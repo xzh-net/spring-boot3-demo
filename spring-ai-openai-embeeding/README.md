@@ -1,4 +1,4 @@
-# OpenAI调用本地向量模型
+# Spring AI 集成 OpenAI 调用本地向量模型
 
 EmbeddingModel接口提供两类方法
 
