@@ -1,8 +1,0 @@
-# Openai Embedding
-
-### 简单调用
-GET http://127.0.0.1:10004/simple/embedding?message=你好，介绍下你自己！
-
-### 运行时设置参数
-GET http://127.0.0.1:10004/custom1/embedding
-

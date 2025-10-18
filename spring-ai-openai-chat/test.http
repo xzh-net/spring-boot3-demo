@@ -1,0 +1,25 @@
+# ChatClient 高层封装
+
+### 简单调用
+GET http://127.0.0.1:10003/openai/chat-client/simple/chat
+
+### 流式调用
+GET http://127.0.0.1:10003/openai/chat-client/stream/chat
+
+### 流式响应
+GET http://127.0.0.1:10003/openai/chat-client/stream/response?message=你好，介绍下你自己！
+
+
+# ChatModel底层直接调用
+
+### 简单调用
+GET http://127.0.0.1:10003/openai/chat-model/simple/chat
+
+### 流式调用
+GET http://127.0.0.1:10003/openai/chat-model/stream/chat
+
+### 自定义参数
+GET http://127.0.0.1:10003/openai/chat-model/custom/chat
+
+### 格式化输出
+GET http://127.0.0.1:10003/openai/chat-model/custom/chat/json-mode
