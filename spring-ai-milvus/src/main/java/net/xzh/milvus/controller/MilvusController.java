@@ -24,7 +24,7 @@ public class MilvusController {
     @GetMapping("/createCollection")
     public String createCollection() {
         milvusService.createCollection();
-        return "Collection created successfully";
+        return "创建成功";
     }
 
     @GetMapping("/insertProducts")
@@ -37,7 +37,7 @@ public class MilvusController {
             createProduct("5", "男士条纹POLO衫 商务休闲 棉质")
         );
         milvusService.batchInsertProducts(products);
-        return "5 records inserted successfully";
+        return "插入成功";
     }  
     
     @GetMapping("/getProduct")

@@ -1,0 +1,13 @@
+# Spring AI 集成 Milvus 实现向量化检索
+
+### 创建表
+GET http://localhost:8080/milvus/createCollection
+
+### 插入数据
+GET http://localhost:8080/milvus/insertProducts
+
+### 单条查询
+GET http://localhost:8080/milvus/getProduct?id=1
+
+### 相似性搜索
+GET http://localhost:8080/milvus/queryVector
