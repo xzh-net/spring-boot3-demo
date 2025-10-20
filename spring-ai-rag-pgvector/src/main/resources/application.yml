@@ -1,0 +1,36 @@
+server:
+  port: 9000
+
+spring:
+  datasource:
+    url: jdbc:postgresql://172.17.17.161:5432/vector_store
+    username: root
+    password: password
+  application:
+    name: rag-pgvector
+
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+  ai:
+    openai:
+      api-key: 123456	
+      base-url: http://172.17.18.36:8080
+      chat:
+        options:
+          model: Qwen3-Coder-30B-A3B-Instruct
+      embedding:
+        options:
+          model: Qwen3-Embedding-8B
+          # Qwen3-Embedding-8B 不支持嵌套维度
+          # dimensions: 1024
+    vectorstore:
+      pgvector:
+        table-name: xzh_rag_vector
+        initialize-schema: true
+        dimensions: 4096
+        # 临时处理版本导致ivfflat同样不能超过2000维度的问题
+        index-type: none
+        # index-type: ivfflat
+        ivf-lists: 1000  # 列表数量
