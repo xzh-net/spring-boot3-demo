@@ -16,7 +16,9 @@
 
 ---
 
-## 4. 三方SDK
+## 4. 应用
 
 - [Spring AI 集成 Milvus 实现向量化检索](https://github.com/xzh-net/spring-boot3/tree/main/spring-ai-milvus)
+
+- [Spring AI + OpenAI + PGVector 实现本地RAG](https://github.com/xzh-net/spring-boot3/tree/main/spring-ai-rag-pgvector)
 
