@@ -22,7 +22,7 @@ import reactor.core.publisher.Flux;
  */
 @RestController
 @RequestMapping("/knowledge")
-public class KnowledgeBaseController {
+public class KnowledgeController {
 
     private final KnowledgeService knowledgeService;
 
@@ -32,7 +32,7 @@ public class KnowledgeBaseController {
      * @param knowledgeService 知识库服务实例
      */
     @Autowired
-    public KnowledgeBaseController(KnowledgeService knowledgeService) {
+    public KnowledgeController(KnowledgeService knowledgeService) {
         this.knowledgeService = knowledgeService;
     }
 
