@@ -14,6 +14,7 @@
 
 - [Spring AI 集成 OpenAI 调用本地向量模型](https://github.com/xzh-net/spring-boot3/tree/main/spring-ai-openai-embeeding)
 
+- [文字转图片](https://github.com/xzh-net/spring-boot3/tree/main/spring-ai-openai-image) 
 ---
 
 ## 4. 应用

@@ -26,9 +26,9 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  */
 
 @SpringBootApplication
-public class SpringAiOpenAiEmbeddingApplication {
+public class EmbeddingApplication {
 	public static void main(String[] args) {
-		SpringApplication.run(SpringAiOpenAiEmbeddingApplication.class, args);
+		SpringApplication.run(EmbeddingApplication.class, args);
 	}
 
 }

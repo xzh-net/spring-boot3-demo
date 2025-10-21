@@ -18,15 +18,16 @@ import org.springframework.web.bind.annotation.RestController;
  * @Date: 2025-09-09
  */
 
+@SuppressWarnings("rawtypes")
 @RestController
 @RequestMapping("/embedding")
 public class EmbeddingController {
 
-	private final EmbeddingModel embeddingModel;
+	private final EmbeddingModel OpenAiEmbeddingModel;
 
 	@Autowired
-	public EmbeddingController(EmbeddingModel embeddingModel) {
-		this.embeddingModel = embeddingModel;
+	public EmbeddingController(EmbeddingModel OpenAiEmbeddingModel) {
+		this.OpenAiEmbeddingModel = OpenAiEmbeddingModel;
 	}
 	
 	/*
@@ -34,7 +35,7 @@ public class EmbeddingController {
 	 */
 	@GetMapping("/vectordata")
 	public Map vectordata(@RequestParam(value = "message", defaultValue = "体恤衫") String message) {
-		List<float[]> embed = this.embeddingModel.embed(List.of(message));
+		List<float[]> embed = this.OpenAiEmbeddingModel.embed(List.of(message));
 		return Map.of("embedding", embed);
 	}
 	
@@ -43,13 +44,13 @@ public class EmbeddingController {
 	 */
 	@GetMapping("/metadata")
 	public Map metadata(@RequestParam(value = "message", defaultValue = "牛仔裤") String message) {
-		EmbeddingResponse embeddingResponse = this.embeddingModel.embedForResponse(List.of(message));
+		EmbeddingResponse embeddingResponse = this.OpenAiEmbeddingModel.embedForResponse(List.of(message));
 		return Map.of("embedding", embeddingResponse);
 	}
 
 	@GetMapping("/custom")
 	public Map custom() {
-		EmbeddingResponse embeddingResponse = embeddingModel
+		EmbeddingResponse embeddingResponse = OpenAiEmbeddingModel
 				.call(new EmbeddingRequest(List.of("连衣裙", "晚匣子"),
 						OpenAiEmbeddingOptions.builder().model("Qwen3-Embedding-8B").build()));
 		return Map.of("embedding", embeddingResponse);
