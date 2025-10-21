@@ -1,0 +1,16 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: spring-ai-openai-image
+  ai:
+    openai:
+      api-key: sk-xxxxxxxx
+      base-url: https://api.siliconflow.cn
+      image:
+        options:
+          # 模型ID,需要替换为实际的接入点ID
+          model: Qwen/Qwen-Image
+          # images接口路径,与OpenAI接口保持一致
+          completions-path: /v1/images/generations
