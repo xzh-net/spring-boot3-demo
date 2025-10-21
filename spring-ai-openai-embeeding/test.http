@@ -1,11 +1,11 @@
 # Openai Embedding
 
 ### 返回向量数据
-GET http://127.0.0.1:10004/embedding/vectordata?message=体恤衫
+GET http://127.0.0.1:8080/openai/embedding/vectordata?message=体恤衫
 
 ### 返回向量数据+元数据
-GET http://127.0.0.1:10004/embedding/metadata?message=牛仔裤
+GET http://127.0.0.1:8080/openai/embedding/metadata?message=牛仔裤
 
 ### 自定义参数
-GET http://127.0.0.1:10004/embedding/custom
+GET http://127.0.0.1:8080/openai/embedding/custom
 

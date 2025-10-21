@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @SuppressWarnings("rawtypes")
 @RestController
-@RequestMapping("/embedding")
+@RequestMapping("/openai/embedding")
 public class EmbeddingController {
 
 	private final EmbeddingModel OpenAiEmbeddingModel;
