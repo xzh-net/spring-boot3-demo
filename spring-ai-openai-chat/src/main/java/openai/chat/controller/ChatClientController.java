@@ -29,11 +29,7 @@ public class ChatClientController {
 
 	private final ChatClient openAiChatClient;
 
-	private final ChatModel chatModel;
-
 	public ChatClientController(ChatModel chatModel) {
-
-		this.chatModel = chatModel;
 
 		// 构造时，可以设置 ChatClient 的参数
 		// {@link org.springframework.ai.chat.client.ChatClient};
