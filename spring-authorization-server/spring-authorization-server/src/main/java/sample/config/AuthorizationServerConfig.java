@@ -140,6 +140,8 @@ public class AuthorizationServerConfig {
 		RegisteredClient messagingClient = RegisteredClient.withId(UUID.randomUUID().toString())
 				.clientId("messaging-client")
 				.clientSecret("{noop}secret")
+				//CLIENT_SECRET_BASIC:客户端使用客户端ID和密钥进行 HTTP Basic认证
+				//CLIENT_SECRET_POST:客户端使用客户端ID和密钥进行 x-www-form-urlencoded提交
 				.clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
 				.authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
 				.authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
@@ -155,11 +157,14 @@ public class AuthorizationServerConfig {
 				.clientSettings(ClientSettings.builder().requireAuthorizationConsent(true).build())
 				.build();
 
+		//设备客户端
 		RegisteredClient deviceClient = RegisteredClient.withId(UUID.randomUUID().toString())
 				.clientId("device-messaging-client")
+				//客户端不需要进行身份验证，如果设置NONE，参数必须包含client_id
 				.clientAuthenticationMethod(ClientAuthenticationMethod.NONE)
 				.authorizationGrantType(AuthorizationGrantType.DEVICE_CODE)
 				.authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
+				.authorizationGrantType(new AuthorizationGrantType("urn:ietf:params:oauth:grant-type:device_code"))
 				.scope("message.read")
 				.scope("message.write")
 				.build();

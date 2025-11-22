@@ -46,13 +46,16 @@ public class DefaultSecurityConfig {
 		http
 			.authorizeHttpRequests(authorize ->
 				authorize
+					//无需认证路径
 					.requestMatchers("/assets/**", "/login").permitAll()
 					.anyRequest().authenticated()
 			)
+			//表单登录
 			.formLogin(formLogin ->
 				formLogin
 					.loginPage("/login")
 			)
+			//OAuth2登录
 			.oauth2Login(oauth2Login ->
 				oauth2Login
 					.loginPage("/login")
