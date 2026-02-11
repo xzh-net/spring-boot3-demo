@@ -1,0 +1,8 @@
+### 系统提示词和用户问题分离
+GET http://localhost:8080/example/ai/roles?name=万事通&voice=讲解员
+
+### 系统提示词和用户问题合并
+GET http://localhost:8080/prompt/ai/stuff
+
+### 系统提示词和用户问题合并，并且使用 prompt data 填充
+GET http://localhost:8080/prompt/ai/stuff?stuffit=true
