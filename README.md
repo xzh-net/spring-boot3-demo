@@ -12,6 +12,8 @@
 
 - [Spring AI 集成 OpenAI 实现对话问答的两种方式](https://github.com/xzh-net/spring-boot3/tree/main/spring-ai-openai-chat)
 
+- [如何使用 Spring AI 提供的 Prompt 模板配置功能](https://github.com/xzh-net/spring-boot3/tree/main/spring-ai-openai-chat-prompt)
+
 - [Spring AI 集成 OpenAI 调用本地向量模型](https://github.com/xzh-net/spring-boot3/tree/main/spring-ai-openai-embeeding)
 
 - [文字转图片](https://github.com/xzh-net/spring-boot3/tree/main/spring-ai-openai-image) 
