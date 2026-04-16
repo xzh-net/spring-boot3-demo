@@ -2,9 +2,11 @@
 
 ## 1. 基础功能
 
-- [为什么 Spring Boot 3应该抛弃 Maven，搭配 Gradle 来使用？](https://github.com/xzh-net/spring-boot3/tree/main/gradle-demo)
+- [为什么 Spring Boot 3 应该抛弃 Maven，搭配 Gradle 来使用？](https://github.com/xzh-net/spring-boot3/tree/main/gradle-demo)
 
 - [Spring Authorization Server 授权服务器](https://github.com/xzh-net/spring-boot3/tree/main/spring-authorization-server)
+
+- [基于 Spring AI 构建 MCP 服务端与客户端](https://github.com/xzh-net/spring-boot3/tree/main/spring-ai-mcp-server)
 
 ---
 
