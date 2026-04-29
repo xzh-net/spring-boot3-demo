@@ -28,21 +28,14 @@ import io.modelcontextprotocol.spec.McpSchema.CallToolResult;
 public class StreamableHttpClient {
 
 	public static void main(String[] args) {
-		
 		HttpClientStreamableHttpTransport transport = HttpClientStreamableHttpTransport.builder("http://localhost:8080")
 				.build();
-
 		var client = McpClient.sync(transport).build();
-
 		client.initialize();
-
 		client.ping();
 
-	
 		CallToolResult weatherResult = client.callTool(new CallToolRequest("getWeather", Map.of("cityName", "大连")));
 		System.out.println("weatherResult Response = " + weatherResult);
-		
-
 		client.closeGracefully();
 	}
 

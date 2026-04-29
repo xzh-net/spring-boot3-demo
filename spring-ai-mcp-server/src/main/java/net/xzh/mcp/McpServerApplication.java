@@ -1,4 +1,4 @@
-package net.xzh.mcp.server;
+package net.xzh.mcp;
 
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
@@ -8,6 +8,7 @@ import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 
 import net.xzh.mcp.filter.LoggingFilter;
+import net.xzh.mcp.service.WeatherService;
 
 @SpringBootApplication
 public class McpServerApplication {

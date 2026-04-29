@@ -15,16 +15,16 @@ import java.util.Enumeration;
 
 public class LoggingFilter implements Filter {
 
-    private static final Logger log = LoggerFactory.getLogger(LoggingFilter.class);
+	private static final Logger log = LoggerFactory.getLogger(LoggingFilter.class);
 
-    @Override
-    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) throws IOException, ServletException {
-        HttpServletRequest req = (HttpServletRequest) request;
-        log.info("Filter - {} {}", req.getMethod(), req.getRequestURI());
-        Enumeration<String> headerNames = req.getHeaderNames();
-        Collections.list(headerNames).forEach(headerName ->
-                log.info("Header: {} = {}", headerName, req.getHeader(headerName))
-        );
-        chain.doFilter(request, response);
-    }
+	@Override
+	public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
+			throws IOException, ServletException {
+		HttpServletRequest req = (HttpServletRequest) request;
+		log.info("Filter - {} {}", req.getMethod(), req.getRequestURI());
+		Enumeration<String> headerNames = req.getHeaderNames();
+		Collections.list(headerNames)
+				.forEach(headerName -> log.info("Header: {} = {}", headerName, req.getHeader(headerName)));
+		chain.doFilter(request, response);
+	}
 }
