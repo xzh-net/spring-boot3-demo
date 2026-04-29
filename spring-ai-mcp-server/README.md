@@ -1,12 +1,14 @@
 # 构建 MCP 服务端与客户端
 
+## MCP 是什么？
+
 MCP 是 Anthropic 公司推出的 "模型上下文协议"（Model Context Protocol），定义了大语言模型（LLM）与外部世界连接的开放标准，是构建在模型原生 tools（Function Calling）能力之上的一层编排与抽象层。
 
 tools 只解决了 "让模型能输出函数名和参数" 这一个问题，MCP 解决的是：这些函数从哪来？（多个服务、动态安装），如何安全地调用？（权限、沙箱），如何传输大数据？（分块、流式），如何支持非函数类需求？（读取资源、获取提示模板）。
 
 当模型 API 不支持原生的 tools 参数时，客户端会将工具描述拼接到系统提示词中作为降级方案。在目前生态中，由于并非所有模型都支持 function calling，这种拼接方式仍被广泛使用，是一种兼容性很强的落地手段。
 
-工作流程
+## MCP 工作流程
 
 ```mermaid
 sequenceDiagram
@@ -36,10 +38,77 @@ sequenceDiagram
     Client->>User: 12. "大连今天多云转小雨，气温11℃到18℃..."
 ```
 
-该项目实现了基于流式 HTTP（STREAMABLE）协议的 MCP 服务端，支持实时通知（资源、工具、提示词变更通知）。通过  `LoggingFilter` 过滤器，专门用于调试网关代理后的请求头参数异常情况，仅对 `/mcp/*` 路径生效。
+## 项目介绍
 
-客户端工具安装
+实现了基于流式 HTTP（STREAMABLE）协议的 MCP 服务端，支持实时通知（资源、工具、提示词变更通知）。通过  `LoggingFilter` 过滤器，专门用于调试网关代理后的请求头参数异常情况，仅对 `/mcp/*` 路径生效。
+
+### 客户端工具安装
 
 ```bash
 npx @mcpjam/inspector@latest
+```
+
+### 获取消息端点（Streamable HTTP）
+
+```bash
+curl -i -X POST http://172.17.17.165:8080/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream, application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+      "protocolVersion": "2025-11-25",
+      "capabilities": {},
+      "clientInfo": {
+        "name": "test-client",
+        "version": "1.0.0"
+      }
+    }
+  }'
+```
+
+输出以下内容表示调用成功，记录下 `Mcp-Session-Id` 的值
+
+```lua
+HTTP/1.1 200 
+Mcp-Session-Id: f65b9dc7-7628-4204-a4e9-face3ed14249
+Content-Type: application/json
+Transfer-Encoding: chunked
+Date: Thu, 16 Apr 2026 03:47:52 GMT
+```
+
+### 列出所有可用工具
+
+```bash
+curl -X POST http://172.17.17.165:8080/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream, application/json" \
+  -H "Mcp-Session-Id: f65b9dc7-7628-4204-a4e9-face3ed14249" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "tools/list"
+  }'
+```
+
+### 调用工具
+
+```bash
+curl -X POST http://172.17.17.165:8080/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream, application/json" \
+  -H "Mcp-Session-Id: f65b9dc7-7628-4204-a4e9-face3ed14249" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "tools/call",
+    "params": {
+      "name": "getWeather",
+      "arguments": {
+        "cityName": "大连"
+      }
+    }
+  }'
 ```
