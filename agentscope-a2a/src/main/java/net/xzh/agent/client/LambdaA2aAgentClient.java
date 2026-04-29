@@ -1,6 +1,5 @@
 package net.xzh.agent.client;
 
-
 import java.util.List;
 
 import io.a2a.spec.AgentCapabilities;
