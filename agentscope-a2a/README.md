@@ -27,3 +27,17 @@ curl -X POST http://172.17.17.165:8888 \
 
 - 自定义解析器
 
+
+## 安装 Nacos
+
+```bash
+docker run --name nacos-standalone-derby \
+    -e MODE=standalone \
+    -e NACOS_AUTH_TOKEN=RK3KM1DQFAM9Xj1aEzL7nMnG9HF+ObBlSeTkJSBMNUs= \
+    -e NACOS_AUTH_IDENTITY_KEY=Authorization \
+    -e NACOS_AUTH_IDENTITY_VALUE=token \
+    -p 8080:8080 \
+    -p 8848:8848 \
+    -p 9848:9848 \
+    -d nacos/nacos-server:v3.2.1
+```
