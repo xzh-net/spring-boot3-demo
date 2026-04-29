@@ -6,6 +6,7 @@
 
 - [Spring Authorization Server 授权服务器](https://github.com/xzh-net/spring-boot3/tree/main/spring-authorization-server)
 
+---
 
 ## 2. Spring AI
 
@@ -15,7 +16,7 @@
 
 - [Spring AI 调用本地向量模型](https://github.com/xzh-net/spring-boot3/tree/main/spring-ai-openai-embeeding)
 
-- [文字转图片](https://github.com/xzh-net/spring-boot3/tree/main/spring-ai-openai-image) 
+- [Spring AI 文字转图片](https://github.com/xzh-net/spring-boot3/tree/main/spring-ai-openai-image) 
 
 - [构建 MCP 服务端与客户端](https://github.com/xzh-net/spring-boot3/tree/main/spring-ai-mcp-server)
 
@@ -23,3 +24,13 @@
 
 - [基于 PGVector 实现本地 RAG](https://github.com/xzh-net/spring-boot3/tree/main/spring-ai-rag-pgvector)
 
+---
+
+## 3. Spring AI Alibaba
+
+
+---
+
+## 4. AgentScope
+
+---

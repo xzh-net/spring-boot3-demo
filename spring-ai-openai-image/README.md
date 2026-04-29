@@ -1,3 +1,3 @@
-# 文字转图片
+# Spring AI 文字转图片
 
-硅基流动API兼容OpenAi格式
+硅基流动 API 兼容 OpenAi 格式
