@@ -1,0 +1,56 @@
+server:
+  port: 8888
+
+spring:
+  main:
+    banner-mode: off
+
+# AgentScope Configuration
+agentscope:
+  model:
+    provider: openai
+  openai:
+    api-key: "123456"
+    model-name: "Qwen3.6"
+    base-url: "http://172.17.17.161:8888/v1"
+    stream: false
+    endpoint-path: /chat/completions
+  agent:
+    enabled: true
+    name: agentscope-a2a-example-agent
+  # A2A Configuration
+  a2a:
+    server:
+      card:
+        description: "Example of A2A(Agent2Agent) Protocol Agent"
+        provider:
+          organization: AgentScope Java
+          url: https://java.agentscope.io/en/intro.html
+        documentation-url: https://java.agentscope.io/en/task/a2a.html
+        icon-url: https://java.agentscope.io/_static/logo.svg
+        skills:
+          - id: get_weather
+            name: Get Weather
+            description: Get current weather information for a city.
+            tags: [weather]
+            examples:
+              - What's the weather like in Hangzhou today?
+          - id: get_current_time
+            name: Get Current Time
+            description: Get the current date and time.
+            tags: [time]
+            examples:
+              - What's the current time?
+          - id: exec_check
+            name: Execute Check
+            description: 对指定区域进行检查，并通过电子邮件发送报告。
+            tags: [check, email]
+            examples:
+              - 对开发环境进行检查。
+              - 请执行生产环境巡检。
+    # Nacos Configuration
+    nacos:
+      enabled: ${NACOS_ENABLED:true}
+      server-addr: ${NACOS_SERVER_ADDR:172.17.17.161:8848}
+      username: ${NACOS_USERNAME:nacos}
+      password: ${NACOS_PASSWORD:nacos}
