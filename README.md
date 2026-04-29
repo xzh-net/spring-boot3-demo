@@ -33,4 +33,5 @@
 
 ## 4. AgentScope
 
----
+- [AG-UI 多智能体服务](https://github.com/xzh-net/spring-boot3/tree/main/agentscope-agui)
+
