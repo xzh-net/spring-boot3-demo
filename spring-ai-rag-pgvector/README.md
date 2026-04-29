@@ -1,4 +1,4 @@
-# Spring AI + OpenAI + PGVector 实现本地RAG
+# 基于 PGVector 实现本地 RAG
 
 上一个示例仅使用`spring-ai`调用向量模型，再通过`milvus-sdk`将数据插入向量库并检索。
 

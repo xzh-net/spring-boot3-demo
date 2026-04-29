@@ -1,4 +1,4 @@
-# 基于 Spring AI 构建 MCP 服务端与客户端
+# 构建 MCP 服务端与客户端
 
 MCP 是 Anthropic 公司推出的 "模型上下文协议"（Model Context Protocol），定义了大语言模型（LLM）与外部世界连接的开放标准，是构建在模型原生 tools（Function Calling）能力之上的一层编排与抽象层。
 
