@@ -33,5 +33,7 @@
 
 ## 4. AgentScope
 
+- [基于 A2A 协议的分布式智能体构建](https://github.com/xzh-net/spring-boot3/tree/main/agentscope-a2a)
+
 - [AG-UI 多智能体服务](https://github.com/xzh-net/spring-boot3/tree/main/agentscope-agui)
 
