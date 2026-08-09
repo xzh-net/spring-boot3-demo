@@ -84,9 +84,9 @@
             <!-- 第1部分：客户端类型 -->
             <div class="section">
                 <h3>一、默认客户端类型与 OIDC 支持</h3>
-                <p>系统初始化时会自动注册三个示例客户端，分别代表三种典型场景。<strong>是否返回 id_token 取决于客户端注册时的 scope 和授权类型</strong>：</p>
+                <p>系统初始化时会自动注册四个示例客户端，覆盖四种典型场景。<strong>是否返回 id_token 取决于客户端注册时的 scope 和授权类型</strong>：</p>
 
-                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-top:12px;">
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">
                     <div class="client-card">
                         <div class="client-name">
                             web-app
@@ -101,7 +101,9 @@
                             ❌ 无 PKCE 强制
                         </div>
                         <div class="client-meta">
-                            redirect: http://localhost:8080/callback
+                            redirect: http://localhost:8080/callback<br>
+                            redirect: http://127.0.0.1:8080/callback<br>
+                            post_logout: http://localhost:8080/logout
                         </div>
                         <div class="client-openid supported">
                             ✅ 注册 scope: <code>openid,profile,email,read,write</code><br>
@@ -114,20 +116,43 @@
                             device-app
                             <span class="tag orange" style="margin-left:4px;">Public 客户端</span>
                         </div>
-                        <div class="client-desc">移动端 App、CLI 工具、TV / IoT</div>
+                        <div class="client-desc">输入受限设备：智能电视 / IoT 终端 / CLI 工具</div>
                         <div class="client-features">
-                            ✅ 授权码 + PKCE<br>
-                            ✅ 设备码模式<br>
-                            ❌ 无 client_secret<br>
-                            ❌ 不弹同意页<br>
+                            ✅ 设备码模式 (device_code)<br>
+                            ✅ Refresh Token<br>
+                            ❌ 无 client_secret (none)<br>
+                            ❌ 不弹同意页 (requireAuthorizationConsent=false)<br>
                             ✅ Access Token TTL 1h
                         </div>
                         <div class="client-meta">
-                            redirect: myapp://callback
+                            redirect: 无 (设备码流程不需要回调地址)
                         </div>
                         <div class="client-openid supported">
                             ✅ 注册 scope: <code>openid,profile,email,read</code><br>
-                            ✅ 授权码/设备码模式 → 返回 id_token
+                            ✅ 设备码模式 → 返回 id_token
+                        </div>
+                    </div>
+
+                    <div class="client-card">
+                        <div class="client-name">
+                            mobile-app
+                            <span class="tag purple" style="margin-left:4px;">Public Client</span>
+                        </div>
+                        <div class="client-desc">原生移动 App (iOS/Android) / 无后端纯前端 SPA</div>
+                        <div class="client-features">
+                            ✅ 授权码 + 强制 PKCE<br>
+                            ❌ 无 client_secret<br>
+                            ❌ 不签发 refresh_token (RFC 8252)<br>
+                            ✅ 授权同意页<br>
+                            ✅ Access Token TTL 2h
+                        </div>
+                        <div class="client-meta">
+                            redirect: com.example.mobileapp://oauth2/redirect<br>
+                            redirect: http://localhost:8082/callback (SPA)
+                        </div>
+                        <div class="client-openid supported">
+                            ✅ 注册 scope: <code>openid,profile,email,read,write</code><br>
+                            ✅ 授权码模式 → 返回 id_token
                         </div>
                     </div>
 
@@ -326,55 +351,6 @@ Authorization: Bearer a1b2c3d4e5f67890abcdef1234567890
   → RedisOAuth2AuthorizationService.save() 检测到 → remove() 删 key
   → 下次 introspect 查不到 → 立即 401</pre>
 
-                <p style="margin-top:14px; font-weight:600; color:#1e293b;">四、改造前后的关键差异</p>
-                <div style="overflow-x:auto; margin-top:12px;">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>维度</th>
-                            <th>改造前（JWT + 黑名单）</th>
-                            <th>改造后（Opaque）</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>access_token 体积</td>
-                            <td>~1200 字节</td>
-                            <td><strong>32 字节</strong></td>
-                        </tr>
-                        <tr>
-                            <td>payload 信息暴露</td>
-                            <td>base64 可解码 sub/roles</td>
-                            <td><strong>无 payload</strong></td>
-                        </tr>
-                        <tr>
-                            <td>资源服务器校验</td>
-                            <td>本地验签 + 查黑名单</td>
-                            <td>查 Redis 授权记录</td>
-                        </tr>
-                        <tr>
-                            <td>撤销机制</td>
-                            <td>写黑名单 + TTL 管理</td>
-                            <td><strong>删 Redis key</strong></td>
-                        </tr>
-                        <tr>
-                            <td>需要维护的组件</td>
-                            <td>JwtDecoder + JwtDenylistValidator + TokenRevocationCleanupFilter</td>
-                            <td><strong>仅 OpaqueTokenIntrospector</strong></td>
-                        </tr>
-                        <tr>
-                            <td>id_token 处理</td>
-                            <td>JWT</td>
-                            <td><strong>JWT（保持不变）</strong></td>
-                        </tr>
-                    </tbody>
-                </table>
-                </div>
-
-                <div class="note info">
-                    <strong>客户端无感知：</strong>access_token 改 Opaque 后，<strong>客户端代码 0 行改动</strong>。因为客户端从不解析 access_token，只把它当字符串塞进 <code>Authorization: Bearer xxx</code> 头转发。<br>
-                    OAuth2 的设计哲学正在于此——<strong>token 格式是实现细节，对调用方完全透明</strong>。
-                </div>
             </div>
 
             <!-- 第4部分：退出登录对接指南 -->
@@ -401,7 +377,7 @@ Authorization: Bearer a1b2c3d4e5f67890abcdef1234567890
                         </tr>
                         <tr>
                             <td>② 销毁 session</td>
-                            <td><code>/logout?redirect={url}</code></td>
+                            <td><code>/logout?post_logout_redirect_uri={url}</code></td>
                             <td><code>GET</code></td>
                             <td>销毁 PORTAL HttpSession → 302 回跳到指定地址</td>
                         </tr>
@@ -424,8 +400,8 @@ token=eyJraWQ...&token_type_hint=refresh_token
 
 // Step 3: 销毁服务器 session
 // 302 重定向到授权服务器
-GET /logout?redirect=http://localhost:8080/
-// 授权服务器销毁 session 后, 再 302 回 redirect 参数指定的地址</pre>
+GET /logout?post_logout_redirect_uri=http://localhost:8080/
+// 授权服务器销毁 session 后, 再 302 回 post_logout_redirect_uri 参数指定的地址</pre>
 
                 <p style="margin-top:14px; font-weight:600; color:#1e293b;">四种退出场景对比：</p>
                 <ul>
@@ -442,105 +418,6 @@ GET /logout?redirect=http://localhost:8080/
                 <div class="note danger">
                     <strong>关键提醒：</strong>单独调 <code>/oauth2/revoke</code> 后，客户端刷新首页仍显示已登录 —— 因为客户端首页只查本地 session，不验证 token。
                     <strong>完整退出 = revoke token + logout session，缺一不可。</strong>
-                </div>
-            </div>
-
-            <!-- 第5部分：Security Filter Chain -->
-            <div class="section">
-                <h3>五、Security Filter Chain 架构</h3>
-                <p>本应用使用 4 条独立的 SecurityFilterChain，按 <code>@Order</code> 优先级依次匹配，请求命中第一条后不再往下走：</p>
-
-                <div style="overflow-x:auto; margin-top:12px;">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Order</th>
-                            <th>匹配路径</th>
-                            <th>认证方式</th>
-                            <th>会话策略</th>
-                            <th>用途</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td><strong style="color:#2563eb;">1</strong></td>
-                            <td><code>/oauth2/**</code> <code>/.well-known/**</code></td>
-                            <td><span class="tag blue">客户端认证</span> Basic Auth / client_secret_post</td>
-                            <td>IF_REQUIRED</td>
-                            <td>OAuth2/OIDC 授权服务器核心端点</td>
-                        </tr>
-                        <tr>
-                            <td><strong style="color:#16a34a;">2</strong></td>
-                            <td><code>/api/**</code></td>
-                            <td><span class="tag green">Bearer Opaque</span> introspect 查 Redis 授权记录</td>
-                            <td>STATELESS</td>
-                            <td>Resource Server — 通讯录等业务 API</td>
-                        </tr>
-                        <tr>
-                            <td><strong style="color:#ea580c;">3</strong></td>
-                            <td><code>/admin/**</code></td>
-                            <td><span class="tag orange">表单登录</span> ADMIN_SESSION</td>
-                            <td>IF_REQUIRED</td>
-                            <td>管理后台（需 ROLE_ADMIN）</td>
-                        </tr>
-                        <tr>
-                            <td><strong style="color:#64748b;">4</strong></td>
-                            <td>兜底（所有未匹配）</td>
-                            <td><span class="tag blue">表单登录</span> PORTAL_SESSION</td>
-                            <td>IF_REQUIRED</td>
-                            <td>门户页面、静态资源</td>
-                        </tr>
-                    </tbody>
-                </table>
-                </div>
-
-                <div class="note warn">
-                    <strong>关键点：</strong>Order(2) Resource Server 使用 OpaqueTokenIntrospector 查 Redis 授权记录验证 access_token。
-                    token 不存在或已 revoke → 立即 401。撤销即删 key，无需黑名单。
-                </div>
-            </div>
-
-            <!-- 第6部分：Controller 分包 -->
-            <div class="section">
-                <h3>六、Controller 分包结构</h3>
-                <p><code>net.xzh.authserver.controller</code> 按职责划分为三个子包，新增接口请归类到对应包：</p>
-
-                <div style="overflow-x:auto; margin-top:12px;">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>包名</th>
-                            <th>职责</th>
-                            <th>请求前缀</th>
-                            <th>现有 Controller</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td><code>controller.admin</code></td>
-                            <td>管理类业务功能，仅管理员可访问</td>
-                            <td><code>/admin/**</code> <code>/health</code></td>
-                            <td>ClientController、UserController、DeviceController、HealthController</td>
-                        </tr>
-                        <tr>
-                            <td><code>controller.auth</code></td>
-                            <td>认证类全局能力，登录入口、授权同意页、当前用户查询</td>
-                            <td><code>/</code> <code>/auth/**</code> <code>/consent</code></td>
-                            <td>LoginController、ConsentController、AuthController</td>
-                        </tr>
-                        <tr>
-                            <td><code>controller.api</code></td>
-                            <td>业务 API，主要给三方调用，需 Bearer JWT 认证</td>
-                            <td><code>/api/**</code></td>
-                            <td>ContactsController（通讯录）</td>
-                        </tr>
-                    </tbody>
-                </table>
-                </div>
-
-                <div class="note info">
-                    <strong>命名约定：</strong>新增业务 API 放入 <code>controller.api</code>，管理后台功能放入 <code>controller.admin</code>，
-                    认证/授权相关页面和端点放入 <code>controller.auth</code>。包路径与 URL 前缀一一对应，便于快速定位代码。
                 </div>
             </div>
         </div>
