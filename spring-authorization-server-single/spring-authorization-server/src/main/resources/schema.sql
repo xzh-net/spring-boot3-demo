@@ -133,7 +133,7 @@ INSERT INTO oauth2_registered_client (
     'http://localhost:8080/logout',
     'openid,profile,email,read,write',
     '{"requireProofKey":false,"requireAuthorizationConsent":true}',
-    '{"accessTokenFormat":"REFERENCE","accessTokenTimeToLive":"PT2H","reuseRefreshTokens":true,"idTokenSignatureAlgorithm":"RS256"}'
+    '{"accessTokenFormat":"REFERENCE","accessTokenTimeToLive":"PT2H","reuseRefreshTokens":false,"idTokenSignatureAlgorithm":"RS256"}'
 );
 
 
@@ -158,7 +158,7 @@ INSERT INTO oauth2_registered_client (
     NULL,
     'openid,profile,email,read',
     '{"requireProofKey":false,"requireAuthorizationConsent":false}',
-    '{"accessTokenFormat":"REFERENCE","accessTokenTimeToLive":"PT1H","reuseRefreshTokens":true}'
+    '{"accessTokenFormat":"REFERENCE","accessTokenTimeToLive":"PT1H","reuseRefreshTokens":false}'
 );
 
 
@@ -184,10 +184,10 @@ INSERT INTO oauth2_registered_client (
     'none',
     'authorization_code,refresh_token',
     'com.example.mobileapp://oauth2/redirect,http://localhost:8082/callback',
-    NULL,
+    'http://localhost:8082/logout',
     'openid,profile,email,read,write',
     '{"requireProofKey":true,"requireAuthorizationConsent":true}',
-    '{"accessTokenFormat":"REFERENCE","accessTokenTimeToLive":"PT2H","reuseRefreshTokens":true,"idTokenSignatureAlgorithm":"RS256"}'
+    '{"accessTokenFormat":"REFERENCE","accessTokenTimeToLive":"PT2H","reuseRefreshTokens":false,"idTokenSignatureAlgorithm":"RS256"}'
 );
 
 -- 客户端: service-app (客户端模式, 服务间调用)
