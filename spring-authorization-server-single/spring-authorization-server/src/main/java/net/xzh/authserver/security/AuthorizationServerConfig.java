@@ -455,7 +455,8 @@ public class AuthorizationServerConfig {
      *  2. OAuth2 回调客户端地址 (http://localhost:8080/*)
      */
     private static final Set<String> ALLOWED_REDIRECT_HOSTS = Set.of(
-            "localhost:8080", "localhost:9000", "127.0.0.1:8080", "127.0.0.1:9000"
+            "localhost:8080", "localhost:8081", "localhost:8082", "localhost:9000",
+            "127.0.0.1:8080", "127.0.0.1:8081", "127.0.0.1:8082", "127.0.0.1:9000"
     );
     private static boolean isRedirectAllowed(String url) {
         if (url == null || url.isEmpty()) return false;

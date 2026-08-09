@@ -177,9 +177,55 @@ public class JdbcRegisteredClientRepository implements RegisteredClientRepositor
         entity.setRedirectUris(String.join(",", client.getRedirectUris()));
         entity.setPostLogoutRedirectUris(String.join(",", client.getPostLogoutRedirectUris()));
         entity.setScopes(String.join(",", client.getScopes()));
-        entity.setClientSettings(toJson(client.getClientSettings().getSettings()));
-        entity.setTokenSettings(toJson(client.getTokenSettings().getSettings()));
+
+        // 统一用 camelCase key 序列化, 与 schema.sql 初始数据格式保持一致.
+        //
+        // 读取时不直接调用 getter (isRequireProofKey / getAccessTokenTimeToLive 等):
+        //   SAS 1.4.1 这些 getter 内部会对设置值做 Boolean/Duration 自动拆箱,
+        //   如果底层 setting 未设置 (null), 会触发 NPE.
+        // 写入时也不直接序列化 getSettings():
+        //   getSettings() 返回的 key 是 "settings.token.reuse-refresh-tokens" 这种
+        //   dotted kebab-case, 与 parseTokenSettings()/entityToVO() 读取的 camelCase key
+        //   不匹配, 会导致管理后台保存后再次打开时 checkbox 回到默认值.
+        //
+        // 所以统一通过 ClientSettings.getSetting(String)/TokenSettings.getSetting(String)
+        //   按 SAS 内部实际的 dotted kebab-case key 取 Object 值, 再按类型转换.
+        Map<String, Object> rawCs = client.getClientSettings().getSettings();
+        Map<String, Object> csMap = new HashMap<>();
+        // 注意: ClientSettings 的内部 key 是 camelCase (requireProofKey),
+        // 而 TokenSettings 的内部 key 是 dotted kebab-case (settings.token.xxx).
+        // 这是 SAS 1.4.1 的实际行为, 已通过 DIAG 日志验证.
+        csMap.put("requireProofKey", readBoolSetting(rawCs, "requireProofKey"));
+        csMap.put("requireAuthorizationConsent", readBoolSetting(rawCs, "requireAuthorizationConsent"));
+        entity.setClientSettings(toJson(csMap));
+
+        Map<String, Object> rawTs = client.getTokenSettings().getSettings();
+        Map<String, Object> tsMap = new HashMap<>();
+        OAuth2TokenFormat fmt = (OAuth2TokenFormat) rawTs.get("settings.token.access-token-format");
+        tsMap.put("accessTokenFormat", fmt != null ? fmt.getValue() : OAuth2TokenFormat.REFERENCE.getValue());
+        Duration attl = readDurationSetting(rawTs, "settings.token.access-token-time-to-live");
+        tsMap.put("accessTokenTimeToLive", (attl != null ? attl : Duration.ofHours(2)).toString());
+        tsMap.put("reuseRefreshTokens", readBoolSetting(rawTs, "settings.token.reuse-refresh-tokens"));
+        Duration acttl = readDurationSetting(rawTs, "settings.token.authorization-code-time-to-live");
+        if (acttl != null) tsMap.put("authorizationCodeTimeToLive", acttl.toString());
+        entity.setTokenSettings(toJson(tsMap));
         return entity;
+    }
+
+    private Boolean readBoolSetting(Map<String, Object> map, String dottedKebabKey) {
+        Object v = map.get(dottedKebabKey);
+        if (v instanceof Boolean b) return b;
+        if (v instanceof String s) return Boolean.parseBoolean(s);
+        // SAS 的 Boolean setting 默认是 false (null 视为 false)
+        return false;
+    }
+
+    private Duration readDurationSetting(Map<String, Object> map, String dottedKebabKey) {
+        Object v = map.get(dottedKebabKey);
+        if (v instanceof Duration d) return d;
+        if (v instanceof String s) return Duration.parse(s);
+        if (v instanceof Number n) return Duration.ofSeconds(n.longValue());
+        return null;
     }
 
     private AuthorizationGrantType toAuthorizationGrantType(String value) {
@@ -222,7 +268,6 @@ public class JdbcRegisteredClientRepository implements RegisteredClientRepositor
             // access_token 格式: 项目全局固定使用 REFERENCE (Opaque 短码),
             // 不允许客户端覆盖. 无论数据库中存的是什么, 一律强制 opaque,
             // 保证 RedisOpaqueTokenIntrospector 能正确解析.
-            // 兼容历史数据: 若数据库显式存了 SELF_CONTAINED, 也忽略并使用 REFERENCE.
             builder.accessTokenFormat(OAuth2TokenFormat.REFERENCE);
             if (map.containsKey("accessTokenTimeToLive")) {
                 builder.accessTokenTimeToLive(Duration.parse((String) map.get("accessTokenTimeToLive")));
