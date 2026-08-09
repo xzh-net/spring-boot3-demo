@@ -157,7 +157,7 @@ INSERT INTO oauth2_registered_client (
     NULL,
     NULL,
     'openid,profile,email,read',
-    '{"requireProofKey":false,"requireAuthorizationConsent":false}',
+    '{"requireProofKey":false,"requireAuthorizationConsent":true}',
     '{"accessTokenFormat":"REFERENCE","accessTokenTimeToLive":"PT1H","reuseRefreshTokens":false}'
 );
 
@@ -209,6 +209,6 @@ INSERT INTO oauth2_registered_client (
     'client_credentials',
     NULL,
     'read,write',
-    '{"requireProofKey":false,"requireAuthorizationConsent":false}',
+    '{"requireProofKey":false,"requireAuthorizationConsent":true}',
     '{"accessTokenFormat":"REFERENCE","accessTokenTimeToLive":"PT30M","reuseRefreshTokens":false}'
 );
