@@ -4,7 +4,9 @@
 
 - [为什么 Spring Boot 3 应该抛弃 Maven，搭配 Gradle 来使用？](https://github.com/xzh-net/spring-boot3/tree/main/gradle-demo)
 
-- [Spring Authorization Server 授权服务器](https://github.com/xzh-net/spring-boot3/tree/main/spring-authorization-server)
+- [Spring Authorization Server 三件套（分离版）](https://github.com/xzh-net/spring-boot3/tree/main/spring-authorization-server) — 授权服务器 + 资源服务器 + 客户端分离架构，设备码流程与三方登录（GitHub / Google）原理讲解
+
+- [统一认证中心（单体版）](https://github.com/xzh-net/spring-boot3/tree/main/spring-authorization-server-single) — 授权 / 资源 / 管理后台一体，含 4 种客户端（授权码 / 设备码 / PKCE / 客户端模式）对接演示
 
 ---
 
