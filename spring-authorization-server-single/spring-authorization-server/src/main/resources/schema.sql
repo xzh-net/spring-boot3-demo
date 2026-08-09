@@ -162,6 +162,34 @@ INSERT INTO oauth2_registered_client (
 );
 
 
+-- 客户端: mobile-app (Public Client + 强制 PKCE)
+-- 典型场景: 原生移动应用 (iOS/Android) 或 无后端纯前端项目 (SPA, 如 Vue/React/Angular)
+--   两类场景协议层配置完全一致: 均为 Public Client, 无 client_secret, 必须使用 PKCE 防止授权码拦截
+--   差异仅在 redirect_uri 形式:
+--     - 原生 App: 自定义 scheme (com.example.mobileapp://...), 由操作系统拦截唤起 App (RFC 8252)
+--     - SPA:      https URL (http://localhost:8082/callback), 由浏览器直接加载回调页
+INSERT INTO oauth2_registered_client (
+    id, client_id, client_secret, client_name,
+    client_authentication_methods,
+    authorization_grant_types,
+    redirect_uris, post_logout_redirect_uris,
+    scopes,
+    client_settings,
+    token_settings
+) VALUES (
+    '3',
+    'mobile-app',
+    NULL,
+    '移动应用客户端',
+    'none',
+    'authorization_code,refresh_token',
+    'com.example.mobileapp://oauth2/redirect,http://localhost:8082/callback',
+    NULL,
+    'openid,profile,email,read,write',
+    '{"requireProofKey":true,"requireAuthorizationConsent":true}',
+    '{"accessTokenFormat":"REFERENCE","accessTokenTimeToLive":"PT2H","reuseRefreshTokens":true,"idTokenSignatureAlgorithm":"RS256"}'
+);
+
 -- 客户端: service-app (客户端模式, 服务间调用)
 -- 典型场景: 后端服务对服务调用 (M2M), 无用户参与, 用 client_credentials 直接获取 access_token
 INSERT INTO oauth2_registered_client (
@@ -173,7 +201,7 @@ INSERT INTO oauth2_registered_client (
     client_settings,
     token_settings
 ) VALUES (
-    '3',
+    '4',
     'service-app',
     '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e',
     '服务间调用客户端',
