@@ -1,0 +1,14 @@
+package net.xzh.authserver.mapper;
+
+import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import net.xzh.authserver.entity.OAuth2RegisteredClient;
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
+
+@Mapper
+public interface OAuth2RegisteredClientMapper extends BaseMapper<OAuth2RegisteredClient> {
+
+    @Select("SELECT * FROM oauth2_registered_client WHERE client_id = #{clientId} LIMIT 1")
+    OAuth2RegisteredClient selectByClientId(@Param("clientId") String clientId);
+}

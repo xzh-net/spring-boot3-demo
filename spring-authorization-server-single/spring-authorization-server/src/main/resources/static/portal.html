@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>首页</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+            background: #f1f5f9;
+            color: #0f172a;
+            min-height: 100vh;
+        }
+        .navbar {
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            color: #ffffff;
+            padding: 0 32px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 12px rgba(37, 99, 235, 0.2);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .navbar .brand {
+            font-size: 18px;
+            font-weight: 700;
+        }
+        .navbar .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            font-size: 14px;
+        }
+        .navbar .user-info {
+            opacity: 0.9;
+        }
+        .navbar .btn-logout {
+            background: rgba(255, 255, 255, 0.2);
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            border-radius: 6px;
+            padding: 6px 16px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .navbar .btn-logout:hover {
+            background: rgba(255, 255, 255, 0.35);
+        }
+        .navbar .btn-login-nav {
+            color: #ffffff;
+            text-decoration: none;
+            font-size: 14px;
+            padding: 6px 14px;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+        .navbar .btn-login-nav:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 40px 24px 60px;
+        }
+        .page-title {
+            margin-bottom: 32px;
+        }
+        .page-title h2 {
+            font-size: 24px;
+            color: #0f172a;
+            margin-bottom: 6px;
+        }
+        .page-title p {
+            font-size: 14px;
+            color: #64748b;
+        }
+        .app-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+            gap: 20px;
+        }
+        .app-card {
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 24px;
+            text-decoration: none;
+            color: inherit;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+            border: 1px solid #e2e8f0;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            cursor: pointer;
+        }
+        .app-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 28px rgba(37, 99, 235, 0.18);
+        }
+        .app-icon {
+            font-size: 36px;
+            margin-bottom: 14px;
+        }
+        .app-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: #0f172a;
+            margin-bottom: 4px;
+        }
+        .app-subname {
+            font-size: 12px;
+            color: #2563eb;
+            margin-bottom: 10px;
+        }
+        .app-desc {
+            font-size: 13px;
+            color: #64748b;
+            line-height: 1.5;
+        }
+        .footer-tip {
+            text-align: center;
+            margin-top: 48px;
+            padding: 20px;
+            font-size: 13px;
+            color: #94a3b8;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="brand">🚀 统一认证中心</div>
+        <div class="nav-right">
+            <span class="user-info" id="userInfo" style="display:none;"></span>
+            <button class="btn-logout" id="btnLogout" style="display:none;">退出登录</button>
+            <a href="/login.html" class="btn-login-nav" id="btnLoginNav" style="display:none;">登录</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="page-title">
+            <h2>应用中心</h2>
+            <p>选择一个应用开始使用</p>
+        </div>
+
+        <div class="app-grid">
+            <a class="app-card" href="javascript:void(0)">
+                <div class="app-icon">📊</div>
+                <div class="app-name">报表中心</div>
+                <div class="app-subname">Report Center</div>
+                <div class="app-desc">数据统计和可视化</div>
+            </a>
+            <a class="app-card" href="javascript:void(0)">
+                <div class="app-icon">📝</div>
+                <div class="app-name">任务管理</div>
+                <div class="app-subname">Task Manager</div>
+                <div class="app-desc">团队协作与任务追踪</div>
+            </a>
+            <a class="app-card" href="javascript:void(0)">
+                <div class="app-icon">🛒</div>
+                <div class="app-name">商城系统</div>
+                <div class="app-subname">Shop</div>
+                <div class="app-desc">在线购物平台</div>
+            </a>
+            <a class="app-card" href="javascript:void(0)">
+                <div class="app-icon">📚</div>
+                <div class="app-name">知识库</div>
+                <div class="app-subname">Wiki</div>
+                <div class="app-desc">团队文档中心</div>
+            </a>
+            <a class="app-card" href="javascript:void(0)">
+                <div class="app-icon">💬</div>
+                <div class="app-name">即时通讯</div>
+                <div class="app-subname">Chat</div>
+                <div class="app-desc">团队消息</div>
+            </a>
+            <a class="app-card" href="javascript:void(0)">
+                <div class="app-icon">🎫</div>
+                <div class="app-name">工单系统</div>
+                <div class="app-subname">Ticket</div>
+                <div class="app-desc">客户服务</div>
+            </a>
+        </div>
+
+        <div class="footer-tip">应用接入开发中，敬请期待...</div>
+    </div>
+
+    <script>
+        function getCookie(name) {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const c = cookies[i].trim();
+                if (c.indexOf(name + '=') === 0) {
+                    return c.substring(name.length + 1);
+                }
+            }
+            return '';
+        }
+
+        async function checkLoginStatus() {
+            try {
+                const res = await fetch('/auth/me', { credentials: 'same-origin' });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.authenticated) {
+                        const userInfoEl = document.getElementById('userInfo');
+                        const btnLogout = document.getElementById('btnLogout');
+                        userInfoEl.textContent = '👤 ' + data.username;
+                        userInfoEl.style.display = 'inline';
+                        btnLogout.style.display = 'inline-block';
+                        return;
+                    }
+                }
+                document.getElementById('btnLoginNav').style.display = 'inline-block';
+            } catch (e) {
+                document.getElementById('btnLoginNav').style.display = 'inline-block';
+            }
+        }
+
+        document.getElementById('btnLogout').addEventListener('click', async function () {
+            if (!confirm('确认退出登录？')) return;
+            const csrf = getCookie('XSRF-TOKEN');
+            const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+            if (csrf) {
+                headers['X-XSRF-TOKEN'] = decodeURIComponent(csrf);
+            }
+            try {
+                await fetch('/logout', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: headers
+                });
+            } catch (e) {
+            }
+            window.location.href = '/login.html?logout';
+        });
+
+        checkLoginStatus();
+    </script>
+</body>
+</html>

@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>统一认证中心 · 客户端管理</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+            background: #f0f2f5; color: #1e293b; min-height: 100vh;
+        }
+        .navbar {
+            background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+            color: #fff; padding: 0 24px; height: 56px;
+            display: flex; align-items: center; gap: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            position: sticky; top: 0; z-index: 10;
+        }
+        .navbar .brand { font-weight: 700; font-size: 16px; color: #ffffff; }
+        .navbar a { color: #dbeafe; text-decoration: none; padding: 8px 14px; border-radius: 6px; font-size: 14px; }
+        .navbar a:hover { background: rgba(255,255,255,0.15); color: #ffffff; }
+        .navbar a.active { background: rgba(255,255,255,0.22); color: #ffffff; }
+        .navbar .spacer { flex: 1; }
+        .navbar .logout { color: #dbeafe; font-size: 13px; }
+
+        .container { max-width: 1200px; margin: 24px auto; padding: 0 24px; }
+        .page-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 20px;
+        }
+        .page-header h2 { font-size: 22px; color: #1e3a5f; }
+        .btn {
+            padding: 8px 18px; border-radius: 6px; border: none; cursor: pointer;
+            font-size: 14px; font-weight: 500; transition: all 0.2s;
+        }
+        .btn-primary { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; }
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(37,99,235,0.35); }
+        .btn-danger { background: #dc2626; color: #fff; }
+        .btn-danger:hover { background: #b91c1c; }
+        .btn-sm { padding: 5px 12px; font-size: 12px; }
+        .btn-link { background: none; border: none; color: #2563eb; cursor: pointer; font-size: 13px; }
+        .btn-link:hover { text-decoration: underline; }
+        .btn-link.danger { color: #dc2626; }
+
+        .card {
+            background: #ffffff; border-radius: 10px; border: 1px solid #e2e8f0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.06); overflow: hidden;
+        }
+        table { width: 100%; border-collapse: collapse; }
+        th, td {
+            padding: 12px 16px; text-align: left;
+            font-size: 13px;
+        }
+        th { background: #fafafa; color: #475569; border-bottom: 1px solid #e2e8f0; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px; }
+        td { border-bottom: 1px solid #f0f0f0; color: #334155; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover { background: #f8fafc; }
+        .tag { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; background: rgba(37,99,235,0.08); color: #2563eb; border: 1px solid rgba(37,99,235,0.2); margin-right: 4px; }
+        .tag.green { background: rgba(34,197,94,0.08); color: #16a34a; border-color: rgba(34,197,94,0.2); }
+        .tag.orange { background: rgba(249,115,22,0.08); color: #ea580c; border-color: rgba(249,115,22,0.2); }
+
+        .empty { text-align: center; padding: 40px; color: #94a3b8; font-size: 14px; }
+
+        .modal-bg {
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+            align-items: center; justify-content: center; z-index: 100;
+        }
+        .modal-bg.show { display: flex; }
+        .modal {
+            background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; width: 680px; max-height: 85vh; overflow-y: auto;
+            box-shadow: 0 16px 50px rgba(0,0,0,0.18); color: #1e293b;
+        }
+        .modal-header {
+            padding: 16px 24px; border-bottom: 1px solid #f0f0f0; display: flex;
+            justify-content: space-between; align-items: center;
+        }
+        .modal-header h3 { font-size: 16px; color: #1e3a5f; }
+        .close-btn { background: none; border: none; font-size: 22px; cursor: pointer; color: #64748b; }
+        .modal-body { padding: 20px 24px; }
+        .form-row { margin-bottom: 14px; }
+        .form-row label { display: block; font-size: 12px; color: #475569; margin-bottom: 5px; font-weight: 500; }
+        .form-row input, .form-row textarea, .form-row select {
+            width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px;
+            font-size: 13px; outline: none; transition: border-color 0.2s;
+            background: #ffffff; color: #1e293b;
+        }
+        .form-row input:focus, .form-row textarea:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.12); }
+        .form-row textarea { min-height: 60px; resize: vertical; font-family: inherit; color: #1e293b; }
+        .form-row .hint { font-size: 11px; color: #64748b; margin-top: 4px; }
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .checkbox-group { display: flex; flex-wrap: wrap; gap: 10px; }
+        .checkbox-group label {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 5px 12px; border: 1px solid #cbd5e1; border-radius: 16px; cursor: pointer;
+            font-size: 12px; margin: 0; background: #f8fafc; color: #475569;
+            white-space: nowrap; transition: all 0.15s;
+        }
+        .checkbox-group label:hover { border-color: #2563eb; color: #2563eb; }
+        .checkbox-group label input[type=checkbox] { margin: 0; }
+        .token-opts { display: flex; gap: 20px; flex-wrap: wrap; padding: 10px 0 4px; }
+        .token-opts label {
+            display: inline-flex; align-items: center; gap: 5px;
+            font-size: 12px; cursor: pointer; color: #475569; margin: 0;
+            white-space: nowrap;
+        }
+        .token-opts label input[type=checkbox] { margin: 0; }
+        .form-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; padding-top: 16px; border-top: 1px solid #f0f0f0; }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <div class="brand">🚀 统一认证中心</div>
+        <a href="/admin/index.html">首页</a>
+        <a href="/admin/user">用户管理</a>
+        <a href="/admin/client" class="active">客户端管理</a>
+        <a href="/admin/authorization">授权管理</a>
+        <a href="/admin/online.html">在线用户</a>
+        <a href="/admin/monitor.html">系统监控</a>
+        <div class="spacer"></div>
+        <a href="#" class="logout" id="logoutLink">退出登录</a>
+    </div>
+
+    <div class="container">
+        <div class="page-header">
+            <h2>客户端管理</h2>
+            <button class="btn btn-primary" onclick="openModal()">+ 新增客户端</button>
+        </div>
+
+        <div class="card">
+            <table>
+                <thead>
+                    <tr>
+                        <th>client_id</th>
+                        <th>名称</th>
+                        <th>授权模式</th>
+                        <th>认证方式</th>
+                        <th>Scopes</th>
+                        <th>重定向地址</th>
+                        <th style="width: 180px">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="clientTable"></tbody>
+            </table>
+            <div class="empty" id="emptyTip" style="display:none;">暂无客户端数据</div>
+        </div>
+    </div>
+
+    <div class="modal-bg" id="modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modalTitle">新增客户端</h3>
+                <button class="close-btn" onclick="closeModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editId">
+                <div class="form-grid">
+                    <div class="form-row">
+                        <label>client_id</label>
+                        <input type="text" id="clientId" placeholder="web-app" autocomplete="off">
+                    </div>
+                    <div class="form-row">
+                        <label>client_name</label>
+                        <input type="text" id="clientName" placeholder="Web 应用">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <label>client_secret <span style="color:#94a3b8;font-weight:normal;">(编辑时留空不修改)</span></label>
+                    <input type="text" id="clientSecret" placeholder="留空表示无密钥 (public client)">
+                </div>
+
+                <div class="form-row">
+                    <label>授权模式</label>
+                    <div class="checkbox-group" id="grantTypes"></div>
+                </div>
+                <div class="form-row">
+                    <label>认证方式</label>
+                    <div class="checkbox-group" id="authMethods"></div>
+                </div>
+
+                <div class="form-row">
+                    <label>Scopes (逗号分隔)</label>
+                    <input type="text" id="scopes" placeholder="openid,profile,email,read,write">
+                </div>
+                <div class="form-row">
+                    <label>Redirect URIs (逗号分隔)</label>
+                    <textarea id="redirectUris" placeholder="http://localhost:8080/callback,myapp://callback"></textarea>
+                </div>
+                <div class="form-row">
+                    <label>Post Logout Redirect URIs (逗号分隔)</label>
+                    <textarea id="postLogoutUris" placeholder="http://localhost:8080/logout"></textarea>
+                </div>
+
+                <div class="form-row">
+                    <label>Token 设置</label>
+                    <div class="token-opts">
+                        <label><input type="checkbox" id="requireProofKey"> 开启 PKCE</label>
+                        <label><input type="checkbox" id="requireConsent" checked> 需授权确认页面</label>
+                        <label><input type="checkbox" id="reuseRefreshTokens" checked> 复用 Refresh Token</label>
+                    </div>
+                </div>
+                <div class="form-grid">
+                    <div class="form-row">
+                        <label>Access Token 格式</label>
+                        <input type="text" id="accessTokenFormat" value="REFERENCE" disabled
+                               style="background:#f1f5f9;color:#64748b;cursor:not-allowed;">
+                        <div class="hint">全局固定 Opaque (REFERENCE), 不可修改. 切换为 JWT 会破坏 Redis introspect.</div>
+                    </div>
+                    <div class="form-row">
+                        <label>Access Token TTL</label>
+                        <input type="text" id="accessTokenTtl" value="PT2H" placeholder="PT2H">
+                        <div class="hint">ISO8601 持续期, 如 PT2H / PT30M</div>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <label>Authorization Code TTL</label>
+                    <input type="text" id="authorizationCodeTtl" value="PT5M" placeholder="PT5M">
+                    <div class="hint">ISO8601 持续期, 默认 5 分钟 (PT5M). 仅授权码模式生效.</div>
+                </div>
+
+                <div class="form-actions">
+                    <button class="btn" onclick="closeModal()">取消</button>
+                    <button class="btn btn-primary" onclick="save()">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+const GRANT_TYPES = [
+    { v: "authorization_code", l: "授权码" },
+    { v: "client_credentials", l: "客户端" },
+    { v: "refresh_token", l: "刷新令牌" },
+    { v: "password", l: "密码" },
+    { v: "urn:ietf:params:oauth:grant-type:device_code", l: "设备码" }
+];
+const AUTH_METHODS = [
+    { v: "client_secret_basic", l: "Basic" },
+    { v: "client_secret_post", l: "Post" },
+    { v: "client_secret_jwt", l: "JWT" },
+    { v: "private_key_jwt", l: "私钥" },
+    { v: "none", l: "无 (Public)" }
+];
+
+function initCheckboxes() {
+    const gt = document.getElementById("grantTypes");
+    gt.innerHTML = GRANT_TYPES.map(g =>
+        `<label><input type="checkbox" value="${g.v}" id="gt_${g.v}">${g.l}</label>`).join("");
+    const am = document.getElementById("authMethods");
+    am.innerHTML = AUTH_METHODS.map(m =>
+        `<label><input type="checkbox" value="${m.v}" id="am_${m.v}">${m.l}</label>`).join("");
+}
+
+function getChecked(list, prefix) {
+    return list.filter(x => document.getElementById(prefix + x.v).checked).map(x => x.v);
+}
+
+async function list() {
+    const res = await fetch("/admin/client/api/list");
+    const { code, data } = await res.json();
+    const tbody = document.getElementById("clientTable");
+    const empty = document.getElementById("emptyTip");
+    if (!data || data.length === 0) {
+        tbody.innerHTML = ""; empty.style.display = "block"; return;
+    }
+    empty.style.display = "none";
+    tbody.innerHTML = data.map(c => {
+        const scopes = c.scopes ? c.scopes.split(",").map(s => `<span class="tag">${s}</span>`).join("") : "";
+        const grants = c.authorizationGrantTypes ? c.authorizationGrantTypes.split(",").map(g => {
+            const found = GRANT_TYPES.find(x => x.v === g);
+            return `<span class="tag green">${found ? found.l : g}</span>`;
+        }).join("") : "";
+        const methods = c.clientAuthenticationMethods ? c.clientAuthenticationMethods.split(",")
+            .map(m => `<span class="tag orange">${m}</span>`).join("") : "";
+        const uris = c.redirectUris ? c.redirectUris.split(",").map(u => `<div style="font-family:monospace;font-size:11px;color:#64748b;">${u}</div>`).join("") : "-";
+        return `<tr>
+            <td style="font-family:monospace;">${c.clientId}</td>
+            <td>${c.clientName || "-"}</td>
+            <td>${grants}</td>
+            <td>${methods}</td>
+            <td>${scopes}</td>
+            <td>${uris}</td>
+            <td>
+                <button class="btn-link" onclick='edit("${c.id}")'>编辑</button>
+                <button class="btn-link" onclick='resetSecret("${c.id}", "${c.clientId}")'>重置密钥</button>
+                <button class="btn-link danger" onclick='del("${c.id}", "${c.clientId}")'>删除</button>
+            </td>
+        </tr>`;
+    }).join("");
+}
+
+function openModal() {
+    document.getElementById("modalTitle").textContent = "新增客户端";
+    document.getElementById("editId").value = "";
+    document.getElementById("clientId").value = "";
+    document.getElementById("clientId").disabled = false;
+    document.getElementById("clientName").value = "";
+    document.getElementById("clientSecret").value = "";
+    document.getElementById("scopes").value = "openid,profile,email";
+    document.getElementById("redirectUris").value = "";
+    document.getElementById("postLogoutUris").value = "";
+    document.getElementById("requireProofKey").checked = false;
+    document.getElementById("requireConsent").checked = true;
+    document.getElementById("reuseRefreshTokens").checked = true;
+    document.getElementById("accessTokenFormat").value = "REFERENCE";
+    document.getElementById("accessTokenTtl").value = "PT2H";
+    document.getElementById("authorizationCodeTtl").value = "PT5M";
+    GRANT_TYPES.forEach(g => document.getElementById("gt_" + g.v).checked = false);
+    document.getElementById("gt_authorization_code").checked = true;
+    document.getElementById("gt_refresh_token").checked = true;
+    AUTH_METHODS.forEach(m => document.getElementById("am_" + m.v).checked = false);
+    document.getElementById("am_client_secret_basic").checked = true;
+    document.getElementById("modal").classList.add("show");
+}
+
+function closeModal() { document.getElementById("modal").classList.remove("show"); }
+
+async function edit(id) {
+    const res = await fetch("/admin/client/api/" + id);
+    const { code, data } = await res.json();
+    if (code !== 200) { alert("加载失败"); return; }
+    document.getElementById("modalTitle").textContent = "编辑客户端";
+    document.getElementById("editId").value = id;
+    document.getElementById("clientId").value = data.clientId;
+    document.getElementById("clientId").disabled = true;
+    document.getElementById("clientName").value = data.clientName || "";
+    document.getElementById("clientSecret").value = "";
+    document.getElementById("scopes").value = data.scopes ? data.scopes.join(",") : "";
+    document.getElementById("redirectUris").value = data.redirectUris ? data.redirectUris.join(",") : "";
+    document.getElementById("postLogoutUris").value = data.postLogoutRedirectUris ? data.postLogoutRedirectUris.join(",") : "";
+    document.getElementById("requireProofKey").checked = data.requireProofKey;
+    document.getElementById("requireConsent").checked = data.requireAuthorizationConsent;
+    document.getElementById("reuseRefreshTokens").checked = data.reuseRefreshTokens;
+    document.getElementById("accessTokenFormat").value = data.accessTokenFormat || "REFERENCE";
+    document.getElementById("accessTokenTtl").value = data.accessTokenTimeToLive || "PT2H";
+    document.getElementById("authorizationCodeTtl").value = data.authorizationCodeTimeToLive || "PT5M";
+    GRANT_TYPES.forEach(g => document.getElementById("gt_" + g.v).checked =
+        data.authorizationGrantTypes && Array.isArray(data.authorizationGrantTypes) && data.authorizationGrantTypes.includes(g.v));
+    AUTH_METHODS.forEach(m => document.getElementById("am_" + m.v).checked =
+        data.clientAuthenticationMethods && Array.isArray(data.clientAuthenticationMethods) && data.clientAuthenticationMethods.includes(m.v));
+    document.getElementById("modal").classList.add("show");
+}
+
+async function save() {
+    const id = document.getElementById("editId").value;
+    const body = {
+        clientId: document.getElementById("clientId").value,
+        clientName: document.getElementById("clientName").value,
+        clientSecret: document.getElementById("clientSecret").value,
+        authorizationGrantTypes: GRANT_TYPES.filter(g => document.getElementById("gt_" + g.v).checked).map(g => g.v),
+        clientAuthenticationMethods: AUTH_METHODS.filter(m => document.getElementById("am_" + m.v).checked).map(m => m.v),
+        scopes: document.getElementById("scopes").value.split(",").map(s => s.trim()).filter(Boolean),
+        redirectUris: document.getElementById("redirectUris").value.split(",").map(s => s.trim()).filter(Boolean),
+        postLogoutRedirectUris: document.getElementById("postLogoutUris").value.split(",").map(s => s.trim()).filter(Boolean),
+        requireProofKey: document.getElementById("requireProofKey").checked,
+        requireAuthorizationConsent: document.getElementById("requireConsent").checked,
+        reuseRefreshTokens: document.getElementById("reuseRefreshTokens").checked,
+        accessTokenTimeToLive: document.getElementById("accessTokenTtl").value,
+        authorizationCodeTimeToLive: document.getElementById("authorizationCodeTtl").value
+        // 注意: accessTokenFormat 不提交, 后端 ClientService 固定写入 REFERENCE
+    };
+
+    if (!body.clientId) { alert("client_id 必填"); return; }
+    if (body.authorizationGrantTypes.length === 0) { alert("至少选一个授权模式"); return; }
+
+    const url = id ? "/admin/client/api/" + id : "/admin/client/api";
+    const method = id ? "PUT" : "POST";
+    const res = await fetch(url, {
+        method, headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+    });
+    const json = await res.json();
+    if (json.code === 200) {
+        closeModal(); list();
+    } else {
+        alert("保存失败: " + json.msg);
+    }
+}
+
+async function del(id, clientId) {
+    if (!confirm(`确认删除客户端 "${clientId}" ?`)) return;
+    const res = await fetch("/admin/client/api/" + id, { method: "DELETE" });
+    const json = await res.json();
+    if (json.code === 200) list(); else alert("删除失败");
+}
+
+async function resetSecret(id, clientId) {
+    if (!confirm(`确认重置客户端 "${clientId}" 的密钥 ?`)) return;
+    const res = await fetch("/admin/client/api/" + id + "/reset-secret", { method: "POST" });
+    const json = await res.json();
+    if (json.code === 200) prompt("新密钥 (请妥善保管):", json.data);
+    else alert("重置失败");
+}
+
+initCheckboxes();
+list();
+
+document.getElementById("logoutLink").addEventListener("click", function (e) {
+    e.preventDefault();
+    if (!confirm("确认退出登录？")) return;
+    var csrf = (document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]*)/) || [])[1];
+    fetch("/admin/logout", {
+        method: "POST",
+        headers: csrf ? { "X-XSRF-TOKEN": decodeURIComponent(csrf) } : {}
+    }).then(function () { location.href = "/admin/login.html"; });
+});
+</script>
+</body>
+</html>

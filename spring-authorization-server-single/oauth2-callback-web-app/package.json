@@ -1,0 +1,12 @@
+{
+  "name": "oauth2-callback-web-app",
+  "version": "1.0.0",
+  "description": "OAuth2 授权码回调接收服务 — 用于测试 spring-authorization-server 的授权码流程",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": ["oauth2", "callback", "test"],
+  "license": "MIT"
+}
