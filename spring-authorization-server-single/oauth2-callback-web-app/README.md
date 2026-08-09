@@ -19,8 +19,18 @@ node server.js
 1. 首页点击"开始授权登录" → 跳转授权服务器
 2. 登录 (`user/123456`) → 授权确认页点"允许"
 3. 回调到本服务 → 服务端自动用 code 换 token
-4. 展示 token 响应 + JWT 解码
+4. 展示 token 响应 + id_token 解码
 5. 点击按钮调用通讯录 API / UserInfo / 刷新 Token
+
+## 客户端配置
+
+| 参数 | 值 |
+|------|------|
+| client_id | `web-app` |
+| 认证方式 | `client_secret_basic`, `client_secret_post` (Confidential Client) |
+| 授权类型 | `authorization_code`, `refresh_token`, `password` |
+| scopes | `openid profile email read write` |
+| redirect_uri | `http://localhost:8080/callback` |
 
 ## 页面说明
 
