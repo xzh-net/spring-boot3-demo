@@ -29,13 +29,9 @@ node server.js
 | client_id | `device-app` |
 | 认证方式 | `none` (Public Client, 无密钥) |
 | 授权类型 | `device_code`, `refresh_token` |
-| scopes | `profile email read` |
+| scopes | `openid profile email read` |
 
-> **注意**: 设备码流程不携带 `openid` scope。
-> SAS 的 `OAuth2RefreshTokenAuthenticationProvider` 在 refresh 时如果 scopes 包含 `openid`，
-> 会尝试生成 OIDC id_token (JWT)，但设备码流程没有 authorization_code 上下文，
-> 导致 `JwtGenerator` 无法生成 id_token → 抛异常 → 返回 `invalid_grant`。
-> 因此设备码客户端去掉 `openid`，OIDC 用户信息通过自定义 `/userinfo` 端点用不透明 token 获取。
+> **说明**: 设备码流程通过自定义 `DeviceCodeGrantAuthenticationProvider` 签发 id_token（替换 SAS 默认 Provider），因此 scopes 可包含 `openid`。OIDC 用户信息也可通过 `/userinfo` 端点用 access_token 获取。
 
 ## 页面说明
 
