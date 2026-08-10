@@ -267,14 +267,18 @@ public class AuthorizationServerConfig {
 						authzConfigurer, as -> as
 								// 3.1 配置授权服务器的各项设置
 								.authorizationServerSettings(
-										AuthorizationServerSettings.builder().issuer("http://localhost:9000") // 设置发行者标识
-												.authorizationEndpoint("/oauth2/authorize") // 授权端点
-												.tokenEndpoint("/oauth2/token") // 令牌端点
-												.deviceAuthorizationEndpoint("/oauth2/device_authorization")
-												.deviceVerificationEndpoint("/oauth2/device/verify")
-												.oidcUserInfoEndpoint("/userinfo")
-												.oidcClientRegistrationEndpoint("/oauth2/connect/register")
-												.build())
+											AuthorizationServerSettings.builder().issuer("http://localhost:9000") // 设置发行者标识
+													.authorizationEndpoint("/oauth2/authorize") // 授权端点
+													.tokenEndpoint("/oauth2/token") // 令牌端点
+													.deviceAuthorizationEndpoint("/oauth2/device_authorization")
+													.deviceVerificationEndpoint("/oauth2/device/verify")
+													.oidcUserInfoEndpoint("/userinfo")
+													.oidcClientRegistrationEndpoint("/oauth2/connect/register")
+													// OIDC RP-Initiated Logout 端点：与 Order(6) 链中的自定义 /logout
+													// 处理器保持一致，使 OIDC discovery 的 end_session_endpoint
+													// 指向 /logout 而非默认的 /connect/logout
+													.oidcLogoutEndpoint("/logout")
+													.build())
 								.authorizationEndpoint(endpoint -> endpoint.consentPage("/consent")) // 指定用户同意授权的页面路径
 								.clientAuthentication(clientAuth -> clientAuth
 										// 【目的】注入自定义的客户端认证组件，以支持设备授权流程
@@ -441,8 +445,8 @@ public class AuthorizationServerConfig {
 	 *  2. OAuth2 回调客户端地址 (http://localhost:8080/*)
 	 */
 	private static final Set<String> ALLOWED_REDIRECT_HOSTS = Set.of(
-			"localhost:8080", "localhost:8081", "localhost:8082", "localhost:9000",
-			"127.0.0.1:8080", "127.0.0.1:8081", "127.0.0.1:8082", "127.0.0.1:9000"
+			"localhost:8080", "localhost:8081", "localhost:8082", "localhost:8083", "localhost:9000",
+			"127.0.0.1:8080", "127.0.0.1:8081", "127.0.0.1:8082", "127.0.0.1:8083", "127.0.0.1:9000"
 	);
 
 	/** 检查退出跳转 URL 是否在白名单内（同源路径自动通过） */

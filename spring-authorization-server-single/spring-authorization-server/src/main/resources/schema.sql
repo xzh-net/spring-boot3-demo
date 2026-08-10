@@ -114,6 +114,12 @@ VALUES ('user', '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e', 
 
 -- 客户端: web-app (授权码模式, Confidential Client)
 -- 典型场景: 传统Web应用 (服务端渲染/SSR), 有 client_secret, 通过 authorization_code + PKCE 完成用户授权
+-- redirect_uris 同时支持:
+--   1) Node.js 演示 (oauth2-callback-web-app, 端口 8080) -> /callback
+--   2) Spring Boot Thymeleaf 客户端 (oauth2-client-thymeleaf, 端口 8083) -> /login/oauth2/code/web-app-oidc
+-- post_logout_redirect_uris 同时支持:
+--   1) Node.js 演示 -> /logout
+--   2) Spring Boot Thymeleaf 客户端 -> /logged-out
 INSERT INTO oauth2_registered_client (
     id, client_id, client_secret, client_name,
     client_authentication_methods,
@@ -129,8 +135,8 @@ INSERT INTO oauth2_registered_client (
     'Web 应用客户端',
     'client_secret_basic,client_secret_post',
     'authorization_code,refresh_token,password',
-    'http://localhost:8080/callback,http://127.0.0.1:8080/callback',
-    'http://localhost:8080/logout',
+    'http://localhost:8080/callback,http://127.0.0.1:8080/callback,http://localhost:8083/login/oauth2/code/web-app-oidc',
+    'http://localhost:8080/logout,http://localhost:8083/logged-out',
     'openid,profile,email,read,write',
     '{"requireProofKey":false,"requireAuthorizationConsent":true}',
     '{"accessTokenFormat":"REFERENCE","accessTokenTimeToLive":"PT2H","reuseRefreshTokens":false,"idTokenSignatureAlgorithm":"RS256"}'
