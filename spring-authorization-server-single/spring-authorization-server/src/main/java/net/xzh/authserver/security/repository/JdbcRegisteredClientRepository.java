@@ -45,7 +45,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @Repository
 @RequiredArgsConstructor
-public final class JdbcRegisteredClientRepository implements RegisteredClientRepository {
+public class JdbcRegisteredClientRepository implements RegisteredClientRepository {
 
     /** Redis key 前缀：按 ID 缓存客户端配置 */
     private static final String CACHE_BY_ID = "oauth2:client:id:";

@@ -39,7 +39,7 @@ import net.xzh.authserver.mapper.OAuth2AuthorizationRecordMapper;
 @Slf4j
 @Repository
 @RequiredArgsConstructor
-public final class JdbcOAuth2AuthorizationConsentService implements OAuth2AuthorizationConsentService {
+public class JdbcOAuth2AuthorizationConsentService implements OAuth2AuthorizationConsentService {
 
     /** 授权同意数据访问接口 */
     private final OAuth2AuthorizationConsentMapper mapper;

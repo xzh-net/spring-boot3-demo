@@ -13,7 +13,7 @@ spring:
   datasource:
     type: com.alibaba.druid.pool.DruidDataSource
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://192.168.31.161:3306/oauth2_server?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
+    url: jdbc:mysql://192.168.1.161:3306/oauth2_server?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
     username: root
     password: 123456
     druid:
@@ -42,7 +42,7 @@ spring:
   # ===== Redis =====
   data:
     redis:
-      host: 192.168.31.161
+      host: 192.168.1.161
       port: 6379
       password: 
       database: 1
