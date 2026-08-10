@@ -33,8 +33,10 @@ import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import org.springframework.security.oauth2.server.authorization.OAuth2Authorization;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationConsentService;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
+import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.server.authorization.authentication.OAuth2DeviceCodeAuthenticationProvider;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.config.annotation.web.configuration.OAuth2AuthorizationServerConfiguration;
@@ -78,6 +80,7 @@ import com.nimbusds.jose.proc.SecurityContext;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
+import net.xzh.authserver.security.repository.RedisOAuth2AuthorizationService;
 import net.xzh.authserver.security.authentication.client.DeviceClientAuthenticationProvider;
 import net.xzh.authserver.security.authentication.grant.DeviceCodeGrantAuthenticationProvider;
 import net.xzh.authserver.security.authentication.grant.PasswordGrantAuthenticationProvider;
@@ -384,7 +387,8 @@ public class AuthorizationServerConfig {
 	@Bean
 	@Order(3)
 	public SecurityFilterChain adminSecurityFilterChain(HttpSecurity http,
-			@Qualifier("adminDaoProvider") DaoAuthenticationProvider adminDaoProvider) throws Exception {
+			@Qualifier("adminDaoProvider") DaoAuthenticationProvider adminDaoProvider,
+			RedisOAuth2AuthorizationService authorizationService) throws Exception {
 
 		// 1. 配置请求匹配与认证提供者
 		// 【目的】明确指定这条安全链只处理 /admin/** 开头的请求
@@ -418,16 +422,21 @@ public class AuthorizationServerConfig {
 						.defaultSuccessUrl("/admin/index.html", true).failureUrl("/admin/login.html?error").permitAll())
 
 				// 6. 配置登出
-				// 【目的】自定义登出逻辑，包括清理会话、清除安全上下文，并返回 JSON 格式的登出成功响应
+				// 【目的】管理员登出时只清理 ADMIN_SECURITY_CONTEXT, 保留同一会话中的门户/设备登录态
+				// 【在线会话同步】同步撤销该管理员通过授权码流程产生的 OAuth2Authorization
+				// 【注意】必须显式 .invalidateHttpSession(false).clearAuthentication(false),
+				//       否则 LogoutConfigurer 自动注入的 SecurityContextLogoutHandler
+				//       会在我们自定义 handler 之前就调用 session.invalidate(), 导致部分登出失效
 				.logout(logout -> logout.logoutUrl("/admin/logout")
+						.invalidateHttpSession(false)
+						.clearAuthentication(false)
 						.addLogoutHandler((HttpServletRequest req, HttpServletResponse res, Authentication auth) -> {
-							var session = req.getSession(false);
-							if (session != null) {
-								sessionRegistry().removeSessionInformation(session.getId());
-								session.invalidate();
+							if (auth != null && auth.getName() != null) {
+								revokeAuthorizationCodeGrantsForPrincipal(authorizationService, auth.getName());
 							}
-							SecurityContextHolder.clearContext();
-						}).logoutSuccessHandler((req, res, auth) -> {
+							partialLogout(sessionRegistry(), req, ADMIN_CONTEXT_KEY);
+						})
+						.logoutSuccessHandler((req, res, auth) -> {
 							res.setContentType("application/json;charset=UTF-8");
 							res.getWriter().write("{\"authenticated\":false}");
 						}).permitAll())
@@ -465,6 +474,96 @@ public class AuthorizationServerConfig {
 			return ALLOWED_REDIRECT_HOSTS.contains(key);
 		} catch (Exception ignore) {
 			return false;
+		}
+	}
+
+	/**
+	 * 部分登出: 只移除指定的 SecurityContext 属性, 避免误删同一会话中其他链路的登录态.
+	 *
+	 * <p>背景: 门户(PORTAL)、管理员(ADMIN)、设备验证(DEVICE)三条链路共用同一个
+	 * HttpSession(都在 localhost:9000, 共享 JSESSIONID cookie),
+	 * SecurityContext 通过不同的 session 属性 key 隔离。
+	 * 如果直接调用 {@code session.invalidate()} 会销毁所有链路的登录态，
+	 * 比如在 8083 客户端 OIDC 登出回调触发 /logout 时，管理员会话也会被连带踢掉。</p>
+	 *
+	 * <p>处理步骤:</p>
+	 * <ol>
+	 *   <li>从 session 中移除传入的 contextKeys</li>
+	 *   <li>检查 session 中是否还留有其他 SecurityContext 属性
+	 *       (PORTAL/ADMIN/DEVICE 之一)</li>
+	 *   <li>全部为空时才真正 {@code session.invalidate()} 并通知 SessionRegistry;
+	 *       有残留时只清掉指定属性，保留其他链路的登录态</li>
+	 * </ol>
+	 *
+	 * @param sessionRegistry 会话注册表，用于在完全销毁会话时移除 sessionId 跟踪
+	 * @param req             当前请求
+	 * @param contextKeysToRemove 本次要移除的 SecurityContext session 属性键
+	 */
+	private static void partialLogout(SessionRegistry sessionRegistry,
+									  HttpServletRequest req,
+									  String... contextKeysToRemove) {
+		var session = req.getSession(false);
+		if (session == null) {
+			SecurityContextHolder.clearContext();
+			return;
+		}
+		// 1. 移除本次指定的 context keys
+		for (String key : contextKeysToRemove) {
+			session.removeAttribute(key);
+		}
+		// 2. 检查三个 context 键中是否还有任何一个残留
+		boolean anyLeft = false;
+		for (String key : List.of(PORTAL_CONTEXT_KEY, ADMIN_CONTEXT_KEY, DEVICE_CONTEXT_KEY)) {
+			if (session.getAttribute(key) != null) {
+				anyLeft = true;
+				break;
+			}
+		}
+		// 3. 全部清空 → 销毁 session；还有残留 → 只清 SecurityContextHolder, 保留 session
+		if (!anyLeft) {
+			sessionRegistry.removeSessionInformation(session.getId());
+			session.invalidate();
+		}
+		SecurityContextHolder.clearContext();
+	}
+
+	/**
+	 * 门户/管理员登出时,同步撤销该用户通过「授权码模式 (authorization_code)」
+	 * 产生的所有 OAuth2Authorization 记录。
+	 * <p>
+	 * 这会让管理后台「在线用户」列表中的对应会话减少或消失,
+	 * 因为在线用户列表是基于 Redis 的 oauth2:user:* 索引统计的。
+	 * <p>
+	 * 只清理 authorization_code 类型的原因:
+	 * <ul>
+	 *   <li>authorization_code: 完全依赖门户/管理员 SSO 会话,登出=会话终结,必须撤销</li>
+	 *   <li>password: 用账号密码直接换 token,不依赖门户 SSO,不能误删</li>
+	 *   <li>device_code / client_credentials: 均为独立流程,不受 SSO 登出影响</li>
+	 * </ul>
+	 *
+	 * @param authorizationService Redis 授权服务,用于查询和删除授权记录
+	 * @param principalName        当前登出的用户名
+	 */
+	private static void revokeAuthorizationCodeGrantsForPrincipal(
+			RedisOAuth2AuthorizationService authorizationService,
+			String principalName) {
+		try {
+			int revoked = 0;
+			// 遍历该用户名下所有授权记录,只删 authorization_code 类型
+			for (OAuth2Authorization auth : authorizationService.findByPrincipal(principalName)) {
+				if (AuthorizationGrantType.AUTHORIZATION_CODE.equals(
+						auth.getAuthorizationGrantType())) {
+					authorizationService.revoke(auth);
+					revoked++;
+				}
+			}
+			if (revoked > 0) {
+				log.info("[门户/管理员登出] 已撤销 {} 的 {} 条 authorization_code 型 OAuth2 授权",
+						principalName, revoked);
+			}
+		} catch (Exception e) {
+			log.warn("[门户/管理员登出] 撤销 authorization_code 授权失败 principal={}: {}",
+					principalName, e.getMessage());
 		}
 	}
 
@@ -520,7 +619,8 @@ public class AuthorizationServerConfig {
 public SecurityFilterChain portalSecurityFilterChain(
         HttpSecurity http,
         @Qualifier("portalDaoProvider")
-        DaoAuthenticationProvider portalDaoProvider) throws Exception {
+        DaoAuthenticationProvider portalDaoProvider,
+        RedisOAuth2AuthorizationService authorizationService) throws Exception {
 
     // 1. 配置认证提供者与安全上下文隔离
     // 【目的】注入门户用户的认证提供者，处理用户名密码登录
@@ -566,20 +666,29 @@ public SecurityFilterChain portalSecurityFilterChain(
             .permitAll())
 
     // 5. 配置登出 (支持 GET 与 POST)
-    // 【目的】支持 GET (OAuth2 客户端 302 跳转) 与 POST (AJAX 退出). 
+    // 【目的】支持 GET (OAuth2 客户端 302 跳转) 与 POST (AJAX 退出).
     // 参数: redirect / post_logout_redirect_uri: 退出成功后 302 目标 (经白名单校验)
     // 无合法参数时默认跳回 /login.html
+    // 【SSO 隔离】只清理 PORTAL + DEVICE 的 SecurityContext, 保留 ADMIN, 避免
+    //            OAuth2 客户端 OIDC 登出回调 /logout 时误把管理员也踢下线
+    // 【在线会话同步】门户登出 = SSO 会话结束, 同步撤销该用户所有 authorization_code
+    //                grant 产生的 OAuth2Authorization (只清 SSO, 不碰 password/device_code 独立会话)
+    // 【注意】必须显式 .invalidateHttpSession(false).clearAuthentication(false),
+    //       否则 LogoutConfigurer 自动注入的 SecurityContextLogoutHandler
+    //       会在我们自定义 handler 之前就调用 session.invalidate(), 导致部分登出失效
     .logout(logout -> logout
             // 匹配 GET /logout 请求
             .logoutRequestMatcher(new AntPathRequestMatcher("/logout"))
-            // 登出处理器：彻底销毁 HttpSession，防止客户端再次 /oauth2/authorize 时被自动登录
+            .invalidateHttpSession(false)
+            .clearAuthentication(false)
+            // 登出处理器：
+            //   a) 撤销该用户通过门户 SSO 产生的 authorization_code 型授权 → 在线用户-1
+            //   b) 仅移除 PORTAL 和 DEVICE 上下文, ADMIN 仍保留
             .addLogoutHandler((HttpServletRequest req, HttpServletResponse res, Authentication auth) -> {
-                var session = req.getSession(false);
-                if (session != null) {
-                    sessionRegistry().removeSessionInformation(session.getId());
-                    session.invalidate();
+                if (auth != null && auth.getName() != null) {
+                    revokeAuthorizationCodeGrantsForPrincipal(authorizationService, auth.getName());
                 }
-                SecurityContextHolder.clearContext();
+                partialLogout(sessionRegistry(), req, PORTAL_CONTEXT_KEY, DEVICE_CONTEXT_KEY);
             })
             // 登出成功处理器：校验 redirect 参数是否在白名单中，合法则 302 跳转，否则回退到登录页
             .logoutSuccessHandler((req, res, auth) -> {
