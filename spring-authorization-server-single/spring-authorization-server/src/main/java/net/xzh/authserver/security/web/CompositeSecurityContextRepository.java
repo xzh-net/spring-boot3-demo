@@ -23,9 +23,16 @@ import jakarta.servlet.http.HttpSession;
  * saveContext 为 no-op: OAuth2 链不应回写会话认证态, 避免设备验证的认证污染门户会话.
  * 各链 (portal/device) 自行管理其 SecurityContextRepository 的写入.
  */
-public class CompositeSecurityContextRepository implements SecurityContextRepository {
+public final class CompositeSecurityContextRepository implements SecurityContextRepository {
 
+    /**
+     * 设备验证流程的 SecurityContext 在会话中的属性键.
+     */
     private final String deviceContextKey;
+
+    /**
+     * 门户登录流程的 SecurityContext 在会话中的属性键.
+     */
     private final String portalContextKey;
 
     public CompositeSecurityContextRepository(String deviceContextKey, String portalContextKey) {
@@ -70,6 +77,15 @@ public class CompositeSecurityContextRepository implements SecurityContextReposi
         return false;
     }
 
+    /**
+     * 从指定的 HTTP 会话中根据键名读取并返回有效的 {@link SecurityContext}.
+     * 仅当属性值为 {@code SecurityContext} 且其 {@code Authentication} 已认证时才返回,
+     * 否则返回 {@code null}.
+     *
+     * @param session HTTP 会话, 不得为 {@code null}
+     * @param key     会话中存储 SecurityContext 的属性键
+     * @return 有效的 {@link SecurityContext}, 若无则返回 {@code null}
+     */
     private SecurityContext readContextFromSession(HttpSession session, String key) {
         Object attr = session.getAttribute(key);
         if (attr instanceof SecurityContext sc) {

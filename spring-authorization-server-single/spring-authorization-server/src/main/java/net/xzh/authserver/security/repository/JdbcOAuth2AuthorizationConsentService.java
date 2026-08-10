@@ -23,12 +23,27 @@ import net.xzh.authserver.entity.OAuth2AuthorizationRecordEntity;
 import net.xzh.authserver.mapper.OAuth2AuthorizationConsentMapper;
 import net.xzh.authserver.mapper.OAuth2AuthorizationRecordMapper;
 
+/**
+ * JDBC 持久化的 OAuth2AuthorizationConsentService 实现.
+ * <p>
+ * 职责：
+ * 1. 将用户的 OAuth2 授权同意（consent）持久化到 MySQL oauth2_authorization_consent 表。
+ * 2. 记录每次授权操作到 oauth2_authorization_record 表（审计日志）。
+ * 3. 支持按 (clientId, principalName) 查询和删除授权同意。
+ *
+ * 架构定位：
+ * 属于 repository 层，实现 SAS 的 OAuth2AuthorizationConsentService 接口。
+ * 与 RedisOAuth2AuthorizationService（token 数据存 Redis）不同，
+ * consent 数据存 MySQL 以支持持久化审计和管理后台查询。
+ */
 @Slf4j
 @Repository
 @RequiredArgsConstructor
-public class JdbcOAuth2AuthorizationConsentService implements OAuth2AuthorizationConsentService {
+public final class JdbcOAuth2AuthorizationConsentService implements OAuth2AuthorizationConsentService {
 
+    /** 授权同意数据访问接口 */
     private final OAuth2AuthorizationConsentMapper mapper;
+    /** 授权记录审计日志数据访问接口 */
     private final OAuth2AuthorizationRecordMapper recordMapper;
 
     @Override

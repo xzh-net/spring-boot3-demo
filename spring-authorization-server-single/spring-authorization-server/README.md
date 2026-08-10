@@ -67,14 +67,12 @@ net.xzh.authserver
 │   └── SessionVO.java
 └── security/                                # 安全组件（核心）
     ├── AuthorizationServerConfig.java       #   总配置：5 条 FilterChain + TokenGenerator
-    ├── authentication/
-    │   ├── client/                          #   设备码 Public Client 认证
-    │   │   ├── DeviceClientAuthenticationConverter.java
-    │   │   ├── DeviceClientAuthenticationProvider.java
-    │   │   └── DeviceClientAuthenticationToken.java
-    │   └── grant/                           #   自定义授权模式
-    │       ├── password/                    #     密码模式 (Converter/Provider/Token)
-    │       └── device_code/                 #     设备码模式 (Provider，支持 id_token)
+    ├── authentication/                      #   【认证层】纯逻辑，不碰 HTTP
+    │   ├── client/                          #     客户端认证逻辑
+    │   │   └── DeviceClientAuthenticationProvider.java
+    │   └── grant/                           #     自定义授权模式逻辑
+    │       ├── password/                    #       密码模式 (Provider/Token)
+    │       └── device_code/                 #       设备码模式 (Provider，支持 id_token)
     ├── repository/                          #   OAuth2 持久化
     │   ├── JdbcRegisteredClientRepository.java       # 客户端 (强制 REFERENCE)
     │   ├── JdbcOAuth2AuthorizationConsentService.java # 授权同意
@@ -84,7 +82,10 @@ net.xzh.authserver
     ├── userdetails/                         #   双 UserDetailsService
     │   ├── AdminUserDetailsService.java     #     管理员 (ROLE_ADMIN)
     │   └── PortalUserDetailsService.java    #     门户 / 设备用户
-    └── web/
+    └── web/                                 #   【Web 层】处理 HTTP 请求
+        ├── converter/                       #     所有 AuthenticationConverter
+        │   ├── DeviceClientAuthenticationConverter.java
+        │   └── PasswordGrantAuthenticationConverter.java
         ├── CompositeSecurityContextRepository.java   # 上下文组合 (DEVICE→PORTAL)
         └── SessionExpirationFilter.java     #   会话过期处理
 ```

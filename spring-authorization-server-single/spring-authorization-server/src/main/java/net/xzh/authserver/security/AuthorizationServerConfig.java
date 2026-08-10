@@ -78,25 +78,58 @@ import com.nimbusds.jose.proc.SecurityContext;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
-import net.xzh.authserver.security.authentication.client.DeviceClientAuthenticationConverter;
 import net.xzh.authserver.security.authentication.client.DeviceClientAuthenticationProvider;
-import net.xzh.authserver.security.authentication.grant.device_code.DeviceCodeGrantAuthenticationProvider;
-import net.xzh.authserver.security.authentication.grant.password.PasswordGrantAuthenticationConverter;
-import net.xzh.authserver.security.authentication.grant.password.PasswordGrantAuthenticationProvider;
+import net.xzh.authserver.security.authentication.grant.DeviceCodeGrantAuthenticationProvider;
+import net.xzh.authserver.security.authentication.grant.PasswordGrantAuthenticationProvider;
 import net.xzh.authserver.security.web.CompositeSecurityContextRepository;
 import net.xzh.authserver.security.web.SessionExpirationFilter;
+import net.xzh.authserver.security.web.converter.DeviceClientAuthenticationConverter;
+import net.xzh.authserver.security.web.converter.PasswordGrantAuthenticationConverter;
 
+/**
+ * Spring Authorization Server 核心配置类.
+ * <p>
+ * 职责：
+ * <ol>
+ *   <li>定义 5 条 SecurityFilterChain，按优先级处理不同的请求路径。</li>
+ *   <li>配置 OAuth2 授权服务器端点（授权码、设备码、令牌、内省、撤销、JWKS、OIDC）。</li>
+ *   <li>配置 TokenGenerator 链路：OAuth2AccessTokenGenerator → JwtGenerator，优先 Opaque 格式。</li>
+ *   <li>注册自定义 AuthenticationProvider（密码授权、设备码授权、设备码客户端认证）。</li>
+ *   <li>配置客户端认证 Converter 链路，支持 NONE（公共客户端）和 CLIENT_SECRET_BASIC。</li>
+ *   <li>配置 OIDC UserInfo 和 ClientRegistration 端点。</li>
+ *   <li>管理安全上下文隔离：门户/管理员/设备验证使用独立的 SecurityContext Key。</li>
+ * </ol>
+ *
+ * 5 条 FilterChain 概览：
+ * <ul>
+ *   <li><b>Order(1)</b> — OAuth2 端点（授权、令牌、内省、撤销、设备码、JWKS、OIDC）</li>
+ *   <li><b>Order(2)</b> — 资源服务器 /api/**（Bearer Token 认证，无状态）</li>
+ *   <li><b>Order(3)</b> — 管理员后台 /admin/**（独立 UserDetailsService + 表单登录）</li>
+ *   <li><b>Order(5)</b> — 设备验证 /activate、/device-login（独立 UserDetailsService）</li>
+ *   <li><b>Order(6)</b> — 门户 + 静态资源（表单登录 + 退出 + 白名单重定向）</li>
+ * </ul>
+ */
 @Slf4j
 @Configuration
 @EnableWebSecurity
-public class AuthorizationServerConfig {
+public final class AuthorizationServerConfig {
 
+    /** 门户/授权码流程的 SecurityContext 在会话中的属性键 */
     private static final String PORTAL_CONTEXT_KEY = "PORTAL_SECURITY_CONTEXT";
+
+    /** 管理员后台的 SecurityContext 在会话中的属性键 */
     private static final String ADMIN_CONTEXT_KEY  = "ADMIN_SECURITY_CONTEXT";
+
+    /** 设备验证流程的 SecurityContext 在会话中的属性键 */
     private static final String DEVICE_CONTEXT_KEY = "DEVICE_SECURITY_CONTEXT";
 
+    /** OAuth2 令牌的预期受众（用于 introspection 和 UserInfo 的 aud claim） */
     static final String CONTACTS_API_AUD = "contacts-api";
 
+    /**
+     * 创建使用指定 key 的 HttpSessionSecurityContextRepository。
+     * 每个链路使用独立的 key 隔离安全上下文，防止会话污染。
+     */
     private static HttpSessionSecurityContextRepository contextRepo(String key) {
         HttpSessionSecurityContextRepository repo = new HttpSessionSecurityContextRepository();
         repo.setSpringSecurityContextKey(key);
@@ -450,14 +483,21 @@ public class AuthorizationServerConfig {
     }
 
     /**
-     * 允许的 post-logout 重定向目标. 防止 open-redirect 漏洞:
-     *  1. 本站同源路径 (以 / 开头, 不包含 // 协议跳)
-     *  2. OAuth2 回调客户端地址 (http://localhost:8080/*)
+     * 门户链 (Order 6) 允许的退出跳转目标白名单：
+     * 1. 本站同源路径 (以 / 开头, 不包含 // 协议跳)
+     * 2. OAuth2 回调客户端地址 (http://localhost:8080/*)
+     *    注意：此处使用硬编码白名单，而非读取客户端配置的 postLogoutRedirectUris，
+     *    因为 SAS 原生 RP-Initiated Logout 流程未在本项目中启用。
      */
     private static final Set<String> ALLOWED_REDIRECT_HOSTS = Set.of(
             "localhost:8080", "localhost:8081", "localhost:8082", "localhost:9000",
             "127.0.0.1:8080", "127.0.0.1:8081", "127.0.0.1:8082", "127.0.0.1:9000"
     );
+
+    /**
+     * 检查给定 URL 是否在允许的退出跳转白名单内。
+     * 同源路径（以 / 开头）自动通过；其他 URL 需匹配白名单中的 host:port。
+     */
     private static boolean isRedirectAllowed(String url) {
         if (url == null || url.isEmpty()) return false;
         try {

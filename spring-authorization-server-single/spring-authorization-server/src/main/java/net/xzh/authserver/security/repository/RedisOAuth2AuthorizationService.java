@@ -49,16 +49,36 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * Redis 持久化的 OAuth2AuthorizationService 实现.
+ * <p>
+ * 职责：
+ * 1. 将 OAuth2 授权数据（authorization codes、access tokens、refresh tokens、device codes）
+ *    序列化存入 Redis，TTL 与 token 过期时间对齐。
+ * 2. 维护 token → authorizationId 的反向索引，支持按 token 值快速查找授权记录。
+ * 3. 维护 principal → authorizationId Set 索引，支持在线会话查询和强制下线。
+ * 4. token 撤销时直接删除 Redis 记录（Opaque 模式无需黑名单）。
+ *
+ * 架构定位：
+ * 属于 repository 层，实现 SAS 的 OAuth2AuthorizationService 接口。
+ * 与 JdbcRegisteredClientRepository（客户端配置）和 JdbcOAuth2AuthorizationConsentService（授权同意）
+ * 协同工作，后两者使用 MySQL 持久化。
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class RedisOAuth2AuthorizationService implements OAuth2AuthorizationService {
+public final class RedisOAuth2AuthorizationService implements OAuth2AuthorizationService {
 
+    /** Redis key 前缀：授权记录主存储 */
     private static final String KEY_PREFIX = "oauth2:auth:";
+    /** Redis key 前缀：用户 → 授权 ID 集合索引 */
     private static final String USER_INDEX_PREFIX = "oauth2:user:";
 
+    /** Redis 操作模板，用于持久化授权数据 */
     private final StringRedisTemplate redisTemplate;
+    /** JSON 序列化/反序列化工具 */
     private final ObjectMapper objectMapper;
+    /** 客户端仓库，用于判断 principalName 是否为 clientId */
     private final RegisteredClientRepository clientRepository;
 
     private static <T extends OAuth2Token> T unwrap(
@@ -667,6 +687,7 @@ public class RedisOAuth2AuthorizationService implements OAuth2AuthorizationServi
     // 注意: claims 中的 exp/iat 是 Instant 类型, Jackson 配置 WRITE_DATES_AS_TIMESTAMPS=false
     // 会将 Instant 序列化为 ISO 字符串, 反序列化为 Map<String,Object> 时变成 String,
     // 导致 OidcUserInfoEndpointFilter 强制 (Instant) 转换失败. 这里手动转 epoch 秒规避.
+    /** 需要特殊处理时间类型转换的 OIDC claim 名称集合 */
     private static final Set<String> TIME_CLAIMS = Set.of("exp", "iat", "nbf", "auth_time", "updated_at");
 
     private Map<String, Object> serializeOidcIdToken(OidcIdToken token) {

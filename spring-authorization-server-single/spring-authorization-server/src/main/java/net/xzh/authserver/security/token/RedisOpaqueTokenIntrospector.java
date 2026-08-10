@@ -44,11 +44,14 @@ import net.xzh.authserver.security.repository.RedisOAuth2AuthorizationService;
  */
 @Slf4j
 @Component
-public class RedisOpaqueTokenIntrospector implements OpaqueTokenIntrospector {
+public final class RedisOpaqueTokenIntrospector implements OpaqueTokenIntrospector {
 
+    /** 资源服务器标识 (aud claim), 用于校验 token 的接收方. */
     private static final String CONTACTS_API_AUD = "contacts-api";
 
+    /** Redis 持久化的 OAuth2Authorization 服务, 用于查找授权记录. */
     private final RedisOAuth2AuthorizationService authorizationService;
+    /** 用户详情服务, 用于加载用户权限信息 (非 client_credentials 模式). */
     private final UserDetailsService portalUserDetailsService;
 
     public RedisOpaqueTokenIntrospector(

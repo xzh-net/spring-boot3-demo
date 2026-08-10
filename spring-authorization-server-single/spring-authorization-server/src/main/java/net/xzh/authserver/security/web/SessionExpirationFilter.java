@@ -23,8 +23,11 @@ import jakarta.servlet.http.HttpSession;
  * 会从 RequestCache 恢复原始请求 (如 /oauth2/authorize?...), 实现强制下线后
  * 重新登录能回到原流程, 而不是跳到默认门户页.
  */
-public class SessionExpirationFilter extends OncePerRequestFilter {
+public final class SessionExpirationFilter extends OncePerRequestFilter {
 
+    /**
+     * 用于查询和管理 Session 过期信息的注册表.
+     */
     private final SessionRegistry sessionRegistry;
 
     public SessionExpirationFilter(SessionRegistry sessionRegistry) {

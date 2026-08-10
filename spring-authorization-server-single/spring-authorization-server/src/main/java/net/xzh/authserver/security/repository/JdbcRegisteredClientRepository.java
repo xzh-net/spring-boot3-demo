@@ -29,17 +29,36 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+/**
+ * JDBC + Redis 双层缓存的 RegisteredClientRepository 实现.
+ * <p>
+ * 职责：
+ * 1. 从 MySQL 读取客户端配置（oauth2_registered_client 表），Redis 缓存 1 小时。
+ * 2. 管理客户端配置的增删改查，变更时自动刷新 Redis 缓存。
+ * 3. 处理 RegisteredClient 与实体之间的序列化/反序列化转换。
+ *
+ * 架构定位：
+ * 属于 repository 层，实现 SAS 的 RegisteredClientRepository 接口。
+ * Token 格式强制 Opaque（REFERENCE），不允许客户端覆盖。
+ * 客户端认证方法支持 NONE（公共客户端）和 CLIENT_SECRET_BASIC（机密客户端）。
+ */
 @Slf4j
 @Repository
 @RequiredArgsConstructor
-public class JdbcRegisteredClientRepository implements RegisteredClientRepository {
+public final class JdbcRegisteredClientRepository implements RegisteredClientRepository {
 
+    /** Redis key 前缀：按 ID 缓存客户端配置 */
     private static final String CACHE_BY_ID = "oauth2:client:id:";
+    /** Redis key 前缀：按 clientId 缓存客户端配置 */
     private static final String CACHE_BY_CLIENT_ID = "oauth2:client:cid:";
+    /** Redis 缓存过期时间（1 小时） */
     private static final Duration CACHE_TTL = Duration.ofHours(1);
 
+    /** 客户端配置数据访问接口 */
     private final OAuth2RegisteredClientMapper mapper;
+    /** Redis 操作模板，用于缓存客户端配置 */
     private final StringRedisTemplate redisTemplate;
+    /** JSON 序列化/反序列化工具 */
     private final ObjectMapper objectMapper;
 
     @Override

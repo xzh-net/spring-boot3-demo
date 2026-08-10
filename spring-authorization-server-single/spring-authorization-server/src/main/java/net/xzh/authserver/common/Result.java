@@ -7,7 +7,11 @@ import java.io.Serializable;
 @Data
 public class Result<T> implements Serializable {
 
-    private int code;
+    /**
+	 * 
+	 */
+	private static final long serialVersionUID = 4436252366066300587L;
+	private int code;
     private String msg;
     private T data;
     private long timestamp = System.currentTimeMillis();
