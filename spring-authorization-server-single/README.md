@@ -7,6 +7,7 @@
 | 项目 | 类型 | 端口 | 说明 | 文档 |
 |------|------|------|------|------|
 | `spring-authorization-server` | 服务端 (Java) | 9000 | 认证中心主体，含管理后台、OAuth2 端点、资源 API | [README](./spring-authorization-server/README.md) |
+| `oauth2-client-thymeleaf` | 演示 (Java) | 8083 | 授权码 + 密钥 — 非前后端分离 Spring Boot 接入示例 | [README](./oauth2-client-thymeleaf/README.md) |
 | `oauth2-callback-web-app` | 演示 (Node) | 8080 | 授权码模式 — 传统 Web 应用 (Confidential Client) | [README](./oauth2-callback-web-app/README.md) |
 | `oauth2-callback-device-app` | 演示 (Node) | 8081 | 设备码模式 — 输入受限设备 (RFC 8628) | [README](./oauth2-callback-device-app/README.md) |
 | `oauth2-callback-mobile-app` | 演示 (Node) | 8082 | 授权码 + PKCE — 移动应用 / SPA (Public Client) | [README](./oauth2-callback-mobile-app/README.md) |
@@ -33,12 +34,13 @@ mvn spring-boot:run
 ### 2. 启动演示项目（按需）
 
 ```bash
+cd oauth2-client-thymeleaf     && mvn spring-boot:run  # http://localhost:8083  非前后端分离 Spring Boot 接入示例
 cd oauth2-callback-web-app     && node server.js   # http://localhost:8080  传统 Web 应用
 cd oauth2-callback-device-app  && node server.js   # http://localhost:8081  设备码
 cd oauth2-callback-mobile-app  && node server.js   # http://localhost:8082  移动应用 / SPA
 ```
 
-演示项目均零依赖，仅需 Node.js。
+Node.js 演示项目均零依赖，仅需 Node.js；Java 演示项目需要 Maven。
 
 ## 默认账号
 
