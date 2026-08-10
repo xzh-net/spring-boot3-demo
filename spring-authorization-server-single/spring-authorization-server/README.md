@@ -69,25 +69,26 @@ net.xzh.authserver
     ├── AuthorizationServerConfig.java       #   总配置：5 条 FilterChain + TokenGenerator
     ├── authentication/                      #   【认证层】纯逻辑，不碰 HTTP
     │   ├── client/                          #     客户端认证逻辑
-    │   │   └── DeviceClientAuthenticationProvider.java
-    │   └── grant/                           #     自定义授权模式逻辑
-    │       ├── password/                    #       密码模式 (Provider/Token)
-    │       └── device_code/                 #       设备码模式 (Provider，支持 id_token)
+    │   │   └── DeviceClientAuthenticationProvider.java  # NONE 公共客户端认证（设备码/刷新令牌）
+    │   └── grant/                           #     自定义授权模式逻辑（扁平，按文件名区分类型）
+    │       ├── PasswordGrantAuthenticationProvider.java  # 密码模式 Provider（支持 id_token）
+    │       ├── PasswordGrantAuthenticationToken.java     # 密码模式 Token 载体
+    │       └── DeviceCodeGrantAuthenticationProvider.java # 设备码模式 Provider（替换 SAS 原生，支持 id_token + 真实 authorities）
     ├── repository/                          #   OAuth2 持久化
-    │   ├── JdbcRegisteredClientRepository.java       # 客户端 (强制 REFERENCE)
-    │   ├── JdbcOAuth2AuthorizationConsentService.java # 授权同意
-    │   └── RedisOAuth2AuthorizationService.java      # 授权运行时状态 (Redis)
-    ├── token/
-    │   └── RedisOpaqueTokenIntrospector.java         # Bearer token 校验
-    ├── userdetails/                         #   双 UserDetailsService
-    │   ├── AdminUserDetailsService.java     #     管理员 (ROLE_ADMIN)
-    │   └── PortalUserDetailsService.java    #     门户 / 设备用户
-    └── web/                                 #   【Web 层】处理 HTTP 请求
-        ├── converter/                       #     所有 AuthenticationConverter
-        │   ├── DeviceClientAuthenticationConverter.java
-        │   └── PasswordGrantAuthenticationConverter.java
-        ├── CompositeSecurityContextRepository.java   # 上下文组合 (DEVICE→PORTAL)
-        └── SessionExpirationFilter.java     #   会话过期处理
+    │   ├── JdbcRegisteredClientRepository.java       # 客户端配置 (MySQL + Redis 缓存，强制 REFERENCE)
+    │   ├── JdbcOAuth2AuthorizationConsentService.java # 授权同意 (MySQL) + 审计日志
+    │   └── RedisOAuth2AuthorizationService.java      # 授权运行时状态 (Redis TTL)
+    ├── token/                               #   Token 内省
+    │   └── RedisOpaqueTokenIntrospector.java         # Opaque Bearer token 校验 (Redis 查询)
+    ├── userdetails/                         #   双 UserDetailsService（按角色隔离）
+    │   ├── AdminUserDetailsService.java     #     管理员 (ROLE_ADMIN, Order 3)
+    │   └── PortalUserDetailsService.java    #     门户 / 设备用户 (Order 5/6, 为 id_token 加载真实 authorities)
+    └── web/                                 #   【Web 层】HTTP 请求处理
+        ├── converter/                       #     AuthenticationConverter（请求 → 未认证 Token）
+        │   ├── DeviceClientAuthenticationConverter.java  # 解析 device_code / refresh_token 请求
+        │   └── PasswordGrantAuthenticationConverter.java  # 解析 password grant 请求
+        ├── CompositeSecurityContextRepository.java   # SecurityContext 组合读写 (DEVICE→PORTAL 回退)
+        └── SessionExpirationFilter.java              # 会话过期检测 + 自动续签
 ```
 
 ### 认证链（5 条 SecurityFilterChain）
