@@ -194,6 +194,30 @@ INSERT INTO oauth2_registered_client (
     '{"accessTokenFormat":"REFERENCE","accessTokenTimeToLive":"PT2H","reuseRefreshTokens":false,"idTokenSignatureAlgorithm":"RS256"}'
 );
 
+-- 客户端: portal-app (门户应用, 用于客户端→门户的SSO)
+-- 典型场景: 用户在客户端登录后，点击"返回门户"时，通过OAuth2授权码流程自动登录门户
+INSERT INTO oauth2_registered_client (
+    id, client_id, client_secret, client_name,
+    client_authentication_methods,
+    authorization_grant_types,
+    redirect_uris, post_logout_redirect_uris,
+    scopes,
+    client_settings,
+    token_settings
+) VALUES (
+    '5',
+    'portal-app',
+    '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e',
+    '门户应用 (SSO)',
+    'none',
+    'authorization_code,refresh_token',
+    'http://localhost:9000/portal.html,http://127.0.0.1:9000/portal.html',
+    'http://localhost:9000/login.html',
+    'openid,profile,email',
+    '{"requireProofKey":false,"requireAuthorizationConsent":false}',
+    '{"accessTokenFormat":"REFERENCE","accessTokenTimeToLive":"PT2H","reuseRefreshTokens":false}'
+);
+
 -- 客户端: service-app (客户端模式, 服务间调用)
 -- 典型场景: 后端服务对服务调用 (M2M), 无用户参与, 用 client_credentials 直接获取 access_token
 INSERT INTO oauth2_registered_client (

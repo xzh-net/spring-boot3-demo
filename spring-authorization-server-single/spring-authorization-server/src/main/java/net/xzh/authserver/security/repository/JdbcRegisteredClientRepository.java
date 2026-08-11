@@ -103,6 +103,23 @@ public class JdbcRegisteredClientRepository implements RegisteredClientRepositor
         return cacheAndReturn(entity);
     }
 
+    /**
+     * 获取所有已注册的客户端列表。
+     * <p>
+     * 注意: 此方法不在 RegisteredClientRepository 接口定义中,
+     * 属于扩展方法, 用于管理后台查询所有客户端配置。
+     *
+     * @return 所有已注册的客户端列表
+     */
+    public java.util.List<RegisteredClient> findAll() {
+        java.util.List<OAuth2RegisteredClient> entities = mapper.selectList(null);
+        java.util.List<RegisteredClient> clients = new java.util.ArrayList<>();
+        for (OAuth2RegisteredClient entity : entities) {
+            clients.add(toRegisteredClient(entity));
+        }
+        return clients;
+    }
+
     // ------------------------------------------------------------------
     // 缓存管理
     // ------------------------------------------------------------------

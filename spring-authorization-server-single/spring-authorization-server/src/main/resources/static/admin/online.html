@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>统一认证中心 · 在线用户</title>
+    <title>统一认证中心 · 在线管理</title>
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -23,44 +23,36 @@
         .container { max-width: 1200px; margin: 24px auto; padding: 0 24px; }
         .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
         .page-header h2 { font-size: 22px; color: #1e3a5f; }
+
+        .tabs { display: flex; gap: 4px; border-bottom: 2px solid #e2e8f0; margin-bottom: 20px; }
+        .tab {
+            padding: 12px 24px; cursor: pointer; font-size: 14px; font-weight: 500;
+            color: #64748b; border-bottom: 3px solid transparent; transition: all 0.2s;
+            margin-bottom: -2px;
+        }
+        .tab:hover { color: #2563eb; }
+        .tab.active { color: #2563eb; border-bottom-color: #2563eb; }
+        .tab .count {
+            display: inline-block; background: #e2e8f0; color: #475569;
+            padding: 2px 8px; border-radius: 10px; font-size: 12px; margin-left: 6px;
+        }
+        .tab.active .count { background: #2563eb; color: #fff; }
+
         .btn { padding: 8px 18px; border-radius: 6px; border: none; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s; }
         .btn-primary { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; }
         .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(37,99,235,0.35); }
-        .btn-link { background: none; border: none; color: #2563eb; cursor: pointer; font-size: 13px; }
+        .btn-link { background: none; border: none; color: #2563eb; cursor: pointer; font-size: 13px; padding: 4px 8px; }
         .btn-link:hover { text-decoration: underline; }
         .btn-link.danger { color: #dc2626; }
-        .btn-icon { background: none; border: none; cursor: pointer; font-size: 14px; padding: 2px 4px; border-radius: 4px; color: #64748b; transition: all 0.15s; position: relative; }
+        .btn-link.danger:hover { color: #b91c1c; }
+        .btn-icon { background: none; border: none; cursor: pointer; font-size: 13px; padding: 4px 6px; border-radius: 4px; color: #64748b; transition: all 0.15s; position: relative; }
         .btn-icon:hover { background: #f1f5f9; color: #2563eb; }
         .btn-icon .copy-tooltip {
-            visibility: hidden;
-            opacity: 0;
-            position: absolute;
-            bottom: 130%;
-            right: 0;
-            transform: translateX(0);
-            background: #1e293b;
-            color: #f8fafc;
-            padding: 6px 10px;
-            border-radius: 6px;
-            font-size: 11px;
-            pointer-events: none;
-            transition: opacity 0.2s;
-            z-index: 200;
-            font-family: "Cascadia Code", Consolas, monospace;
-            white-space: nowrap;
-            max-width: 300px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .btn-icon .copy-tooltip::after {
-            content: "";
-            position: absolute;
-            top: 100%;
-            right: 8px;
-            margin-left: 0;
-            border-width: 4px;
-            border-style: solid;
-            border-color: #1e293b transparent transparent transparent;
+            visibility: hidden; opacity: 0; position: absolute; bottom: 130%; right: 0; transform: translateX(0);
+            background: #1e293b; color: #f8fafc; padding: 6px 10px; border-radius: 6px; font-size: 11px;
+            pointer-events: none; transition: opacity 0.2s; z-index: 200;
+            font-family: "Cascadia Code", Consolas, monospace; white-space: nowrap; max-width: 400px;
+            overflow: hidden; text-overflow: ellipsis;
         }
         .btn-icon:hover .copy-tooltip { visibility: visible; opacity: 1; }
         .copy-copied { color: #16a34a !important; }
@@ -80,6 +72,19 @@
         .tag.amber { background: rgba(245,158,11,0.08); color: #d97706; }
         .empty { text-align: center; padding: 40px; color: #94a3b8; font-size: 14px; }
 
+        .login-time-cell { display: flex; align-items: center; gap: 6px; }
+        .login-time-text { color: #94a3b8; font-size: 12px; }
+        .token-copy-btn {
+            background: none; border: 1px solid #e2e8f0; cursor: pointer; font-size: 11px;
+            padding: 2px 6px; border-radius: 4px; color: #64748b; transition: all 0.15s;
+        }
+        .token-copy-btn:hover { background: #f1f5f9; color: #2563eb; border-color: #2563eb; }
+        .token-copy-btn.copied { background: #dcfce7; color: #16a34a; border-color: #16a34a; }
+        .token-value {
+            font-family: "Cascadia Code", Consolas, monospace; font-size: 11px;
+            color: #64748b; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+
         .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); align-items: center; justify-content: center; z-index: 100; padding: 24px; }
         .modal-bg.show { display: flex; }
         .modal { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; width: 1100px; max-width: 100%; max-height: 85vh; box-shadow: 0 16px 50px rgba(0,0,0,0.18); color: #1e293b; display: flex; flex-direction: column; }
@@ -96,7 +101,7 @@
         <a href="/admin/user">用户管理</a>
         <a href="/admin/client">客户端管理</a>
         <a href="/admin/authorization">授权管理</a>
-        <a href="/admin/online.html" class="active">在线用户</a>
+        <a href="/admin/online.html" class="active">在线管理</a>
         <a href="/admin/monitor.html">系统监控</a>
         <div class="spacer"></div>
         <a href="#" class="logout" id="logoutLink">退出登录</a>
@@ -104,19 +109,60 @@
 
     <div class="container">
         <div class="page-header">
-            <h2>在线用户</h2>
-            <button class="btn btn-primary" onclick="listOnline()">🔄 刷新</button>
+            <h2>在线管理</h2>
+            <button class="btn btn-primary" onclick="refreshCurrentTab()">🔄 刷新</button>
         </div>
+
+        <div class="tabs">
+            <div class="tab active" data-tab="admin" onclick="switchTab('admin')">
+                管理用户 <span class="count" id="count-admin">0</span>
+            </div>
+            <div class="tab" data-tab="portal" onclick="switchTab('portal')">
+                门户用户 <span class="count" id="count-portal">0</span>
+            </div>
+            <div class="tab" data-tab="client" onclick="switchTab('client')">
+                客户端用户 <span class="count" id="count-client">0</span>
+            </div>
+        </div>
+
         <div class="card">
-            <table>
+            <table id="adminTable">
                 <thead>
                     <tr>
-                        <th>用户名</th><th>会话数</th><th>客户端</th>
-                        <th>首次登录</th><th>最近登录</th><th style="width: 200px">操作</th>
+                        <th>用户名</th>
+                        <th>会话数</th>
+                        <th>上次登录</th>
+                        <th style="width: 200px">操作</th>
                     </tr>
                 </thead>
-                <tbody id="onlineTable"></tbody>
+                <tbody id="adminTableBody"></tbody>
             </table>
+
+            <table id="portalTable" style="display:none;">
+                <thead>
+                    <tr>
+                        <th>用户名</th>
+                        <th>会话数</th>
+                        <th>上次登录</th>
+                        <th style="width: 200px">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="portalTableBody"></tbody>
+            </table>
+
+            <table id="clientTable" style="display:none;">
+                <thead>
+                    <tr>
+                        <th>用户名</th>
+                        <th>会话数</th>
+                        <th>客户端</th>
+                        <th>上次登录</th>
+                        <th style="width: 200px">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="clientTableBody"></tbody>
+            </table>
+
             <div class="empty" id="emptyTip" style="display:none;">当前无在线用户</div>
         </div>
     </div>
@@ -130,9 +176,12 @@
             <div class="modal-body">
                 <table style="width:100%;border-collapse:collapse;">
                     <thead>
-                        <tr>
-                            <th>客户端</th><th>授权类型</th><th>设备/浏览器</th><th>IP地址</th><th>登录时间</th>
-                            <th>Access Token 过期</th><th>Refresh Token 过期</th><th>操作</th>
+                        <tr id="sessionTableHead">
+                            <th>设备/浏览器</th>
+                            <th>IP地址</th>
+                            <th>登录时间</th>
+                            <th>会话</th>
+                            <th>操作</th>
                         </tr>
                     </thead>
                     <tbody id="sessionTable"></tbody>
@@ -172,27 +221,155 @@ function grantTypeTag(grantType) {
     return `<span class="tag ${m.cls}">${m.label}</span>`;
 }
 
-async function listOnline() {
-    const res = await fetch("/admin/user/api/online");
+let currentTab = "admin";
+
+function switchTab(tab) {
+    currentTab = tab;
+    document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === tab));
+    document.getElementById("adminTable").style.display = tab === "admin" ? "" : "none";
+    document.getElementById("portalTable").style.display = tab === "portal" ? "" : "none";
+    document.getElementById("clientTable").style.display = tab === "client" ? "" : "none";
+    loadTabData(tab);
+}
+
+function refreshCurrentTab() {
+    loadTabData(currentTab);
+}
+
+async function loadTabData(tab) {
+    document.getElementById("emptyTip").style.display = "none";
+    if (tab === "admin") {
+        await loadSessionUsers("admin");
+    } else if (tab === "portal") {
+        await loadSessionUsers("portal");
+    } else {
+        await loadClientUsers();
+    }
+}
+
+/** 加载管理/门户用户列表 */
+async function loadSessionUsers(type) {
+    const url = type === "admin"
+        ? "/admin/user/api/admin/online"
+        : "/admin/user/api/portal/online";
+    const res = await fetch(url);
     const { code, data } = await res.json();
-    const tbody = document.getElementById("onlineTable");
-    const empty = document.getElementById("emptyTip");
+    const tableId = type === "admin" ? "adminTableBody" : "portalTableBody";
+    const countId = type === "admin" ? "count-admin" : "count-portal";
+    const tbody = document.getElementById(tableId);
+
     if (!data || data.length === 0) {
+        document.getElementById(countId).textContent = "0";
         tbody.innerHTML = "";
-        empty.style.display = "block";
+        document.getElementById("emptyTip").style.display = "block";
+        document.getElementById("emptyTip").textContent = type === "admin" ? "当前无管理端在线用户" : "当前无门户端在线用户";
         return;
     }
-    empty.style.display = "none";
+
+    document.getElementById(countId).textContent = data.length;
+    document.getElementById("emptyTip").style.display = "none";
+
+    // 聚合相同用户名的会话
+    const grouped = {};
+    data.forEach(row => {
+        const name = row.principalName;
+        if (!grouped[name]) {
+            grouped[name] = { name, sessions: [] };
+        }
+        grouped[name].sessions.push(row);
+    });
+
+    tbody.innerHTML = Object.values(grouped).map(user => {
+        const firstSession = user.sessions[0];
+        const lastAccessTime = firstSession.lastAccessTime || firstSession.loginTime || "-";
+        const sessionCount = user.sessions.length;
+
+        return `
+            <tr>
+                <td style="font-family:monospace;">${user.name}</td>
+                <td>${sessionCount}</td>
+                <td style="font-size:12px;color:#94a3b8;">${lastAccessTime}</td>
+                <td>
+                    <button class="btn-link" onclick="showSessionSessions('${user.name}', '${type}')">查看会话</button>
+                    <button class="btn-link danger" onclick="kickUserSessions('${user.name}', '${type}')">强制下线</button>
+                </td>
+            </tr>
+        `;
+    }).join("");
+}
+
+/** 显示管理/门户用户的会话详情 (session 列表) */
+async function showSessionSessions(username, type) {
+    const url = type === "admin"
+        ? "/admin/user/api/admin/online"
+        : "/admin/user/api/portal/online";
+    const res = await fetch(url);
+    const { code, data } = await res.json();
+    if (code !== 200) { alert("加载失败"); return; }
+    const userSessions = (data || []).filter(r => r.principalName === username);
+    document.getElementById("sessionModalTitle").textContent = `会话详情 - ${username}`;
+    // 管理/门户会话详情使用标准表头
+    document.getElementById("sessionTableHead").innerHTML = `
+        <th>设备/浏览器</th>
+        <th>IP地址</th>
+        <th>登录时间</th>
+        <th>会话</th>
+        <th>操作</th>
+    `;
+    const tbody = document.getElementById("sessionTable");
+    if (!userSessions || userSessions.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:16px;">无活动会话</td></tr>`;
+    } else {
+        tbody.innerHTML = userSessions.map(s => {
+            const sid = s.sessionId || '';
+            const sidDisplay = sid.length > 40 ? sid.substring(0, 20) + '...' + sid.substring(sid.length - 16) : sid;
+            return `
+            <tr>
+                <td style="font-size:12px;color:#64748b;">${type === "admin" ? "管理端" : "门户端"}</td>
+                <td style="font-size:12px;font-family:monospace;">-</td>
+                <td style="font-size:12px;color:#94a3b8;">${s.loginTime || "-"}</td>
+                <td style="font-size:12px;color:#64748b;">
+                    <span class="token-value" title="${sid}">${sidDisplay}</span>
+                    ${sid ? `<button class="btn-icon" data-token="${sid}" onclick="copyToken(this)">
+                        📋
+                        <span class="copy-tooltip" data-full="${sid}">${sidDisplay}</span>
+                    </button>` : ''}
+                </td>
+                <td>
+                    <button class="btn-link danger" onclick="kickSessionBySid('${sid}')">强制下线</button>
+                </td>
+            </tr>
+            `;
+        }).join("");
+    }
+    document.getElementById("sessionModal").classList.add("show");
+}
+
+/** 加载客户端用户列表 */
+async function loadClientUsers() {
+    const res = await fetch("/admin/user/api/client/online");
+    const { code, data } = await res.json();
+    const tbody = document.getElementById("clientTableBody");
+
+    if (!data || data.length === 0) {
+        document.getElementById("count-client").textContent = "0";
+        tbody.innerHTML = "";
+        document.getElementById("emptyTip").style.display = "block";
+        document.getElementById("emptyTip").textContent = "当前无客户端在线用户";
+        return;
+    }
+
+    document.getElementById("count-client").textContent = data.length;
+    document.getElementById("emptyTip").style.display = "none";
     tbody.innerHTML = data.map(u => `
         <tr>
             <td style="font-family:monospace;">${u.principalName}</td>
             <td>${u.sessionCount}</td>
             <td style="font-size:12px;">${u.clients || "-"}</td>
-            <td style="font-size:12px;color:#94a3b8;">${u.loginTime || "-"}</td>
-            <td style="font-size:12px;color:#94a3b8;">${u.lastAccessTime || "-"}</td>
+            <td style="font-size:12px;color:#94a3b8;">${u.lastAccessTime || u.loginTime || "-"}</td>
             <td>
                 <button class="btn-link" onclick="showSessions('${u.principalName}')">查看会话</button>
-                <button class="btn-link danger" onclick="kick('${u.principalName}')">强制下线</button>
+                <button class="btn-link danger" onclick="kickClientUser('${u.principalName}')">强制下线</button>
             </td>
         </tr>
     `).join("");
@@ -201,47 +378,70 @@ async function listOnline() {
 function closeSessionModal() { document.getElementById("sessionModal").classList.remove("show"); }
 
 async function showSessions(username) {
-    const res = await fetch("/admin/user/api/online/" + username);
+    const res = await fetch("/admin/user/api/client/online/" + username);
     const { code, data } = await res.json();
     if (code !== 200) { alert("加载失败"); return; }
     document.getElementById("sessionModalTitle").textContent = `会话详情 - ${username}`;
+    // 客户端会话详情使用专用表头 (含 access_token / refresh_token)
+    document.getElementById("sessionTableHead").innerHTML = `
+        <th>客户端</th>
+        <th>授权类型</th>
+        <th>设备/浏览器</th>
+        <th>IP地址</th>
+        <th>Access Token</th>
+        <th>Refresh Token</th>
+        <th>登录时间</th>
+        <th>AT 过期</th>
+        <th>操作</th>
+    `;
     const tbody = document.getElementById("sessionTable");
     if (!data || data.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:16px;">无活动会话</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:#94a3b8;padding:16px;">无活动会话</td></tr>`;
     } else {
         tbody.innerHTML = data.map(s => {
             const at = s.accessToken || '';
+            const atDisplay = at.length > 40 ? at.substring(0, 16) + '...' + at.substring(at.length - 12) : at;
             const rt = s.refreshToken || '';
-            const atDisplay = at.length > 40 ? at.substring(0, 20) + '...' + at.substring(at.length - 16) : at;
-            const rtDisplay = rt.length > 40 ? rt.substring(0, 20) + '...' + rt.substring(rt.length - 16) : rt;
+            const rtDisplay = rt.length > 40 ? rt.substring(0, 16) + '...' + rt.substring(rt.length - 12) : rt;
             return `
             <tr>
-                <td style="font-size:12px;">${s.clientName || s.registeredClientId}</td>
-                <td style="font-size:12px;">${grantTypeTag(s.grantType)}</td>
+                <td style="font-size:12px;">${s.clientName || '-'}</td>
+                <td style="font-size:12px;color:#64748b;">${s.grantType || '-'}</td>
                 <td style="font-size:12px;color:#64748b;" title="${s.userAgent || ''}">${parseUA(s.userAgent)}</td>
                 <td style="font-size:12px;font-family:monospace;">${s.clientIp || "-"}</td>
-                <td style="font-size:12px;color:#94a3b8;">${s.loginTime || "-"}</td>
-                <td style="font-size:12px;color:#94a3b8;white-space:nowrap;">
-                    ${s.accessTokenExpiresAt || "-"}
+                <td style="font-size:12px;color:#64748b;">
+                    <span class="token-value" title="${at}">${atDisplay}</span>
                     ${at ? `<button class="btn-icon" data-token="${at}" onclick="copyToken(this)">
                         📋
                         <span class="copy-tooltip" data-full="${at}">${atDisplay}</span>
                     </button>` : ''}
                 </td>
-                <td style="font-size:12px;color:#94a3b8;white-space:nowrap;">
-                    ${s.refreshTokenExpiresAt || "-"}
+                <td style="font-size:12px;color:#64748b;">
+                    <span class="token-value" title="${rt}">${rtDisplay}</span>
                     ${rt ? `<button class="btn-icon" data-token="${rt}" onclick="copyToken(this)">
                         📋
                         <span class="copy-tooltip" data-full="${rt}">${rtDisplay}</span>
-                    </button>` : ''}
+                    </button>` : '<span style="color:#94a3b8;">-</span>'}
                 </td>
+                <td style="font-size:12px;color:#94a3b8;">${s.loginTime || "-"}</td>
+                <td style="font-size:12px;color:#94a3b8;">${s.accessTokenExpiresAt || "-"}</td>
                 <td>
-                    <button class="btn-link danger" onclick="kickSession('${s.authorizationId}', '${username}')">强制下线</button>
+                    <button class="btn-link danger" onclick="kickClientSession('${s.authorizationId}')">强制下线</button>
                 </td>
             </tr>
         `}).join("");
     }
     document.getElementById("sessionModal").classList.add("show");
+}
+
+/** 复制文本到剪贴板 */
+function copyText(text) {
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(function() {
+        alert("已复制: " + text.substring(0, 20) + "...");
+    }).catch(function() {
+        alert("复制失败, 请手动复制: " + text);
+    });
 }
 
 function copyToken(btn) {
@@ -265,22 +465,66 @@ function copyToken(btn) {
     });
 }
 
-async function kickSession(authId, username) {
-    if (!confirm(`确认强制下线该会话 ?`)) return;
-    const res = await fetch("/admin/user/api/session/" + authId, { method: "DELETE" });
+/** 下线单个 HttpSession */
+async function kickSessionBySid(sessionId) {
+    if (!confirm(`确认下线该会话 ?\nSessionID: ${sessionId}`)) return;
+    const res = await fetch("/admin/user/api/session/" + sessionId, { method: "DELETE" });
     const json = await res.json();
-    if (json.code === 200) { showSessions(username); listOnline(); }
-    else alert("下线失败");
+    if (json.code === 200 && json.data) {
+        alert("✅ 已下线该会话");
+        refreshCurrentTab();
+    } else {
+        alert("❌ 下线失败: " + (json.msg || ""));
+    }
 }
 
-async function kick(username) {
-    if (!confirm(`确认将用户 "${username}" 全部会话下线 ?\n(已签发的 Token 将立即失效)`)) return;
-    const res = await fetch("/admin/user/api/online/" + username, { method: "DELETE" });
+/** 下线用户全部管理/门户会话 */
+async function kickUserSessions(username, type) {
+    const typeName = type === "admin" ? "管理端" : "门户端";
+    if (!confirm(`确认将用户 "${username}" 的全部${typeName}会话下线 ?\n(不影响客户端会话)`)) return;
+    const url = type === "admin"
+        ? "/admin/user/api/admin/online/" + username
+        : "/admin/user/api/portal/online/" + username;
+    const res = await fetch(url, { method: "DELETE" });
     const json = await res.json();
-    if (json.code === 200) { listOnline(); closeSessionModal(); } else alert("下线失败: " + (json.msg || ""));
+    if (json.code === 200) {
+        alert("✅ 已将 " + username + " 的全部" + typeName + "会话下线");
+        refreshCurrentTab();
+    } else {
+        alert("❌ 下线失败: " + (json.msg || ""));
+    }
 }
 
-listOnline();
+/** 下线单个客户端会话 */
+async function kickClientSession(authId) {
+    if (!confirm("确认强制下线该客户端会话 ?")) return;
+    const res = await fetch("/admin/user/api/client/session/" + authId, { method: "DELETE" });
+    const json = await res.json();
+    if (json.code === 200) {
+        alert("✅ 已下线该客户端会话");
+        closeSessionModal();
+        refreshCurrentTab();
+    } else {
+        alert("❌ 下线失败");
+    }
+}
+
+/** 下线用户全部客户端会话 */
+async function kickClientUser(username) {
+    if (!confirm(`确认将用户 "${username}" 全部客户端会话下线 ?\n(已签发的 Token 将立即失效)`)) return;
+    const res = await fetch("/admin/user/api/client/online/" + username, { method: "DELETE" });
+    const json = await res.json();
+    if (json.code === 200) {
+        alert("✅ 已将 " + username + " 的全部客户端会话下线\n(客户端在 Token 过期后会自动离线)");
+        refreshCurrentTab();
+        closeSessionModal();
+    } else {
+        alert("❌ 下线失败: " + (json.msg || ""));
+    }
+}
+
+// 初始化加载: 使用 switchTab 确保表格 display 状态正确设置
+switchTab("admin");
 
 document.getElementById("logoutLink").addEventListener("click", function (e) {
     e.preventDefault();
@@ -291,6 +535,5 @@ document.getElementById("logoutLink").addEventListener("click", function (e) {
         headers: csrf ? { "X-XSRF-TOKEN": decodeURIComponent(csrf) } : {}
     }).then(function () { location.href = "/admin/login.html"; });
 });
-</script>
-</body>
+</script>`n</body>
 </html>

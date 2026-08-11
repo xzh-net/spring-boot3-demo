@@ -12,6 +12,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.core.annotation.Order;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
@@ -23,7 +24,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.session.SessionRegistry;
-import org.springframework.security.core.session.SessionRegistryImpl;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -79,11 +79,14 @@ import com.nimbusds.jose.proc.SecurityContext;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import lombok.extern.slf4j.Slf4j;
 import net.xzh.authserver.security.repository.RedisOAuth2AuthorizationService;
 import net.xzh.authserver.security.authentication.client.DeviceClientAuthenticationProvider;
 import net.xzh.authserver.security.authentication.grant.DeviceCodeGrantAuthenticationProvider;
 import net.xzh.authserver.security.authentication.grant.PasswordGrantAuthenticationProvider;
+import net.xzh.authserver.security.session.RedisSessionRegistry;
+import net.xzh.authserver.security.web.ActiveClientTrackingFilter;
 import net.xzh.authserver.security.web.CompositeSecurityContextRepository;
 import net.xzh.authserver.security.web.SessionExpirationFilter;
 import net.xzh.authserver.security.web.converter.DeviceClientAuthenticationConverter;
@@ -138,10 +141,20 @@ public class AuthorizationServerConfig {
 		return repo;
 	}
 
-	/** 跟踪用户 HttpSession，供强制下线时终止 session */
+	/**
+	 * 基于 Redis 的 SessionRegistry Bean。
+	 * <p>
+	 * 使用 {@link RedisSessionRegistry} 将会话跟踪信息持久化到 Redis，
+	 * 确保服务器重启后管理端/门户端在线用户列表数据不丢失。
+	 * <ul>
+	 *   <li>HttpSession 数据通过 Spring Session 持久化到 Redis (登录状态不丢失)</li>
+	 *   <li>SessionRegistry 跟踪索引也持久化到 Redis (在线列表不丢失)</li>
+	 * </ul>
+	 */
 	@Bean
-	public SessionRegistry sessionRegistry() {
-		return new SessionRegistryImpl();
+	public SessionRegistry sessionRegistry(StringRedisTemplate redisTemplate) {
+		log.info("使用 RedisSessionRegistry, 会话跟踪信息持久化到 Redis");
+		return new RedisSessionRegistry(redisTemplate);
 	}
 
 	/** 将 HttpSession 事件转发给 SessionRegistry，确保会话生命周期正确跟踪 */
@@ -244,12 +257,13 @@ public class AuthorizationServerConfig {
 	@Bean
 	@Order(1)
 	public SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http,
-			RegisteredClientRepository registeredClientRepository, OAuth2AuthorizationService authorizationService,
+			RegisteredClientRepository registeredClientRepository, RedisOAuth2AuthorizationService authorizationService,
 			OAuth2AuthorizationConsentService authorizationConsentService, OAuth2TokenGenerator<?> tokenGenerator,
 			OpaqueTokenIntrospector introspector,
 			@Qualifier("portalUserDetailsService") UserDetailsService portalUserDetailsService,
 			PasswordEncoder passwordEncoder,
-			@Qualifier("portalDaoProvider") DaoAuthenticationProvider portalDaoProvider) throws Exception {
+			@Qualifier("portalDaoProvider") DaoAuthenticationProvider portalDaoProvider,
+			SessionRegistry sessionRegistry) throws Exception {
 
 		// 1. 准备自定义的认证组件
 		// 创建用于设备授权流程的客户端认证转换器，指定其处理的端点路径
@@ -339,14 +353,16 @@ public class AuthorizationServerConfig {
 				// 【目的】忽略设备验证端点的 CSRF 校验，解决跨安全链（从普通业务链到授权服务器链）的 CSRF Token 不一致问题
 				.csrf(csrf -> csrf.ignoringRequestMatchers(new AntPathRequestMatcher("/oauth2/device/verify")))
 				.sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
-						.sessionConcurrency(sc -> sc.sessionRegistry(sessionRegistry()) // 配置会话注册表
+						.sessionConcurrency(sc -> sc.sessionRegistry(sessionRegistry) // 配置会话注册表
 								.maximumSessions(-1) // 允许同一用户并发会话数（-1为不限制）
 								.expiredUrl("/login.html?expired"))) // 会话过期后的跳转地址
 				.securityContext(sc -> sc.securityContextRepository(
 						// 【目的】使用复合的上下文仓库，以支持在同一应用中管理多种不同类型的登录会话
 						new CompositeSecurityContextRepository(DEVICE_CONTEXT_KEY, PORTAL_CONTEXT_KEY)))
 				// 在 SecurityContextHolderFilter 之后添加自定义的会话过期过滤器
-				.addFilterAfter(new SessionExpirationFilter(sessionRegistry()), SecurityContextHolderFilter.class);
+				.addFilterAfter(new SessionExpirationFilter(sessionRegistry), SecurityContextHolderFilter.class)
+				// 跟踪当前活跃客户端 (解析 Bearer Token, 存入 Session)
+				.addFilterAfter(new ActiveClientTrackingFilter(authorizationService), SecurityContextHolderFilter.class);
 
 		return http.build();
 	}
@@ -357,7 +373,8 @@ public class AuthorizationServerConfig {
 	@Bean
 	@Order(2)
 	public SecurityFilterChain resourceServerSecurityFilterChain(HttpSecurity http,
-			OpaqueTokenIntrospector introspector) throws Exception {
+			OpaqueTokenIntrospector introspector,
+			RedisOAuth2AuthorizationService authorizationService) throws Exception {
 
 		// 1. 配置请求匹配与 CSRF
 		// 【目的】明确指定这条安全链只处理 /api/** 开头的请求
@@ -376,7 +393,10 @@ public class AuthorizationServerConfig {
 				// 4. 配置资源服务器
 				// 【目的】启用 OAuth2 资源服务器功能，并指定使用“不透明令牌”（Opaque Token）模式
 				// 当请求携带 Bearer Token 时，Spring Security 会调用 introspector 去授权服务器校验令牌的有效性
-				.oauth2ResourceServer(oauth2 -> oauth2.opaqueToken(opaque -> opaque.introspector(introspector)));
+				.oauth2ResourceServer(oauth2 -> oauth2.opaqueToken(opaque -> opaque.introspector(introspector)))
+				// 跟踪当前活跃客户端 (解析 Bearer Token, 存入 Session)
+				// 虽然资源服务器配置为 STATELESS, 但 ActiveClientTrackingFilter 会主动创建 Session
+				.addFilterAfter(new ActiveClientTrackingFilter(authorizationService), SecurityContextHolderFilter.class);
 
 		return http.build();
 	}
@@ -388,7 +408,8 @@ public class AuthorizationServerConfig {
 	@Order(3)
 	public SecurityFilterChain adminSecurityFilterChain(HttpSecurity http,
 			@Qualifier("adminDaoProvider") DaoAuthenticationProvider adminDaoProvider,
-			RedisOAuth2AuthorizationService authorizationService) throws Exception {
+			RedisOAuth2AuthorizationService authorizationService,
+			SessionRegistry sessionRegistry) throws Exception {
 
 		// 1. 配置请求匹配与认证提供者
 		// 【目的】明确指定这条安全链只处理 /admin/** 开头的请求
@@ -405,10 +426,10 @@ public class AuthorizationServerConfig {
 				// 【目的】使用独立的 SecurityContext Key，将管理员会话与普通用户会话隔离
 				.securityContext(sc -> sc.securityContextRepository(contextRepo(ADMIN_CONTEXT_KEY)))
 				// 【目的】配置会话并发控制，使用全局的 SessionRegistry 跟踪会话，不限制最大会话数
-				.sessionManagement(sm -> sm.sessionConcurrency(sc -> sc.sessionRegistry(sessionRegistry())
+				.sessionManagement(sm -> sm.sessionConcurrency(sc -> sc.sessionRegistry(sessionRegistry)
 						.maximumSessions(-1).expiredUrl("/admin/login.html?expired")))
 				// 【注意】在用户名密码过滤器之前添加自定义的会话过期过滤器
-				.addFilterBefore(new SessionExpirationFilter(sessionRegistry()),
+				.addFilterBefore(new SessionExpirationFilter(sessionRegistry),
 						UsernamePasswordAuthenticationFilter.class)
 
 				// 4. 配置授权规则
@@ -434,7 +455,7 @@ public class AuthorizationServerConfig {
 							if (auth != null && auth.getName() != null) {
 								revokeAuthorizationCodeGrantsForPrincipal(authorizationService, auth.getName());
 							}
-							partialLogout(sessionRegistry(), req, ADMIN_CONTEXT_KEY);
+							partialLogout(sessionRegistry, req, ADMIN_CONTEXT_KEY);
 						})
 						.logoutSuccessHandler((req, res, auth) -> {
 							res.setContentType("application/json;charset=UTF-8");
@@ -454,8 +475,8 @@ public class AuthorizationServerConfig {
 	 *  2. OAuth2 回调客户端地址 (http://localhost:8080/*)
 	 */
 	private static final Set<String> ALLOWED_REDIRECT_HOSTS = Set.of(
-			"localhost:8080", "localhost:8081", "localhost:8082", "localhost:8083", "localhost:9000",
-			"127.0.0.1:8080", "127.0.0.1:8081", "127.0.0.1:8082", "127.0.0.1:8083", "127.0.0.1:9000"
+					"localhost:8080", "localhost:8081", "localhost:8082", "localhost:9000",
+					"127.0.0.1:8080", "127.0.0.1:8081", "127.0.0.1:8082", "127.0.0.1:9000"
 	);
 
 	/** 检查退出跳转 URL 是否在白名单内（同源路径自动通过） */
@@ -519,9 +540,13 @@ public class AuthorizationServerConfig {
 				break;
 			}
 		}
-		// 3. 全部清空 → 销毁 session；还有残留 → 只清 SecurityContextHolder, 保留 session
+		// 3. 无论是否还有残留 context, 都从 SessionRegistry 移除当前 session 的跟踪记录
+		//    原因: SessionRegistry 只跟踪最后一次登录的 principal, 当 portal 退出时
+		//    即使 admin context 还在 session 中, SessionRegistry 中的记录仍是 portalUser,
+		//    不移除会导致 portal 用户仍在在线列表中
+		sessionRegistry.removeSessionInformation(session.getId());
+		// 全部清空 → 销毁 session；还有残留 → 只清 SecurityContextHolder, 保留 session
 		if (!anyLeft) {
-			sessionRegistry.removeSessionInformation(session.getId());
 			session.invalidate();
 		}
 		SecurityContextHolder.clearContext();
@@ -568,12 +593,51 @@ public class AuthorizationServerConfig {
 	}
 
 	/**
+	 * 按 (principal, registeredClientId) 精确撤销该用户在指定客户端上的所有 OAuth2Authorization.
+	 * <p>用于客户端带 {@code client_id} 参数发起 /logout 时, 只撤销该客户端的授权,
+	 * 不影响该用户在其他客户端上的会话。撤销所有 grant 类型 (authorization_code / password 等),
+	 * 因为同一用户在同一客户端上的所有 token 都属于同一个登录态。</p>
+	 *
+	 * @param authorizationService Redis 授权服务,用于查询和删除授权记录
+	 * @param principalName        当前登出的用户名
+	 * @param registeredClientId   当前发起登出的客户端 ID (对应 OAuth2Authorization.registeredClientId)
+	 * @return 撤销的授权记录数
+	 */
+	private static int revokeGrantsByPrincipalAndClient(
+			RedisOAuth2AuthorizationService authorizationService,
+			String principalName,
+			String registeredClientId) {
+		try {
+			int revoked = 0;
+			for (OAuth2Authorization auth : authorizationService.findByPrincipal(principalName)) {
+				if (registeredClientId.equals(auth.getRegisteredClientId())) {
+					authorizationService.revoke(auth);
+					revoked++;
+				}
+			}
+			if (revoked > 0) {
+				log.info("[门户登出] 已撤销 {} 在 client={} 上的 {} 条 OAuth2 授权",
+						principalName, registeredClientId, revoked);
+			} else {
+				log.debug("[门户登出] principal={} 在 client={} 上无活跃授权 (可能已被 /oauth2/revoke 提前撤销)",
+						principalName, registeredClientId);
+			}
+			return revoked;
+		} catch (Exception e) {
+			log.warn("[门户登出] 按 (principal, clientId) 撤销授权失败 principal={} clientId={}: {}",
+					principalName, registeredClientId, e.getMessage());
+			return 0;
+		}
+	}
+
+	/**
 	 * 【关键】设置优先级为 5，确保 /activate 和 /device-login 请求被此链处理
 	 */
 	@Bean
 	@Order(5) 
 	public SecurityFilterChain deviceVerificationSecurityFilterChain(HttpSecurity http,
-			@Qualifier("portalDaoProvider") DaoAuthenticationProvider portalDaoProvider) throws Exception {
+			@Qualifier("portalDaoProvider") DaoAuthenticationProvider portalDaoProvider,
+			SessionRegistry sessionRegistry) throws Exception {
 
 		// 1. 配置请求匹配与认证提供者
 		// 【目的】明确指定这条安全链只处理 /activate 和 /device-login 两个端点
@@ -584,10 +648,10 @@ public class AuthorizationServerConfig {
 				// 【目的】使用独立的 SecurityContext Key，将设备验证流程的会话与普通用户、管理员会话隔离
 				.securityContext(sc -> sc.securityContextRepository(contextRepo(DEVICE_CONTEXT_KEY)))
 				// 【目的】配置会话并发控制，使用全局的 SessionRegistry 跟踪会话
-				.sessionManagement(sm -> sm.sessionConcurrency(sc -> sc.sessionRegistry(sessionRegistry())
+				.sessionManagement(sm -> sm.sessionConcurrency(sc -> sc.sessionRegistry(sessionRegistry)
 						.maximumSessions(-1).expiredUrl("/login.html?expired")))
 				// 【注意】在用户名密码过滤器之前添加自定义的会话过期过滤器
-				.addFilterBefore(new SessionExpirationFilter(sessionRegistry()),
+				.addFilterBefore(new SessionExpirationFilter(sessionRegistry),
 						UsernamePasswordAuthenticationFilter.class)
 
 				// 3. 配置授权规则
@@ -620,7 +684,8 @@ public SecurityFilterChain portalSecurityFilterChain(
         HttpSecurity http,
         @Qualifier("portalDaoProvider")
         DaoAuthenticationProvider portalDaoProvider,
-        RedisOAuth2AuthorizationService authorizationService) throws Exception {
+        RedisOAuth2AuthorizationService authorizationService,
+        SessionRegistry sessionRegistry) throws Exception {
 
     // 1. 配置认证提供者与安全上下文隔离
     // 【目的】注入门户用户的认证提供者，处理用户名密码登录
@@ -632,25 +697,25 @@ public SecurityFilterChain portalSecurityFilterChain(
     // 【目的】配置会话并发控制，使用全局的 SessionRegistry 跟踪会话，不限制最大会话数 (-1)
     // 【目的】会话过期后重定向到 /login.html?expired
     .sessionManagement(sm -> sm.sessionConcurrency(sc -> sc
-            .sessionRegistry(sessionRegistry())
+            .sessionRegistry(sessionRegistry)
             .maximumSessions(-1)
             .expiredUrl("/login.html?expired")))
     // 【注意】在用户名密码过滤器之前添加自定义的会话过期过滤器，用于实时拦截过期会话
     .addFilterBefore(
-            new SessionExpirationFilter(sessionRegistry()),
+            new SessionExpirationFilter(sessionRegistry),
             UsernamePasswordAuthenticationFilter.class)
 
     // 3. 配置授权规则
     // 【目的】放行静态资源、登录页、健康检查、Druid/Actuator 监控端点
     // 【目的】放行 /oauth2/device/verify 和 /.well-known/**，确保设备验证和 OIDC 发现端点可公开访问
-    // 【目的】/portal 和其余所有请求都需要认证
+    // 【目的】/portal-api/** 和 /api/portal/** 需要公开访问（门户SSO功能）
     .authorizeHttpRequests(auth -> auth
             .requestMatchers(
                     "/", "/login.html", "/portal.html", "/error", "/health", "/health/**",
                     "/druid/**", "/actuator/**",
                     "/css/**", "/js/**", "/images/**", "/favicon.ico",
                     "/oauth2/device/verify", "/.well-known/**",
-                    "/userinfo"
+                    "/userinfo", "/portal-api/**", "/api/portal/**"
             ).permitAll()
             .requestMatchers("/portal").authenticated()
             .anyRequest().authenticated())
@@ -686,9 +751,33 @@ public SecurityFilterChain portalSecurityFilterChain(
             //   b) 仅移除 PORTAL 和 DEVICE 上下文, ADMIN 仍保留
             .addLogoutHandler((HttpServletRequest req, HttpServletResponse res, Authentication auth) -> {
                 if (auth != null && auth.getName() != null) {
-                    revokeAuthorizationCodeGrantsForPrincipal(authorizationService, auth.getName());
+                    // 从 Session 中读取最后活跃的客户端 ID (由 ActiveClientTrackingFilter 写入)
+                    HttpSession session = req.getSession(false);
+                    String activeClientId = session != null
+                            ? (String) session.getAttribute(ActiveClientTrackingFilter.ACTIVE_CLIENT_ID_ATTR)
+                            : null;
+
+                    if (activeClientId != null && !activeClientId.isBlank()) {
+                        // 存在活跃客户端: 按 (principal, clientId) 精确撤销该客户端的 OAuth2Authorization,
+                        // 不影响该用户在其他客户端(如 8080/8082)上的会话
+                        int revoked = revokeGrantsByPrincipalAndClient(authorizationService, auth.getName(), activeClientId);
+                        if (revoked == 0) {
+                            log.debug("[门户登出] principal={} 在 Session 中标记的活跃 client={} 上无有效授权, 可能已被 /oauth2/revoke 提前撤销",
+                                    auth.getName(), activeClientId);
+                        }
+                    } else {
+                        // 兜底: Session 中没有记录活跃客户端, 按 principal 全撤 authorization_code 授权
+                        log.warn("[门户登出] Session 中无 ACTIVE_CLIENT_ID, 按 principal 全撤授权 (可能 ActiveClientTrackingFilter 未记录)");
+                        revokeAuthorizationCodeGrantsForPrincipal(authorizationService, auth.getName());
+                    }
                 }
-                partialLogout(sessionRegistry(), req, PORTAL_CONTEXT_KEY, DEVICE_CONTEXT_KEY);
+                partialLogout(sessionRegistry, req, PORTAL_CONTEXT_KEY, DEVICE_CONTEXT_KEY);
+
+                // 撤销后清理 Session 中的活跃客户端标记 (如果 Session 还存在)
+                HttpSession session = req.getSession(false);
+                if (session != null) {
+                    session.removeAttribute(ActiveClientTrackingFilter.ACTIVE_CLIENT_ID_ATTR);
+                }
             })
             // 登出成功处理器：校验 redirect 参数是否在白名单中，合法则 302 跳转，否则回退到登录页
             .logoutSuccessHandler((req, res, auth) -> {

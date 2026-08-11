@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>首页</title>
+    <title>应用中心</title>
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -83,7 +83,7 @@
         }
         .app-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
             gap: 20px;
         }
         .app-card {
@@ -103,6 +103,7 @@
         .app-card:hover {
             transform: translateY(-3px);
             box-shadow: 0 10px 28px rgba(37, 99, 235, 0.18);
+            border-color: #2563eb;
         }
         .app-icon {
             font-size: 36px;
@@ -123,6 +124,59 @@
             font-size: 13px;
             color: #64748b;
             line-height: 1.5;
+        }
+        .app-action {
+            margin-top: 16px;
+            font-size: 12px;
+            color: #2563eb;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .app-action:hover {
+            text-decoration: underline;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #64748b;
+        }
+        .empty {
+            text-align: center;
+            padding: 40px;
+            color: #94a3b8;
+        }
+        .device-app {
+            cursor: pointer;
+            border-style: dashed;
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        }
+        .device-app:hover {
+            border-style: solid;
+            border-color: #059669;
+            box-shadow: 0 10px 28px rgba(5, 150, 105, 0.18);
+        }
+        .device-app .app-icon {
+            font-size: 32px;
+        }
+        .device-app .app-action {
+            color: #059669;
+        }
+        .app-desc .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 500;
+            margin-left: 6px;
+        }
+        .badge-device {
+            background: #d1fae5;
+            color: #059669;
+        }
+        .badge-web {
+            background: #dbeafe;
+            color: #2563eb;
         }
         .footer-tip {
             text-align: center;
@@ -146,52 +200,18 @@
     <div class="container">
         <div class="page-title">
             <h2>应用中心</h2>
-            <p>选择一个应用开始使用</p>
+            <p>选择一个应用开始使用，已登录状态可自动跳转（SSO）</p>
         </div>
 
-        <div class="app-grid">
-            <a class="app-card" href="javascript:void(0)">
-                <div class="app-icon">📊</div>
-                <div class="app-name">报表中心</div>
-                <div class="app-subname">Report Center</div>
-                <div class="app-desc">数据统计和可视化</div>
-            </a>
-            <a class="app-card" href="javascript:void(0)">
-                <div class="app-icon">📝</div>
-                <div class="app-name">任务管理</div>
-                <div class="app-subname">Task Manager</div>
-                <div class="app-desc">团队协作与任务追踪</div>
-            </a>
-            <a class="app-card" href="javascript:void(0)">
-                <div class="app-icon">🛒</div>
-                <div class="app-name">商城系统</div>
-                <div class="app-subname">Shop</div>
-                <div class="app-desc">在线购物平台</div>
-            </a>
-            <a class="app-card" href="javascript:void(0)">
-                <div class="app-icon">📚</div>
-                <div class="app-name">知识库</div>
-                <div class="app-subname">Wiki</div>
-                <div class="app-desc">团队文档中心</div>
-            </a>
-            <a class="app-card" href="javascript:void(0)">
-                <div class="app-icon">💬</div>
-                <div class="app-name">即时通讯</div>
-                <div class="app-subname">Chat</div>
-                <div class="app-desc">团队消息</div>
-            </a>
-            <a class="app-card" href="http://localhost:8083/" target="_blank" rel="noopener">
-                <div class="app-icon">🎫</div>
-                <div class="app-name">工单系统</div>
-                <div class="app-subname">Ticket · 已接入</div>
-                <div class="app-desc">客户服务（OAuth2 SSO 已接入）</div>
-            </a>
+        <div class="app-grid" id="appGrid">
+            <div class="loading">加载中...</div>
         </div>
-
-        <div class="footer-tip">应用接入开发中，敬请期待...</div>
     </div>
 
     <script>
+        const PORTAL_CLIENT_ID = 'portal-app';
+        const PORTAL_REDIRECT_URI = 'http://localhost:9000/portal.html';
+
         function getCookie(name) {
             const cookies = document.cookie.split(';');
             for (let i = 0; i < cookies.length; i++) {
@@ -203,7 +223,128 @@
             return '';
         }
 
+        function setCookie(name, value, days) {
+            const expires = new Date();
+            expires.setTime(expires.getTime() + days * 24 * 60 * 60 * 1000);
+            document.cookie = name + '=' + value + ';expires=' + expires.toUTCString() + ';path=/';
+        }
+
+        function getStoredToken() {
+            try {
+                const token = localStorage.getItem('portal_token');
+                return token ? JSON.parse(token) : null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function setStoredToken(token) {
+            try {
+                localStorage.setItem('portal_token', JSON.stringify(token));
+            } catch (e) {
+                console.error('Failed to store token:', e);
+            }
+        }
+
+        function clearStoredToken() {
+            try {
+                localStorage.removeItem('portal_token');
+            } catch (e) {}
+        }
+
+        async function exchangeCodeForToken(code, state) {
+            // 使用后端代理API进行token交换，避免在前端暴露client_secret
+            const response = await fetch('/api/portal/token', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: new URLSearchParams({
+                    code: code,
+                    redirect_uri: PORTAL_REDIRECT_URI
+                })
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error('Token交换失败: ' + errorText);
+            }
+
+            const result = await response.json();
+            if (!result.success) {
+                throw new Error(result.error || 'Token交换失败');
+            }
+
+            return result.data;
+        }
+
+        async function handleOAuthCallback() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const code = urlParams.get('code');
+            const state = urlParams.get('state');
+            const error = urlParams.get('error');
+
+            if (error) {
+                console.error('OAuth错误:', error);
+                alert('授权失败: ' + error);
+                return false;
+            }
+
+            if (!code) {
+                return false;
+            }
+
+            try {
+                const tokenResponse = await exchangeCodeForToken(code, state);
+                
+                // 存储token
+                setStoredToken({
+                    access_token: tokenResponse.access_token,
+                    refresh_token: tokenResponse.refresh_token,
+                    id_token: tokenResponse.id_token,
+                    expires_in: tokenResponse.expires_in,
+                    token_type: tokenResponse.token_type
+                });
+
+                // 清理URL中的code参数
+                const cleanUrl = PORTAL_REDIRECT_URI;
+                window.history.replaceState({}, document.title, cleanUrl);
+
+                return true;
+            } catch (e) {
+                console.error('OAuth回调处理失败:', e);
+                alert('登录失败: ' + e.message);
+                return false;
+            }
+        }
+
         async function checkLoginStatus() {
+            // 首先检查是否有存储的token
+            const storedToken = getStoredToken();
+            if (storedToken && storedToken.access_token) {
+                try {
+                    // 使用token获取用户信息
+                    const res = await fetch('/userinfo', {
+                        headers: { 'Authorization': 'Bearer ' + storedToken.access_token }
+                    });
+                    if (res.ok) {
+                        const userInfo = await res.json();
+                        const userInfoEl = document.getElementById('userInfo');
+                        const btnLogout = document.getElementById('btnLogout');
+                        userInfoEl.textContent = '👤 ' + (userInfo.preferred_username || userInfo.sub || '用户');
+                        userInfoEl.style.display = 'inline';
+                        btnLogout.style.display = 'inline-block';
+                        return true;
+                    } else {
+                        // token无效，清除存储
+                        clearStoredToken();
+                    }
+                } catch (e) {
+                    clearStoredToken();
+                }
+            }
+
+            // 检查认证中心session
             try {
                 const res = await fetch('/auth/me', { credentials: 'same-origin' });
                 if (res.ok) {
@@ -214,12 +355,103 @@
                         userInfoEl.textContent = '👤 ' + data.username;
                         userInfoEl.style.display = 'inline';
                         btnLogout.style.display = 'inline-block';
-                        return;
+                        return true;
                     }
                 }
-                document.getElementById('btnLoginNav').style.display = 'inline-block';
+            } catch (e) {}
+
+            document.getElementById('btnLoginNav').style.display = 'inline-block';
+            return false;
+        }
+
+        async function loadClients() {
+            try {
+                const res = await fetch('/portal-api/clients', { credentials: 'same-origin' });
+                if (!res.ok) {
+                    throw new Error('Failed to load clients');
+                }
+                const clients = await res.json();
+                const grid = document.getElementById('appGrid');
+                
+                if (!clients || clients.length === 0) {
+                    grid.innerHTML = '<div class="empty">暂无可访问的应用</div>';
+                    return;
+                }
+
+                grid.innerHTML = clients.map(client => {
+                    if (client.type === 'device') {
+                        // 设备码应用：点击时需要先获取device_code
+                        return `
+                            <div class="app-card device-app" data-client-id="${client.clientId}" onclick="handleDeviceAuth('${client.clientId}')">
+                                <div class="app-icon">${client.icon || '📱'}</div>
+                                <div class="app-name">${client.clientName}</div>
+                                <div class="app-subname">${client.clientId} · 设备码</div>
+                                <div class="app-desc">${client.description || '无浏览器设备授权'}</div>
+                                <div class="app-action">发起设备授权 →</div>
+                            </div>
+                        `;
+                    } else {
+                        // Web应用：直接跳转SSO
+                        return `
+                            <a class="app-card" href="${client.authUrl}" data-client-id="${client.clientId}">
+                                <div class="app-icon">${client.icon || '🔗'}</div>
+                                <div class="app-name">${client.clientName}</div>
+                                <div class="app-subname">${client.clientId}</div>
+                                <div class="app-desc">${client.description || '第三方业务系统'}</div>
+                                <div class="app-action">点击访问 →</div>
+                            </a>
+                        `;
+                    }
+                }).join('');
             } catch (e) {
-                document.getElementById('btnLoginNav').style.display = 'inline-block';
+                console.error('Failed to load clients:', e);
+                const grid = document.getElementById('appGrid');
+                grid.innerHTML = `
+                    <div class="empty">
+                        <p>加载客户端列表失败</p>
+                        <p style="font-size:12px;margin-top:8px;">${e.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        /**
+         * 处理设备码授权流程.
+         * 点击设备码应用时，先获取device_code，再跳转到授权页面
+         */
+        async function handleDeviceAuth(clientId) {
+            try {
+                // 显示加载状态
+                const card = document.querySelector(`[data-client-id="${clientId}"]`);
+                if (card) {
+                    card.style.opacity = '0.6';
+                    card.style.pointerEvents = 'none';
+                }
+
+                // 调用后端API获取device_code
+                const res = await fetch(`/portal-api/device-auth?clientId=${clientId}`, { 
+                    credentials: 'same-origin' 
+                });
+                if (!res.ok) {
+                    throw new Error('获取设备码失败');
+                }
+                const data = await res.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || '设备授权失败');
+                }
+
+                // 跳转到授权确认页面（带user_code）
+                window.location.href = data.verificationUriComplete;
+            } catch (e) {
+                console.error('设备授权失败:', e);
+                alert('设备授权失败: ' + e.message);
+                // 恢复卡片状态
+                const card = document.querySelector(`[data-client-id="${clientId}"]`);
+                if (card) {
+                    card.style.opacity = '1';
+                    card.style.pointerEvents = 'auto';
+                }
             }
         }
 
@@ -241,7 +473,20 @@
             window.location.href = '/login.html?logout';
         });
 
-        checkLoginStatus();
-    </script>
-</body>
+        (async function init() {
+            // 先处理OAuth回调（如果有code参数）
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('code')) {
+                await handleOAuthCallback();
+            }
+
+            const loggedIn = await checkLoginStatus();
+            if (loggedIn) {
+                await loadClients();
+            } else {
+                document.getElementById('appGrid').innerHTML = 
+                    '<div class="empty">请先登录以访问应用中心</div>';
+            }
+        })();
+    </script></body>
 </html>

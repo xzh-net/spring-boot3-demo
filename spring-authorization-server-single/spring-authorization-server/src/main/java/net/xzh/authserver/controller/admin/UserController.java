@@ -81,31 +81,91 @@ public class UserController {
         return Result.ok();
     }
 
-    // ========= 在线用户相关 =========
+    // ========= 在线管理相关 (3个选项卡) =========
 
-    @GetMapping("/api/online")
+    /**
+     * 管理端在线用户列表。
+     */
+    @GetMapping("/api/admin/online")
     @ResponseBody
-    public Result<List<Map<String, Object>>> onlineUsers() {
+    public Result<List<Map<String, Object>>> adminOnlineUsers() {
+        return Result.ok(authSessionService.listAdminOnlineUsers());
+    }
+
+    /**
+     * 门户端在线用户列表。
+     */
+    @GetMapping("/api/portal/online")
+    @ResponseBody
+    public Result<List<Map<String, Object>>> portalOnlineUsers() {
+        return Result.ok(authSessionService.listPortalOnlineUsers());
+    }
+
+    /**
+     * 客户端在线用户列表 (OAuth2 对接进来的用户)。
+     */
+    @GetMapping("/api/client/online")
+    @ResponseBody
+    public Result<List<Map<String, Object>>> clientOnlineUsers() {
         return Result.ok(authSessionService.listOnlineUsers());
     }
 
-    @GetMapping("/api/online/{username}")
+    /**
+     * 指定用户的所有会话明细 (客户端)。
+     */
+    @GetMapping("/api/client/online/{username}")
     @ResponseBody
     public Result<List<?>> userSessions(@PathVariable String username) {
         return Result.ok(authSessionService.listSessionsByPrincipal(username));
     }
 
-    @DeleteMapping("/api/online/{username}")
+    /**
+     * 踢下线单个会话 (HttpSession, 管理端/门户端通用)。
+     */
+    @DeleteMapping("/api/session/{sessionId}")
     @ResponseBody
-    public Result<Integer> kickUser(@PathVariable String username) {
-        int kicked = authSessionService.revokeUserAll(username);
+    public Result<Boolean> kickHttpSession(@PathVariable String sessionId) {
+        boolean ok = authSessionService.revokeHttpSession(sessionId);
+        return Result.ok(ok);
+    }
+
+    /**
+     * 踢下线单个客户端会话 (OAuth2Authorization)。
+     */
+    @DeleteMapping("/api/client/session/{authorizationId}")
+    @ResponseBody
+    public Result<Boolean> kickClientSession(@PathVariable String authorizationId) {
+        boolean ok = authSessionService.revokeSession(authorizationId);
+        return Result.ok(ok);
+    }
+
+    /**
+     * 踢下线用户全部管理端会话 (仅终止 HttpSession, 不撤销 OAuth2)。
+     */
+    @DeleteMapping("/api/admin/online/{username}")
+    @ResponseBody
+    public Result<Integer> kickAdminUser(@PathVariable String username) {
+        int kicked = authSessionService.revokeSessionUser(username, true);
         return Result.ok(kicked);
     }
 
-    @DeleteMapping("/api/session/{authorizationId}")
+    /**
+     * 踢下线用户全部门户端会话 (仅终止 HttpSession, 不撤销 OAuth2)。
+     */
+    @DeleteMapping("/api/portal/online/{username}")
     @ResponseBody
-    public Result<Boolean> kickSession(@PathVariable String authorizationId) {
-        boolean ok = authSessionService.revokeSession(authorizationId);
-        return Result.ok(ok);
+    public Result<Integer> kickPortalUser(@PathVariable String username) {
+        int kicked = authSessionService.revokeSessionUser(username, false);
+        return Result.ok(kicked);
+    }
+
+    /**
+     * 踢下线用户全部客户端会话 (撤销 OAuth2 令牌 + 终止 HttpSession)。
+     */
+    @DeleteMapping("/api/client/online/{username}")
+    @ResponseBody
+    public Result<Integer> kickClientUser(@PathVariable String username) {
+        int kicked = authSessionService.revokeUserAll(username);
+        return Result.ok(kicked);
     }
 }

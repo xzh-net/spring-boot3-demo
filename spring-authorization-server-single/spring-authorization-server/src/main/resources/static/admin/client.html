@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -405,6 +405,5 @@ document.getElementById("logoutLink").addEventListener("click", function (e) {
         headers: csrf ? { "X-XSRF-TOKEN": decodeURIComponent(csrf) } : {}
     }).then(function () { location.href = "/admin/login.html"; });
 });
-</script>
-</body>
+</script>`n</body>
 </html>

@@ -54,6 +54,13 @@ spring:
           min-idle: 5
           max-wait: 5s
 
+  # ===== Spring Session (HttpSession 持久化到 Redis) =====
+  session:
+    store-type: redis
+    timeout: 30m
+    redis:
+      namespace: "oauth2:session"
+
 # ===== MyBatis-Plus =====
 mybatis-plus:
   configuration:

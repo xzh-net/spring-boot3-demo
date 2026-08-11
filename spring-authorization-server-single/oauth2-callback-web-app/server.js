@@ -106,12 +106,12 @@ async function refreshAccessToken(refreshToken) {
     return { status: res.statusCode, data: JSON.parse(res.body) };
 }
 
-/** 调用资源 API */
+/** 调用资源 API (内置 10s 超时，避免服务端异常时请求挂起) */
 async function callResourceServer(path, accessToken) {
     const res = await request({
         hostname: 'localhost', port: 9000, path: path, method: 'GET',
         headers: { 'Authorization': `Bearer ${accessToken}` }
-    });
+    }, null, 10000);
     return { status: res.statusCode, body: res.body };
 }
 
@@ -199,8 +199,31 @@ async function handleLogout(req, res) {
 // 页面渲染
 // ============================================================
 
-function layout(title, content, isLoggedIn = false) {
-    const logoutBtn = isLoggedIn ? '<a href="/logout" style="margin-left:auto;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.35);padding:6px 14px;border-radius:6px;text-decoration:none;font-size:13px;">退出登录</a>' : '';
+/** 获取门户SSO授权URL（客户端→门户） */
+async function getPortalSsoUrl() {
+    try {
+        const res = await request({
+            hostname: 'localhost', port: 9000, path: '/portal-api/portal-sso-url?currentClientId=' + CLIENT_ID, method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+        }, null, 5000);
+        if (res.statusCode === 200) {
+            const data = JSON.parse(res.body);
+            if (data.authUrl) {
+                // 将相对URL转换为完整URL
+                return AUTH_SERVER + data.authUrl;
+            }
+        }
+    } catch (e) {
+        console.warn('[SSO] 获取门户URL失败:', e.message);
+    }
+    return null;
+}
+
+function layout(title, content, isLoggedIn = false, portalAuthUrl = null) {
+    const portalBtn = isLoggedIn && portalAuthUrl
+        ? `<a href="${esc(portalAuthUrl)}" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.35);padding:6px 14px;border-radius:6px;text-decoration:none;font-size:13px;margin-right:12px;">🏠 返回门户</a>`
+        : '';
+    const logoutBtn = isLoggedIn ? '<a href="/logout" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.35);padding:6px 14px;border-radius:6px;text-decoration:none;font-size:13px;">退出登录</a>' : '';
     return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -213,6 +236,7 @@ function layout(title, content, isLoggedIn = false) {
         .nav { background: linear-gradient(135deg, #1e3a5f, #2563eb); color: #fff; padding: 0 24px; height: 56px; display: flex; align-items: center; }
         .nav .brand { font-weight: 700; font-size: 16px; }
         .nav a { color: #dbeafe; text-decoration: none; margin-left: 24px; font-size: 14px; }
+        .nav .right { margin-left: auto; display: flex; align-items: center; }
         .container { max-width: 860px; margin: 24px auto; padding: 0 24px; }
         .card { background: #fff; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); padding: 28px; margin-bottom: 18px; }
         h1 { font-size: 22px; color: #1e3a5f; margin-bottom: 6px; }
@@ -237,13 +261,17 @@ function layout(title, content, isLoggedIn = false) {
         .info-table { width: 100%; font-size: 13px; }
         .info-table td { padding: 6px 0; }
         .info-table td:first-child { color: #94a3b8; width: 120px; }
+        .sso-info { background: linear-gradient(135deg, #f0fdf4, #ecfdf5); border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; font-size: 13px; color: #166534; }
     </style>
 </head>
 <body>
     <div class="nav">
         <div class="brand">🔐 OAuth2 授权码演示</div>
         <a href="/">首页</a>
-        ${logoutBtn}
+        <div class="right">
+            ${portalBtn}
+            ${logoutBtn}
+        </div>
     </div>
     <div class="container">${content}</div>
 </body>
@@ -258,17 +286,24 @@ function layout(title, content, isLoggedIn = false) {
 async function renderHome(req, res) {
     const session = getSessionTokens(req, res);
     const isLoggedIn = !!session;
+    const portalAuthUrl = isLoggedIn ? await getPortalSsoUrl() : null;
     let content = '';
     if (isLoggedIn) {
         content = `
             <div class="card">
                 <h1>🎉 欢迎回来</h1>
                 <div class="sub">你已登录,可以继续操作。</div>
+                ${portalAuthUrl ? `
+                <div class="sso-info">
+                    <strong>🔗 SSO 单点登录:</strong> 你已在认证中心登录, 可以点击右上角"返回门户"或下方按钮,
+                    无需再次登录即可访问门户首页。
+                </div>` : ''}
                 <div class="actions">
                     <a href="/userinfo-demo" class="btn btn-outline">👤 查询用户信息</a>
                     <a href="/api-demo" class="btn btn-outline">📋 调用通讯录 API</a>
                     <a href="/refresh-demo" class="btn btn-outline">🔄 刷新 Token</a>
                     <a href="/introspect-demo" class="btn btn-outline">🔍 验证 Token</a>
+                    ${portalAuthUrl ? `<a href="${esc(portalAuthUrl)}" class="btn btn-primary">🏠 返回门户首页</a>` : ''}
                 </div>
             </div>
         `;
@@ -296,7 +331,7 @@ async function renderHome(req, res) {
             </div>
         `;
     }
-    return layout('OAuth2 授权码登录演示', content, isLoggedIn);
+    return layout('OAuth2 授权码登录演示', content, isLoggedIn, portalAuthUrl);
 }
 
 /** Token 内省演示 */
@@ -311,11 +346,13 @@ async function renderIntrospectDemo(req, res) {
         return;
     }
 
+    const portalAuthUrl = await getPortalSsoUrl();
+
     let result;
     try {
         result = await introspectToken(session.tokens.access_token, 'access_token');
     } catch (e) {
-        return layout('请求失败', `<div class="card"><h1>⚠️ 请求失败</h1><pre>${esc(e.message)}</pre><div class="actions"><a href="/" class="btn btn-outline">返回</a></div></div>`);
+        return layout('请求失败', `<div class="card"><h1>⚠️ 请求失败</h1><pre>${esc(e.message)}</pre><div class="actions"><a href="/" class="btn btn-outline">返回</a></div></div>`, true, portalAuthUrl);
     }
 
     if (result.status === 401) {
@@ -355,9 +392,10 @@ async function renderIntrospectDemo(req, res) {
                 <a href="/userinfo-demo" class="btn btn-outline">👤 查询用户信息</a>
                 <a href="/api-demo" class="btn btn-outline">📋 调用通讯录 API</a>
                 <a href="/refresh-demo" class="btn btn-outline">🔄 刷新 Token</a>
+                ${portalAuthUrl ? `<a href="${esc(portalAuthUrl)}" class="btn btn-primary">🏠 返回门户</a>` : ''}
             </div>
         </div>
-    `, true);
+    `, true, portalAuthUrl);
 }
 
 /** 回调页 — 换 token 并展示 */
@@ -482,11 +520,13 @@ async function renderApiDemo(req, res) {
         return;
     }
 
+    const portalAuthUrl = await getPortalSsoUrl();
+
     let result;
     try {
         result = await callResourceServer('/api/contacts', session.tokens.access_token);
     } catch (e) {
-        return layout('API 调用失败', `<div class="card"><h1>⚠️ 请求失败</h1><pre>${esc(e.message)}</pre></div>`);
+        return layout('API 调用失败', `<div class="card"><h1>⚠️ 请求失败</h1><pre>${esc(e.message)}</pre></div>`, true, portalAuthUrl);
     }
 
     if (result.status === 401) {
@@ -521,9 +561,10 @@ Authorization: Bearer ${esc(session.tokens.access_token.substring(0, 40))}...</p
                 <a href="/userinfo-demo" class="btn btn-outline">👤 查询用户信息</a>
                 <a href="/refresh-demo" class="btn btn-outline">🔄 刷新 Token</a>
                 <a href="/introspect-demo" class="btn btn-outline">🔍 验证 Token</a>
+                ${portalAuthUrl ? `<a href="${esc(portalAuthUrl)}" class="btn btn-primary">🏠 返回门户</a>` : ''}
             </div>
         </div>
-    `, true);
+    `, true, portalAuthUrl);
 }
 
 /** UserInfo 演示 */
@@ -538,11 +579,13 @@ async function renderUserinfoDemo(req, res) {
         return;
     }
 
+    const portalAuthUrl = await getPortalSsoUrl();
+
     let result;
     try {
         result = await callResourceServer('/userinfo', session.tokens.access_token);
     } catch (e) {
-        return layout('请求失败', `<div class="card"><h1>⚠️ 请求失败</h1><pre>${esc(e.message)}</pre></div>`);
+        return layout('请求失败', `<div class="card"><h1>⚠️ 请求失败</h1><pre>${esc(e.message)}</pre></div>`, true, portalAuthUrl);
     }
 
     if (result.status === 401) {
@@ -570,9 +613,10 @@ async function renderUserinfoDemo(req, res) {
                 <a href="/api-demo" class="btn btn-outline">📋 调用通讯录 API</a>
                 <a href="/refresh-demo" class="btn btn-outline">🔄 刷新 Token</a>
                 <a href="/introspect-demo" class="btn btn-outline">🔍 验证 Token</a>
+                ${portalAuthUrl ? `<a href="${esc(portalAuthUrl)}" class="btn btn-primary">🏠 返回门户</a>` : ''}
             </div>
         </div>
-    `, true);
+    `, true, portalAuthUrl);
 }
 
 /** 刷新 token 演示 */
@@ -587,11 +631,13 @@ async function renderRefreshDemo(req, res) {
         return;
     }
 
+    const portalAuthUrl = await getPortalSsoUrl();
+
     let result;
     try {
         result = await refreshAccessToken(session.tokens.refresh_token);
     } catch (e) {
-        return layout('刷新失败', `<div class="card"><h1>⚠️ 请求失败</h1><pre>${esc(e.message)}</pre></div>`);
+        return layout('刷新失败', `<div class="card"><h1>⚠️ 请求失败</h1><pre>${esc(e.message)}</pre></div>`, true, portalAuthUrl);
     }
 
     // RFC 6749 §5.2: token 端点错误返回 400 (invalid_grant), 401 (client 认证失败) 等
@@ -629,9 +675,10 @@ async function renderRefreshDemo(req, res) {
                 <a href="/userinfo-demo" class="btn btn-outline">👤 查询用户信息</a>
                 <a href="/api-demo" class="btn btn-outline">📋 调用通讯录 API</a>
                 <a href="/introspect-demo" class="btn btn-outline">🔍 验证 Token</a>
+                ${portalAuthUrl ? `<a href="${esc(portalAuthUrl)}" class="btn btn-primary">🏠 返回门户</a>` : ''}
             </div>
         </div>
-    `, true);
+    `, true, portalAuthUrl);
 }
 
 // ============================================================
