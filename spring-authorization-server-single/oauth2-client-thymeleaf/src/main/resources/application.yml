@@ -51,5 +51,5 @@ spring:
             logout-uri: http://localhost:9000/logout
             user-info-authentication-method: header
             user-name-attribute: sub
-            # 声明 issuer 值用于 id_token iss 校验, 不触发 HTTP 发现
-            issuer-uri: http://localhost:9000
+            # 【关键】移除 issuer-uri, 避免启动时自动调用 /.well-known/openid-configuration 导致失败
+            # id_token iss 校验通过自定义 JwtDecoder 处理
