@@ -1,0 +1,12 @@
+{
+  "name": "iam-portal-web",
+  "version": "1.0.0",
+  "description": "门户前端应用 — 调用 iam-portal-service (8080) 后端 API, 展示客户端列表和 SSO 跳转",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": ["portal", "oauth2", "sso", "frontend"],
+  "license": "MIT"
+}
