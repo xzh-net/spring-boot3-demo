@@ -8,14 +8,15 @@
  *   4. 展示 id_token 解码的身份信息 + 调用资源 API
  *
  * 启动: node server.js
- * 端口: 8081  (零依赖)
+ * 端口: 8082  (零依赖)
  */
 
 const http = require('http');
 const url = require('url');
 
-const PORT = 8081;
+const PORT = 8082;
 const AUTH_SERVER = 'http://localhost:9000';
+const PORTAL_URL = 'http://localhost:8000';
 const CLIENT_ID = 'device-app';
 const SCOPE = 'openid profile email read';
 // 说明: 设备码流程现在携带 openid scope, 以获取 OIDC id_token (JWT).
@@ -218,8 +219,11 @@ function stopPolling(sessionId) {
 // ============================================================
 
 function layout(title, content, isLoggedIn = false) {
+    const portalBtn = isLoggedIn
+        ? `<a href="${PORTAL_URL}" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.35);padding:6px 14px;border-radius:6px;text-decoration:none;font-size:13px;margin-right:12px;">🏠 返回门户</a>`
+        : '';
     const logoutBtn = isLoggedIn
-        ? '<a href="/logout" style="margin-left:auto;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.35);padding:6px 14px;border-radius:6px;text-decoration:none;font-size:13px;">退出登录</a>'
+        ? '<a href="/logout" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.35);padding:6px 14px;border-radius:6px;text-decoration:none;font-size:13px;">退出登录</a>'
         : '';
     return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -233,6 +237,7 @@ function layout(title, content, isLoggedIn = false) {
         .nav { background: linear-gradient(135deg, #1e3a5f, #2563eb); color: #fff; padding: 0 24px; height: 56px; display: flex; align-items: center; }
         .nav .brand { font-weight: 700; font-size: 16px; }
         .nav a { color: #dbeafe; text-decoration: none; margin-left: 24px; font-size: 14px; }
+        .nav .right { margin-left: auto; display: flex; align-items: center; }
         .container { max-width: 860px; margin: 24px auto; padding: 0 24px; }
         .card { background: #fff; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); padding: 28px; margin-bottom: 18px; }
         h1 { font-size: 22px; color: #1e3a5f; margin-bottom: 6px; }
@@ -272,7 +277,10 @@ function layout(title, content, isLoggedIn = false) {
     <div class="nav">
         <div class="brand">📱 OAuth2 设备码演示</div>
         <a href="/">首页</a>
-        ${logoutBtn}
+        <div class="right">
+            ${portalBtn}
+            ${logoutBtn}
+        </div>
     </div>
     <div class="container">${content}</div>
 </body>
@@ -359,7 +367,9 @@ async function renderIntrospectDemo(req, res) {
         return layout('请求失败', `<div class="card"><h1>⚠️ 请求失败</h1><pre>${esc(e.message)}</pre><div class="actions"><a href="/" class="btn btn-outline">返回</a></div></div>`);
     }
 
-    if (result.status === 401) {
+    // RFC 7662: introspect 端点在 token 无效时返回 200 + active=false (而非 401)
+    // 但我们仍需要清除本地 session 并跳转到授权服务器，保持与其他按钮行为一致
+    if (result.status === 401 || (result.status === 200 && result.data.active === false)) {
         sessions.delete(session.sessionId);
         clearSessionCookie(res);
         res.writeHead(302, {

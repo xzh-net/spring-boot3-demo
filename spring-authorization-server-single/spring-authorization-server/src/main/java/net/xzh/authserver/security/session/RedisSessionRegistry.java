@@ -59,23 +59,30 @@ public class RedisSessionRegistry implements SessionRegistry, ApplicationListene
 		if (sessionId == null || principal == null) {
 			return;
 		}
-		if (!(principal instanceof UserDetails userDetails)) {
-			log.warn("[RedisSessionRegistry] principal 不是 UserDetails 类型: {}, 跳过注册", principal.getClass());
+
+		// 从 principal 中提取用户名，支持多种类型:
+		// - UserDetails: 标准 Spring Security 用户详情
+		// - String: 直接是用户名
+		// - Authentication: 从 authentication.getPrincipal() 提取
+		// - 其他对象: 尝试调用 getName() 或 toString()
+		String username = extractUsername(principal);
+		if (username == null || username.isBlank()) {
+			log.warn("[RedisSessionRegistry] 无法从 principal 提取用户名: {}, 跳过注册", principal.getClass());
 			return;
 		}
-		String username = userDetails.getUsername();
-		String authorities = userDetails.getAuthorities().stream()
-				.map(GrantedAuthority::getAuthority)
-				.collect(Collectors.joining(","));
+
+		String authorities = extractAuthorities(principal);
 
 		String sessionKey = SESSION_KEY_PREFIX + sessionId;
 		String principalKey = PRINCIPAL_KEY_PREFIX + username;
 
 		// 1. 存储会话信息
+		long now = System.currentTimeMillis();
 		redisTemplate.opsForHash().put(sessionKey, "principalName", username);
 		redisTemplate.opsForHash().put(sessionKey, "sessionId", sessionId);
 		redisTemplate.opsForHash().put(sessionKey, "authorities", authorities);
-		redisTemplate.opsForHash().put(sessionKey, "lastRequest", String.valueOf(System.currentTimeMillis()));
+		redisTemplate.opsForHash().put(sessionKey, "creationTime", String.valueOf(now));
+		redisTemplate.opsForHash().put(sessionKey, "lastRequest", String.valueOf(now));
 		redisTemplate.expire(sessionKey, TTL);
 
 		// 2. 维护 principal → sessionId 反向索引
@@ -86,6 +93,51 @@ public class RedisSessionRegistry implements SessionRegistry, ApplicationListene
 		redisTemplate.opsForSet().add(ALL_SESSIONS_KEY, sessionId);
 
 		log.info("[RedisSessionRegistry] 注册会话: principal={}, sessionId={}", username, sessionId);
+	}
+
+	/**
+	 * 从 principal 对象中提取用户名.
+	 */
+	private String extractUsername(Object principal) {
+		if (principal instanceof UserDetails ud) {
+			return ud.getUsername();
+		}
+		if (principal instanceof String s) {
+			return s;
+		}
+		// 尝试处理 Authentication 对象
+		if (principal instanceof org.springframework.security.core.Authentication auth) {
+			Object innerPrincipal = auth.getPrincipal();
+			if (innerPrincipal instanceof UserDetails ud) {
+				return ud.getUsername();
+			}
+			if (innerPrincipal instanceof String s) {
+				return s;
+			}
+			if (innerPrincipal != null) {
+				return innerPrincipal.toString();
+			}
+			return auth.getName();
+		}
+		// 其他情况: 使用 toString()
+		return principal.toString();
+	}
+
+	/**
+	 * 从 principal 对象中提取权限列表.
+	 */
+	private String extractAuthorities(Object principal) {
+		if (principal instanceof UserDetails ud) {
+			return ud.getAuthorities().stream()
+					.map(GrantedAuthority::getAuthority)
+					.collect(Collectors.joining(","));
+		}
+		if (principal instanceof org.springframework.security.core.Authentication auth) {
+			return auth.getAuthorities().stream()
+					.map(GrantedAuthority::getAuthority)
+					.collect(Collectors.joining(","));
+		}
+		return "";
 	}
 
 	@Override
@@ -160,6 +212,30 @@ public class RedisSessionRegistry implements SessionRegistry, ApplicationListene
 		String sessionKey = SESSION_KEY_PREFIX + sessionId;
 		redisTemplate.opsForHash().put(sessionKey, "expired", "true");
 		log.info("[RedisSessionRegistry] 标记会话过期: sessionId={}", sessionId);
+	}
+
+	/**
+	 * 获取会话创建时间 (登录时间).
+	 * <p>
+	 * 与 {@link #getSessionInformation(String)} 返回的 lastRequest (最后访问时间) 不同,
+	 * creationTime 在 {@link #registerNewSession} 时写入, 后续不会更新.
+	 *
+	 * @param sessionId 会话 ID
+	 * @return 创建时间的毫秒时间戳, 若会话不存在或无 creationTime 则返回 null
+	 */
+	public Long getCreationTime(String sessionId) {
+		if (sessionId == null) {
+			return null;
+		}
+		Object val = redisTemplate.opsForHash().get(SESSION_KEY_PREFIX + sessionId, "creationTime");
+		if (val != null) {
+			try {
+				return Long.parseLong(val.toString());
+			} catch (NumberFormatException e) {
+				return null;
+			}
+		}
+		return null;
 	}
 
 	@Override
@@ -299,16 +375,6 @@ public class RedisSessionRegistry implements SessionRegistry, ApplicationListene
 				.password("[PROTECTED]")
 				.authorities(parseAuthorities(authoritiesStr))
 				.build();
-	}
-
-	private String extractUsername(Object principal) {
-		if (principal instanceof UserDetails ud) {
-			return ud.getUsername();
-		}
-		if (principal instanceof String s) {
-			return s;
-		}
-		return null;
 	}
 
 	private String extractSessionId(AbstractSessionEvent event) {

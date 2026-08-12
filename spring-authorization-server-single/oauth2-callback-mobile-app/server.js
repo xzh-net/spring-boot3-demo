@@ -9,19 +9,31 @@
  *   其余环节 (调 API / userinfo) 与 web-app 完全一致, 只用 access_token。
  *
  * 启动: node server.js
- * 端口: 8082  (零依赖, 仅用 Node 内置 crypto 模块)
+ * 端口: 8083  (零依赖, 仅用 Node 内置 crypto 模块)
  */
 
 const http = require('http');
 const url = require('url');
 const crypto = require('crypto');
 
-const PORT = 8082;
+const PORT = 8083;
 const AUTH_SERVER = 'http://localhost:9000';
+const PORTAL_URL = 'http://localhost:8000';
 const CLIENT_ID = 'mobile-app';
 // Public Client 无 client_secret, 此处保留为 null 仅作文档说明, 实际请求不会使用
 const CLIENT_SECRET = null;
-const REDIRECT_URI = 'http://localhost:8082/callback';
+const REDIRECT_URI = 'http://localhost:8083/callback';
+
+// ========== 设计文档 §6: A 返回 Portal 使用 prompt=none 静默授权 ==========
+// 门户应用 (portal-app) 是 Confidential Client, client_id=portal-app
+// 从应用 A 回门户时, 先向认证中心为 portal-app 发起静默授权 (prompt=none)
+// 有 SAS SSO Session → 直接带 code 跳到门户回调 → 门户无感登录
+// 无 SAS Session  → 返回 error=login_required → 转门户正常登录流程
+const PORTAL_CLIENT_ID = 'portal-app';
+// portal-server 的 OAuth2 回调地址 (与 portal-server application.yml 中 redirect-uri 一致)
+const PORTAL_REDIRECT_URI = 'http://localhost:8080/login/oauth2/code/portal-app-oidc';
+// 本应用作为中间方接收 prompt=none 授权响应的本地回调
+const PORTAL_SSO_REDIRECT_URI = 'http://localhost:8083/portal-sso-callback';
 
 // ============================================================
 // PKCE 工具函数 (RFC 7636)
@@ -127,12 +139,46 @@ function getAuthorizationUrl() {
     const codeChallenge = generateCodeChallenge(codeVerifier);
     const state = generateState();
     // 暂存 verifier, 等回调时按 state 取回 (Map 无 TTL, 演示用, 生产环境应设过期时间)
-    pkceStore.set(state, codeVerifier);
+    pkceStore.set(state, { codeVerifier, type: 'self' });
     return `${AUTH_SERVER}/oauth2/authorize?response_type=code&client_id=${CLIENT_ID}` +
         `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
         `&scope=${encodeURIComponent('openid profile email read write')}` +
         `&state=${state}` +
         `&code_challenge=${codeChallenge}&code_challenge_method=S256`;
+}
+
+// ========== 设计文档 §6-7: A → Portal 静默 SSO (prompt=none) ==========
+/**
+ * 生成「返回门户」的静默授权 URL.
+ *
+ * 按设计文档要求: A 返回 Portal 时不直接跳门户首页, 而是向认证中心为 portal-app 客户端
+ * 发起 OIDC 授权请求, 带 prompt=none:
+ *   - 有 SAS SSO Session → 认证中心直接发 code (不弹登录页)
+ *   - 无 SAS SSO Session → 返回 error=login_required, 不弹登录页
+ *
+ * 授权响应由本应用的 /portal-sso-callback 端点接收:
+ *   - 成功收到 code: 再 302 到门户的登录入口, 由门户走自己的 OAuth2 流程
+ *     (因 Public Client 无 portal-app 的 client_secret, 无法代换 token)
+ *     门户发起新授权时 SAS 有 SSO Session, 依然是无感登录
+ *   - error=login_required: 直接跳门户正常登录入口, 门户会弹登录页
+ */
+function getPortalSsoUrl() {
+    const state = generateState();
+    // 标记这个 state 是门户回流用的, 避免和 PKCE verifier 混淆
+    pkceStore.set(state, { codeVerifier: null, type: 'portal-sso' });
+    // portal-app 配置了 requireProofKey=true (PKCE), 必须发送 code_challenge
+    // 这里生成一次性的 PKCE 参数, code_verifier 不会用于换 token (仅做 SSO 有效性探测)
+    const codeVerifier = crypto.randomBytes(32).toString('base64url');
+    const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
+    let url = `${AUTH_SERVER}/oauth2/authorize?response_type=code&client_id=${PORTAL_CLIENT_ID}`;
+    url += `&redirect_uri=${encodeURIComponent(PORTAL_SSO_REDIRECT_URI)}`;
+    url += `&scope=${encodeURIComponent('openid profile')}`;
+    url += `&state=${state}`;
+    url += `&code_challenge=${codeChallenge}`;
+    url += `&code_challenge_method=S256`;
+    // 设计文档 §6-7: prompt=none — 静默授权, 绝不弹登录页
+    url += `&prompt=none`;
+    return url;
 }
 
 /**
@@ -211,7 +257,7 @@ async function revokeToken(token, tokenTypeHint) {
     }
 }
 
-const CLIENT_LOGIN_URL = 'http://localhost:8082/';
+const CLIENT_LOGIN_URL = 'http://localhost:8083/';
 
 /**
  * 退出登录流程 — 与 web-app 逻辑一致, 仅 client_id 认证方式不同
@@ -246,7 +292,12 @@ async function handleLogout(req, res) {
 // ============================================================
 
 function layout(title, content, isLoggedIn = false) {
-    const logoutBtn = isLoggedIn ? '<a href="/logout" style="margin-left:auto;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.35);padding:6px 14px;border-radius:6px;text-decoration:none;font-size:13px;">退出登录</a>' : '';
+    // 设计文档 §6: 点击"返回门户"先打到本应用 /return-to-portal 端点,
+    // 由服务端构造 portal-app 的 prompt=none 静默授权 URL 并 302 跳转
+    const portalBtn = isLoggedIn
+        ? `<a href="/return-to-portal" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.35);padding:6px 14px;border-radius:6px;text-decoration:none;font-size:13px;margin-right:12px;">🏠 返回门户</a>`
+        : '';
+    const logoutBtn = isLoggedIn ? '<a href="/logout" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.35);padding:6px 14px;border-radius:6px;text-decoration:none;font-size:13px;">退出登录</a>' : '';
     return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -259,6 +310,7 @@ function layout(title, content, isLoggedIn = false) {
         .nav { background: linear-gradient(135deg, #1e3a5f, #2563eb); color: #fff; padding: 0 24px; height: 56px; display: flex; align-items: center; }
         .nav .brand { font-weight: 700; font-size: 16px; }
         .nav a { color: #dbeafe; text-decoration: none; margin-left: 24px; font-size: 14px; }
+        .nav .right { margin-left: auto; display: flex; align-items: center; }
         .container { max-width: 860px; margin: 24px auto; padding: 0 24px; }
         .card { background: #fff; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); padding: 28px; margin-bottom: 18px; }
         h1 { font-size: 22px; color: #1e3a5f; margin-bottom: 6px; }
@@ -290,7 +342,10 @@ function layout(title, content, isLoggedIn = false) {
     <div class="nav">
         <div class="brand">🔐 OAuth2 授权码 + PKCE 演示</div>
         <a href="/">首页</a>
-        ${logoutBtn}
+        <div class="right">
+            ${portalBtn}
+            ${logoutBtn}
+        </div>
     </div>
     <div class="container">${content}</div>
 </body>
@@ -367,7 +422,9 @@ async function renderIntrospectDemo(req, res) {
         return layout('请求失败', `<div class="card"><h1>⚠️ 请求失败</h1><pre>${esc(e.message)}</pre><div class="actions"><a href="/" class="btn btn-outline">返回</a></div></div>`);
     }
 
-    if (result.status === 401) {
+    // RFC 7662: introspect 端点在 token 无效时返回 200 + active=false (而非 401)
+    // 但我们仍需要清除本地 session 并跳转到授权服务器，保持与其他按钮行为一致
+    if (result.status === 401 || (result.status === 200 && result.data.active === false)) {
         sessions.delete(session.sessionId);
         clearSessionCookie(res);
         res.writeHead(302, {
@@ -415,7 +472,27 @@ async function renderIntrospectDemo(req, res) {
  *   - 调用 exchangeCodeForToken(code, codeVerifier)
  */
 async function renderCallback(query, res) {
+    // 设计文档 §9: self-silent (prompt=none) 授权失败, 自动降级为正常授权 (不弹登录页 → 弹登录页)
+    // 先判断 state 类型, 再处理 error, 因为只有 self-silent 需要特殊降级
+    const state = query.state;
+    let storedType = null;
+    if (state) {
+        const s = pkceStore.get(state);
+        if (s && typeof s === 'object') storedType = s.type;
+    }
+
     if (query.error) {
+        // 设计文档 §7 + §9: self-silent 收到 login_required → 无 SAS Session → 自动降级为正常授权
+        if (storedType === 'self-silent' && query.error === 'login_required') {
+            if (state) pkceStore.delete(state);
+            console.log('[reauth] prompt=none 静默授权失败 (SAS Session 已过期), 自动降级为正常授权');
+            res.writeHead(302, {
+                'Location': getAuthorizationUrl(),
+                'Cache-Control': 'no-cache, no-store, must-revalidate'
+            });
+            res.end();
+            return;
+        }
         return layout('授权失败', `
             <div class="card">
                 <h1>❌ 授权失败</h1>
@@ -429,14 +506,16 @@ async function renderCallback(query, res) {
     }
 
     const code = query.code;
-    const state = query.state;
     if (!code) {
         return layout('错误', `<div class="card"><h1>⚠️ 未收到授权码</h1><div class="actions"><a href="/" class="btn btn-outline">返回</a></div></div>`);
     }
 
     // 按 state 取出暂存的 code_verifier, 取出后立即删除 (一次性)
-    const codeVerifier = pkceStore.get(state);
-    if (!codeVerifier) {
+    const stored = pkceStore.get(state);
+    // type='self' (正常授权) 或 type='self-silent' (prompt=none 静默授权成功) 都需要 code_verifier
+    if (!stored || typeof stored !== 'object'
+        || (stored.type !== 'self' && stored.type !== 'self-silent')
+        || !stored.codeVerifier) {
         return layout('PKCE 校验失败', `
             <div class="card">
                 <h1>⚠️ PKCE 状态丢失</h1>
@@ -446,6 +525,7 @@ async function renderCallback(query, res) {
         `);
     }
     pkceStore.delete(state);
+    const codeVerifier = stored.codeVerifier;
 
     let tokenResult;
     try {
@@ -642,18 +722,93 @@ async function renderUserinfoDemo(req, res) {
     `, true);
 }
 
+// ========== 设计文档 §9: Public Client 无 refresh_token, access_token 过期后使用 ==========
+//              prompt=none + SAS SSO Session 静默重新授权 (替代 refresh_token 方案)
+
 /**
- * 重新授权 (静默) — Public Client 无 refresh_token, access_token 过期后直接重新走授权码流程。
- * 若授权服务器 session (PORTAL_SECURITY_CONTEXT) 仍有效, 用户无需重新登录, 整个过程无感知。
- * 这就是 SPA / 移动端的 "silent renew" 替代方案。
+ * 生成带 prompt=none 的「静默重新授权」URL (给自己的授权).
+ * 设计文档 §9 Token 策略: 推荐短生命周期 Access Token + prompt=none 静默重新授权.
+ *   - 有 SAS SSO Session → 直接返回 code, 用户无感
+ *   - 无 SAS Session     → 返回 error=login_required, 不弹登录页, 再降级为正常授权
+ */
+function getSilentAuthorizationUrl() {
+    const codeVerifier = generateCodeVerifier();
+    const codeChallenge = generateCodeChallenge(codeVerifier);
+    const state = generateState();
+    pkceStore.set(state, { codeVerifier, type: 'self-silent' });
+    let url = `${AUTH_SERVER}/oauth2/authorize?response_type=code&client_id=${CLIENT_ID}`;
+    url += `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`;
+    url += `&scope=${encodeURIComponent('openid profile email read write')}`;
+    url += `&state=${state}`;
+    url += `&code_challenge=${codeChallenge}&code_challenge_method=S256`;
+    // 设计文档 §9: prompt=none — 绝不弹登录页, 没 session 就返回 login_required 错误
+    url += `&prompt=none`;
+    return url;
+}
+
+/**
+ * 重新授权 (设计文档 §9: 先用 prompt=none 静默刷新, 失败再降级为正常授权).
+ * Public Client 不签发 refresh_token (SAS 安全策略 RFC 8252).
+ * 当 access_token 过期时, 先尝试 prompt=none:
+ *   - 若 Authorization Server 的 SSO Session 仍有效: 无感获取新 code → 换新 token
+ *   - 若 SSO Session 已失效: 收到 login_required 错误 → 自动降级为正常授权 (弹登录页)
  */
 function handleReauth(req, res) {
-    // 清除旧 session, 避免残留已过期的 token
     const sid = getSessionIdFromCookie(req);
     if (sid) sessions.delete(sid);
     clearSessionCookie(res);
+    // 设计文档 §9: 先尝试 prompt=none 静默授权
     res.writeHead(302, {
-        'Location': getAuthorizationUrl(),
+        'Location': getSilentAuthorizationUrl(),
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+    });
+    res.end();
+}
+
+// ========== 设计文档 §6-7: 应用 A → 门户 的 prompt=none 静默 SSO 回流 ==========
+
+/**
+ * A 点击"返回门户"端点: 302 到认证中心为 portal-app 发起静默授权.
+ */
+function handleReturnToPortal(req, res) {
+    res.writeHead(302, {
+        'Location': getPortalSsoUrl(),
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+    });
+    res.end();
+}
+
+/**
+ * 门户 SSO 授权回调端点 (/portal-sso-callback).
+ * 接收认证中心针对 portal-app 发起的 prompt=none 授权响应:
+ *   - 成功 (有 code): 说明 SAS SSO Session 有效.
+ *     Public Client 没有 portal-app 的 client_secret, 不能代换 token.
+ *     处理方式: 302 到门户首页 PORTAL_URL, 门户前端检测到未登录会跳 portal-server OAuth2 登录,
+ *               portal-server 发起自己的授权请求时, SAS 仍有 SSO Session, 依然无感登录.
+ *   - 失败 (error=login_required): 说明 SAS SSO Session 已过期 (设计文档 §7).
+ *     处理方式: 302 到门户首页 PORTAL_URL, 门户会走正常登录流程 (弹登录页).
+ *   - 其他错误 (e.g. invalid_request, access_denied): 同上, 交由门户正常处理.
+ */
+function handlePortalSsoCallback(query, res) {
+    const state = query.state;
+    // 清理一次性 state
+    if (state) pkceStore.delete(state);
+
+    let redirectTarget = PORTAL_URL;
+    if (query.error === 'login_required') {
+        // 设计文档 §7: 无 SAS Session → error=login_required → 转门户正常登录
+        console.log('[portal-sso] 认证中心无 SSO Session, 返回 login_required, 转门户正常登录');
+        // 加上提示参数, 让门户知道需要立即登录 (可选)
+        redirectTarget = PORTAL_URL + '/login';
+    } else if (query.code) {
+        // 设计文档 §7: 有 SAS Session → code 返回 → 用户无感进入门户
+        console.log('[portal-sso] 认证中心 SSO Session 有效, 获得 code, 转门户 (门户会完成剩余登录)');
+    } else if (query.error) {
+        console.log('[portal-sso] 授权失败 error=%s desc=%s, 转门户首页', query.error, query.error_description);
+    }
+
+    res.writeHead(302, {
+        'Location': redirectTarget,
         'Cache-Control': 'no-cache, no-store, must-revalidate'
     });
     res.end();
@@ -678,6 +833,14 @@ const server = http.createServer(async (req, res) => {
             case '/callback':
                 html = await renderCallback(query, res);
                 break;
+            // 设计文档 §6: A → Portal 静默 SSO 端点
+            case '/return-to-portal':
+                handleReturnToPortal(req, res);
+                return;
+            // 设计文档 §6-7: A → Portal prompt=none 授权回调
+            case '/portal-sso-callback':
+                handlePortalSsoCallback(query, res);
+                return;
             case '/logout':
                 await handleLogout(req, res);
                 return;

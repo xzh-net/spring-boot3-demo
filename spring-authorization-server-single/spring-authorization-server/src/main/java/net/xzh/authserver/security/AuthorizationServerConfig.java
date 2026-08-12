@@ -97,39 +97,40 @@ import net.xzh.authserver.security.web.converter.PasswordGrantAuthenticationConv
  * <p>
  * 职责：
  * <ol>
- * <li>定义 5 条 SecurityFilterChain，按优先级处理不同的请求路径。</li>
+ * <li>定义 4 条 SecurityFilterChain，按优先级处理不同的请求路径。</li>
  * <li>配置 OAuth2 授权服务器端点（授权码、设备码、令牌、内省、撤销、JWKS、OIDC）。</li>
  * <li>配置 TokenGenerator 链路：OAuth2AccessTokenGenerator → JwtGenerator，优先 Opaque
  * 格式。</li>
  * <li>注册自定义 AuthenticationProvider（密码授权、设备码授权、设备码客户端认证）。</li>
  * <li>配置客户端认证 Converter 链路，支持 NONE（公共客户端）和 CLIENT_SECRET_BASIC。</li>
  * <li>配置 OIDC UserInfo 和 ClientRegistration 端点。</li>
- * <li>管理安全上下文隔离：门户/管理员/设备验证使用独立的 SecurityContext Key。</li>
+ * <li>管理安全上下文隔离：OAuth2 授权登录/管理员/设备验证使用独立的 SecurityContext Key。</li>
  * </ol>
  *
- * 5 条 FilterChain 概览：
+ * 4 条 FilterChain 概览：
  * <ul>
- * <li><b>Order(1)</b> — OAuth2 端点（授权、令牌、内省、撤销、设备码、JWKS、OIDC）</li>
+ * <li><b>Order(1)</b> — OAuth2 端点 + 登录页（授权、令牌、内省、撤销、设备码、JWKS、OIDC、/login）</li>
  * <li><b>Order(2)</b> — 资源服务器 /api/**（Bearer Token 认证，无状态）</li>
  * <li><b>Order(3)</b> — 管理员后台 /admin/**（独立 UserDetailsService + 表单登录）</li>
- * <li><b>Order(5)</b> — 设备验证 /activate、/device-login（独立
- * UserDetailsService）</li>
- * <li><b>Order(6)</b> — 门户 + 静态资源（表单登录 + 退出 + 白名单重定向）</li>
+ * <li><b>Order(5)</b> — 设备验证 /activate、/device-login（独立 UserDetailsService）</li>
  * </ul>
+ * <p>
+ * 门户已拆分为独立项目 (portal-app 8000 + portal-server 8080)，通过 OAuth2 授权码流程接入。
+ * 认证中心不再包含门户专属安全链，/login 和 /logout 由 Order(1) 链统一处理。
  */
 @Slf4j
 @Configuration
 @EnableWebSecurity
 public class AuthorizationServerConfig {
 
-	/** 门户/授权码流程的 SecurityContext 在会话中的属性键 */
-	private static final String PORTAL_CONTEXT_KEY = "PORTAL_SECURITY_CONTEXT";
+	/** OAuth2 授权码流程登录态的 SecurityContext 在会话中的属性键（历史命名 PORTAL，实际用于 /login 表单登录会话） */
+	public static final String PORTAL_CONTEXT_KEY = "PORTAL_SECURITY_CONTEXT";
 
 	/** 管理员后台的 SecurityContext 在会话中的属性键 */
-	private static final String ADMIN_CONTEXT_KEY = "ADMIN_SECURITY_CONTEXT";
+	static final String ADMIN_CONTEXT_KEY = "ADMIN_SECURITY_CONTEXT";
 
 	/** 设备验证流程的 SecurityContext 在会话中的属性键 */
-	private static final String DEVICE_CONTEXT_KEY = "DEVICE_SECURITY_CONTEXT";
+	static final String DEVICE_CONTEXT_KEY = "DEVICE_SECURITY_CONTEXT";
 
 	/** OAuth2 令牌的预期受众（用于 introspection 和 UserInfo 的 aud claim） */
 	static final String CONTACTS_API_AUD = "contacts-api";
@@ -145,14 +146,14 @@ public class AuthorizationServerConfig {
 	 * 基于 Redis 的 SessionRegistry Bean。
 	 * <p>
 	 * 使用 {@link RedisSessionRegistry} 将会话跟踪信息持久化到 Redis，
-	 * 确保服务器重启后管理端/门户端在线用户列表数据不丢失。
+	 * 确保服务器重启后管理端/客户端在线用户列表数据不丢失。
 	 * <ul>
 	 *   <li>HttpSession 数据通过 Spring Session 持久化到 Redis (登录状态不丢失)</li>
 	 *   <li>SessionRegistry 跟踪索引也持久化到 Redis (在线列表不丢失)</li>
 	 * </ul>
 	 */
 	@Bean
-	public SessionRegistry sessionRegistry(StringRedisTemplate redisTemplate) {
+	public RedisSessionRegistry sessionRegistry(StringRedisTemplate redisTemplate) {
 		log.info("使用 RedisSessionRegistry, 会话跟踪信息持久化到 Redis");
 		return new RedisSessionRegistry(redisTemplate);
 	}
@@ -228,7 +229,7 @@ public class AuthorizationServerConfig {
 	}
 
 	// ------------------------------------------------------------------
-	// DaoAuthenticationProvider（门户 + 管理员，各链路按需注入）
+	// DaoAuthenticationProvider（OAuth2 授权登录 + 管理员，各链路按需注入）
 	// ------------------------------------------------------------------
 
 	@Bean("portalDaoProvider")
@@ -277,10 +278,13 @@ public class AuthorizationServerConfig {
 		OAuth2AuthorizationServerConfigurer authzConfigurer = OAuth2AuthorizationServerConfigurer.authorizationServer();
 
 		// 3. 开始配置 HttpSecurity
-		// 【目的】明确指定这条安全链只处理列出的这些 OAuth2/OIDC 相关端点
+		// 【目的】明确指定这条安全链处理 OAuth2/OIDC 端点 + 登录流程
+		// 【注意】/login.html 和 /login 加入此链: 门户链 (原 Order 6) 删除后,
+		//        登录页和表单提交端点需要由本链处理, 否则 formLogin().loginProcessingUrl("/login") 不生效
 		http.securityMatcher("/oauth2/authorize", "/oauth2/token", "/oauth2/introspect", "/oauth2/revoke",
 				"/oauth2/device_authorization", "/oauth2/device/verify", "/oauth2/jwks", "/oauth2/connect/register",
-				"/consent", "/.well-known/openid-configuration", "/.well-known/oauth-authorization-server").with(
+				"/consent", "/logout", "/login.html", "/login",
+				"/.well-known/openid-configuration", "/.well-known/oauth-authorization-server").with(
 						authzConfigurer, as -> as
 								// 3.1 配置授权服务器的各项设置
 								.authorizationServerSettings(
@@ -291,10 +295,12 @@ public class AuthorizationServerConfig {
 													.deviceVerificationEndpoint("/oauth2/device/verify")
 													.oidcUserInfoEndpoint("/userinfo")
 													.oidcClientRegistrationEndpoint("/oauth2/connect/register")
-													// OIDC RP-Initiated Logout 端点：与 Order(6) 链中的自定义 /logout
-													// 处理器保持一致，使 OIDC discovery 的 end_session_endpoint
-													// 指向 /logout 而非默认的 /connect/logout
-													.oidcLogoutEndpoint("/logout")
+													// OIDC RP-Initiated Logout 端点配置。
+													// 注意: 实际的 /logout 由 LogoutController 处理 (partialLogout + 重定向),
+													// OidcLogoutEndpointFilter 的匹配路径设为 /oidc/logout 以避免拦截 /logout 请求。
+													// OIDC discovery 中的 end_session_endpoint 仍指向 /oidc/logout,
+													// 但 portal-server 和各客户端均直接使用 /logout, 不依赖 discovery。
+													.oidcLogoutEndpoint("/oidc/logout")
 													.build())
 								.authorizationEndpoint(endpoint -> endpoint.consentPage("/consent")) // 指定用户同意授权的页面路径
 								.clientAuthentication(clientAuth -> clientAuth
@@ -341,17 +347,21 @@ public class AuthorizationServerConfig {
 				.authorizeHttpRequests(auth -> auth
 						// 【目的】放行所有 OAuth2 端点和登录页，让请求能到达对应的过滤器进行处理
 						.requestMatchers("/login.html", "/login", "/error", "/.well-known/openid-configuration",
-								"/.well-known/oauth-authorization-server", "/oauth2/token", "/oauth2/introspect",
-								"/oauth2/revoke", "/oauth2/device_authorization", "/oauth2/jwks",
-								"/oauth2/connect/register", "/userinfo")
-						.permitAll()
+							"/.well-known/oauth-authorization-server", "/oauth2/token", "/oauth2/introspect",
+							"/oauth2/revoke", "/oauth2/device_authorization", "/oauth2/jwks",
+							"/oauth2/connect/register", "/userinfo", "/logout")
+					.permitAll()
 						// 其他所有请求都需要认证
 						.anyRequest().authenticated())
 				.formLogin(form -> form.loginPage("/login.html") // 自定义登录页面
 						.loginProcessingUrl("/login") // 登录表单提交地址
 						.permitAll())
-				// 【目的】忽略设备验证端点的 CSRF 校验，解决跨安全链（从普通业务链到授权服务器链）的 CSRF Token 不一致问题
-				.csrf(csrf -> csrf.ignoringRequestMatchers(new AntPathRequestMatcher("/oauth2/device/verify")))
+				// 【目的】忽略设备验证端点和登录表单提交的 CSRF 校验
+				// /oauth2/device/verify: 跨安全链 CSRF Token 不一致
+				// /login POST: login.html 为静态文件, 无服务端渲染的 CSRF token
+				.csrf(csrf -> csrf.ignoringRequestMatchers(
+						new AntPathRequestMatcher("/oauth2/device/verify"),
+						new AntPathRequestMatcher("/login", "POST")))
 				.sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
 						.sessionConcurrency(sc -> sc.sessionRegistry(sessionRegistry) // 配置会话注册表
 								.maximumSessions(-1) // 允许同一用户并发会话数（-1为不限制）
@@ -387,8 +397,11 @@ public class AuthorizationServerConfig {
 				.sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
 				// 3. 配置授权规则
-				// 【目的】要求所有匹配 /api/** 的请求都必须经过身份认证
-				.authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
+				// 【目的】/api/public/** 公开访问 (供 portal-server BFF 调用获取客户端列表)
+				// 【目的】其余 /api/** 请求必须经过身份认证
+				.authorizeHttpRequests(auth -> auth
+						.requestMatchers("/api/public/**").permitAll()
+						.anyRequest().authenticated())
 
 				// 4. 配置资源服务器
 				// 【目的】启用 OAuth2 资源服务器功能，并指定使用“不透明令牌”（Opaque Token）模式
@@ -440,10 +453,10 @@ public class AuthorizationServerConfig {
 				// 5. 配置表单登录
 				// 【目的】指定管理员的登录页面、登录处理 URL 以及登录成功/失败后的跳转地址
 				.formLogin(form -> form.loginPage("/admin/login.html").loginProcessingUrl("/admin/login")
-						.defaultSuccessUrl("/admin/index.html", true).failureUrl("/admin/login.html?error").permitAll())
+						.defaultSuccessUrl("/admin", true).failureUrl("/admin/login.html?error").permitAll())
 
 				// 6. 配置登出
-				// 【目的】管理员登出时只清理 ADMIN_SECURITY_CONTEXT, 保留同一会话中的门户/设备登录态
+				// 【目的】管理员登出时只清理 ADMIN_SECURITY_CONTEXT, 保留同一会话中的 OAuth2/设备登录态
 				// 【在线会话同步】同步撤销该管理员通过授权码流程产生的 OAuth2Authorization
 				// 【注意】必须显式 .invalidateHttpSession(false).clearAuthentication(false),
 				//       否则 LogoutConfigurer 自动注入的 SecurityContextLogoutHandler
@@ -472,11 +485,11 @@ public class AuthorizationServerConfig {
 	/**
 	 * 允许的 post-logout 重定向目标. 防止 open-redirect 漏洞:
 	 *  1. 本站同源路径 (以 / 开头, 不包含 // 协议跳)
-	 *  2. OAuth2 回调客户端地址 (http://localhost:8080/*)
+	 *  2. OAuth2 回调客户端地址 (http://localhost:8000~8084, http://localhost:9000)
 	 */
 	private static final Set<String> ALLOWED_REDIRECT_HOSTS = Set.of(
-					"localhost:8080", "localhost:8081", "localhost:8082", "localhost:9000",
-					"127.0.0.1:8080", "127.0.0.1:8081", "127.0.0.1:8082", "127.0.0.1:9000"
+					"localhost:8000", "localhost:8080", "localhost:8081", "localhost:8082", "localhost:8083", "localhost:8084", "localhost:9000",
+					"127.0.0.1:8000", "127.0.0.1:8080", "127.0.0.1:8081", "127.0.0.1:8082", "127.0.0.1:8083", "127.0.0.1:8084", "127.0.0.1:9000"
 	);
 
 	/** 检查退出跳转 URL 是否在白名单内（同源路径自动通过） */
@@ -501,7 +514,7 @@ public class AuthorizationServerConfig {
 	/**
 	 * 部分登出: 只移除指定的 SecurityContext 属性, 避免误删同一会话中其他链路的登录态.
 	 *
-	 * <p>背景: 门户(PORTAL)、管理员(ADMIN)、设备验证(DEVICE)三条链路共用同一个
+	 * <p>背景: OAuth2 授权登录(PORTAL)、管理员(ADMIN)、设备验证(DEVICE)三条链路共用同一个
 	 * HttpSession(都在 localhost:9000, 共享 JSESSIONID cookie),
 	 * SecurityContext 通过不同的 session 属性 key 隔离。
 	 * 如果直接调用 {@code session.invalidate()} 会销毁所有链路的登录态，
@@ -511,7 +524,7 @@ public class AuthorizationServerConfig {
 	 * <ol>
 	 *   <li>从 session 中移除传入的 contextKeys</li>
 	 *   <li>检查 session 中是否还留有其他 SecurityContext 属性
-	 *       (PORTAL/ADMIN/DEVICE 之一)</li>
+	 *       (ADMIN/DEVICE 之一; PORTAL 登出代表 OAuth2 SSO 终结, 不参与残留检查)</li>
 	 *   <li>全部为空时才真正 {@code session.invalidate()} 并通知 SessionRegistry;
 	 *       有残留时只清掉指定属性，保留其他链路的登录态</li>
 	 * </ol>
@@ -520,7 +533,7 @@ public class AuthorizationServerConfig {
 	 * @param req             当前请求
 	 * @param contextKeysToRemove 本次要移除的 SecurityContext session 属性键
 	 */
-	private static void partialLogout(SessionRegistry sessionRegistry,
+	public static void partialLogout(SessionRegistry sessionRegistry,
 									  HttpServletRequest req,
 									  String... contextKeysToRemove) {
 		var session = req.getSession(false);
@@ -532,18 +545,17 @@ public class AuthorizationServerConfig {
 		for (String key : contextKeysToRemove) {
 			session.removeAttribute(key);
 		}
-		// 2. 检查三个 context 键中是否还有任何一个残留
+		// 2. 检查 ADMIN/DEVICE 两个 context 键中是否还有任何一个残留
+		//    (PORTAL 登出代表 OAuth2 SSO 终结, 不参与残留检查;
+		//     残留检查只看 ADMIN/DEVICE, 决定是否保留 session 给其他链路)
 		boolean anyLeft = false;
-		for (String key : List.of(PORTAL_CONTEXT_KEY, ADMIN_CONTEXT_KEY, DEVICE_CONTEXT_KEY)) {
+		for (String key : List.of(ADMIN_CONTEXT_KEY, DEVICE_CONTEXT_KEY)) {
 			if (session.getAttribute(key) != null) {
 				anyLeft = true;
 				break;
 			}
 		}
 		// 3. 无论是否还有残留 context, 都从 SessionRegistry 移除当前 session 的跟踪记录
-		//    原因: SessionRegistry 只跟踪最后一次登录的 principal, 当 portal 退出时
-		//    即使 admin context 还在 session 中, SessionRegistry 中的记录仍是 portalUser,
-		//    不移除会导致 portal 用户仍在在线列表中
 		sessionRegistry.removeSessionInformation(session.getId());
 		// 全部清空 → 销毁 session；还有残留 → 只清 SecurityContextHolder, 保留 session
 		if (!anyLeft) {
@@ -553,7 +565,7 @@ public class AuthorizationServerConfig {
 	}
 
 	/**
-	 * 门户/管理员登出时,同步撤销该用户通过「授权码模式 (authorization_code)」
+	 * 管理员登出时,同步撤销该用户通过「授权码模式 (authorization_code)」
 	 * 产生的所有 OAuth2Authorization 记录。
 	 * <p>
 	 * 这会让管理后台「在线用户」列表中的对应会话减少或消失,
@@ -561,8 +573,8 @@ public class AuthorizationServerConfig {
 	 * <p>
 	 * 只清理 authorization_code 类型的原因:
 	 * <ul>
-	 *   <li>authorization_code: 完全依赖门户/管理员 SSO 会话,登出=会话终结,必须撤销</li>
-	 *   <li>password: 用账号密码直接换 token,不依赖门户 SSO,不能误删</li>
+	 *   <li>authorization_code: 完全依赖 OAuth2 SSO 会话,登出=会话终结,必须撤销</li>
+	 *   <li>password: 用账号密码直接换 token,不依赖 SSO,不能误删</li>
 	 *   <li>device_code / client_credentials: 均为独立流程,不受 SSO 登出影响</li>
 	 * </ul>
 	 *
@@ -583,50 +595,12 @@ public class AuthorizationServerConfig {
 				}
 			}
 			if (revoked > 0) {
-				log.info("[门户/管理员登出] 已撤销 {} 的 {} 条 authorization_code 型 OAuth2 授权",
+				log.info("[管理员登出] 已撤销 {} 的 {} 条 authorization_code 型 OAuth2 授权",
 						principalName, revoked);
 			}
 		} catch (Exception e) {
-			log.warn("[门户/管理员登出] 撤销 authorization_code 授权失败 principal={}: {}",
+			log.warn("[管理员登出] 撤销 authorization_code 授权失败 principal={}: {}",
 					principalName, e.getMessage());
-		}
-	}
-
-	/**
-	 * 按 (principal, registeredClientId) 精确撤销该用户在指定客户端上的所有 OAuth2Authorization.
-	 * <p>用于客户端带 {@code client_id} 参数发起 /logout 时, 只撤销该客户端的授权,
-	 * 不影响该用户在其他客户端上的会话。撤销所有 grant 类型 (authorization_code / password 等),
-	 * 因为同一用户在同一客户端上的所有 token 都属于同一个登录态。</p>
-	 *
-	 * @param authorizationService Redis 授权服务,用于查询和删除授权记录
-	 * @param principalName        当前登出的用户名
-	 * @param registeredClientId   当前发起登出的客户端 ID (对应 OAuth2Authorization.registeredClientId)
-	 * @return 撤销的授权记录数
-	 */
-	private static int revokeGrantsByPrincipalAndClient(
-			RedisOAuth2AuthorizationService authorizationService,
-			String principalName,
-			String registeredClientId) {
-		try {
-			int revoked = 0;
-			for (OAuth2Authorization auth : authorizationService.findByPrincipal(principalName)) {
-				if (registeredClientId.equals(auth.getRegisteredClientId())) {
-					authorizationService.revoke(auth);
-					revoked++;
-				}
-			}
-			if (revoked > 0) {
-				log.info("[门户登出] 已撤销 {} 在 client={} 上的 {} 条 OAuth2 授权",
-						principalName, registeredClientId, revoked);
-			} else {
-				log.debug("[门户登出] principal={} 在 client={} 上无活跃授权 (可能已被 /oauth2/revoke 提前撤销)",
-						principalName, registeredClientId);
-			}
-			return revoked;
-		} catch (Exception e) {
-			log.warn("[门户登出] 按 (principal, clientId) 撤销授权失败 principal={} clientId={}: {}",
-					principalName, registeredClientId, e.getMessage());
-			return 0;
 		}
 	}
 
@@ -641,7 +615,7 @@ public class AuthorizationServerConfig {
 
 		// 1. 配置请求匹配与认证提供者
 		// 【目的】明确指定这条安全链只处理 /activate 和 /device-login 两个端点
-		// 【注意】复用了门户用户的认证提供者，意味着设备验证使用的是普通用户账号体系
+		// 【注意】复用了 OAuth2 授权登录的认证提供者，意味着设备验证使用的是普通用户账号体系
 		http.securityMatcher("/activate", "/device-login").authenticationProvider(portalDaoProvider)
 
 				// 2. 配置安全上下文与会话管理
@@ -674,141 +648,14 @@ public class AuthorizationServerConfig {
 		return http.build();
 	}
 
+	// ====== 已删除: 原 @Order(6) 门户安全链 ======
+	// 门户已拆分为独立项目 (portal-app 8000 前端 + portal-server 8080 BFF),
+	// 通过 OAuth2 授权码流程接入认证中心。
+	// /login 和 /logout 现由 Order(1) 链统一处理, 不再需要独立的门户安全链。
+	// 兜底请求 (不匹配 Order 1~5) 由 Spring Security 默认链处理, 返回 401/403。
+
 /**
- * 【关键】设置最低优先级，作为“兜底链”（Catch-all）。只有当请求不匹配 Order(1)~Order(5) 的任何路径时，才会落到这里
- */
-
-@Bean
-@Order(6)
-public SecurityFilterChain portalSecurityFilterChain(
-        HttpSecurity http,
-        @Qualifier("portalDaoProvider")
-        DaoAuthenticationProvider portalDaoProvider,
-        RedisOAuth2AuthorizationService authorizationService,
-        SessionRegistry sessionRegistry) throws Exception {
-
-    // 1. 配置认证提供者与安全上下文隔离
-    // 【目的】注入门户用户的认证提供者，处理用户名密码登录
-    // 【目的】使用独立的 SecurityContext Key (PORTAL_CONTEXT_KEY)，将门户会话与管理员、设备验证会话隔离
-    http.authenticationProvider(portalDaoProvider)
-            .securityContext(sc -> sc.securityContextRepository(contextRepo(PORTAL_CONTEXT_KEY)))
-
-    // 2. 配置会话管理
-    // 【目的】配置会话并发控制，使用全局的 SessionRegistry 跟踪会话，不限制最大会话数 (-1)
-    // 【目的】会话过期后重定向到 /login.html?expired
-    .sessionManagement(sm -> sm.sessionConcurrency(sc -> sc
-            .sessionRegistry(sessionRegistry)
-            .maximumSessions(-1)
-            .expiredUrl("/login.html?expired")))
-    // 【注意】在用户名密码过滤器之前添加自定义的会话过期过滤器，用于实时拦截过期会话
-    .addFilterBefore(
-            new SessionExpirationFilter(sessionRegistry),
-            UsernamePasswordAuthenticationFilter.class)
-
-    // 3. 配置授权规则
-    // 【目的】放行静态资源、登录页、健康检查、Druid/Actuator 监控端点
-    // 【目的】放行 /oauth2/device/verify 和 /.well-known/**，确保设备验证和 OIDC 发现端点可公开访问
-    // 【目的】/portal-api/** 和 /api/portal/** 需要公开访问（门户SSO功能）
-    .authorizeHttpRequests(auth -> auth
-            .requestMatchers(
-                    "/", "/login.html", "/portal.html", "/error", "/health", "/health/**",
-                    "/druid/**", "/actuator/**",
-                    "/css/**", "/js/**", "/images/**", "/favicon.ico",
-                    "/oauth2/device/verify", "/.well-known/**",
-                    "/userinfo", "/portal-api/**", "/api/portal/**"
-            ).permitAll()
-            .requestMatchers("/portal").authenticated()
-            .anyRequest().authenticated())
-
-    // 4. 配置表单登录
-    // 【目的】指定门户登录页面、登录处理 URL 以及登录成功/失败后的跳转地址
-    // 【注意】defaultSuccessUrl 的第二个参数 false 表示：如果有原始请求 URL，则跳转到原始 URL，否则跳转到 /portal.html
-    .formLogin(form -> form
-            .loginPage("/login.html")
-            .loginProcessingUrl("/login")
-            .defaultSuccessUrl("/portal.html", false)
-            .failureUrl("/login.html?error")
-            .permitAll())
-
-    // 5. 配置登出 (支持 GET 与 POST)
-    // 【目的】支持 GET (OAuth2 客户端 302 跳转) 与 POST (AJAX 退出).
-    // 参数: redirect / post_logout_redirect_uri: 退出成功后 302 目标 (经白名单校验)
-    // 无合法参数时默认跳回 /login.html
-    // 【SSO 隔离】只清理 PORTAL + DEVICE 的 SecurityContext, 保留 ADMIN, 避免
-    //            OAuth2 客户端 OIDC 登出回调 /logout 时误把管理员也踢下线
-    // 【在线会话同步】门户登出 = SSO 会话结束, 同步撤销该用户所有 authorization_code
-    //                grant 产生的 OAuth2Authorization (只清 SSO, 不碰 password/device_code 独立会话)
-    // 【注意】必须显式 .invalidateHttpSession(false).clearAuthentication(false),
-    //       否则 LogoutConfigurer 自动注入的 SecurityContextLogoutHandler
-    //       会在我们自定义 handler 之前就调用 session.invalidate(), 导致部分登出失效
-    .logout(logout -> logout
-            // 匹配 GET /logout 请求
-            .logoutRequestMatcher(new AntPathRequestMatcher("/logout"))
-            .invalidateHttpSession(false)
-            .clearAuthentication(false)
-            // 登出处理器：
-            //   a) 撤销该用户通过门户 SSO 产生的 authorization_code 型授权 → 在线用户-1
-            //   b) 仅移除 PORTAL 和 DEVICE 上下文, ADMIN 仍保留
-            .addLogoutHandler((HttpServletRequest req, HttpServletResponse res, Authentication auth) -> {
-                if (auth != null && auth.getName() != null) {
-                    // 从 Session 中读取最后活跃的客户端 ID (由 ActiveClientTrackingFilter 写入)
-                    HttpSession session = req.getSession(false);
-                    String activeClientId = session != null
-                            ? (String) session.getAttribute(ActiveClientTrackingFilter.ACTIVE_CLIENT_ID_ATTR)
-                            : null;
-
-                    if (activeClientId != null && !activeClientId.isBlank()) {
-                        // 存在活跃客户端: 按 (principal, clientId) 精确撤销该客户端的 OAuth2Authorization,
-                        // 不影响该用户在其他客户端(如 8080/8082)上的会话
-                        int revoked = revokeGrantsByPrincipalAndClient(authorizationService, auth.getName(), activeClientId);
-                        if (revoked == 0) {
-                            log.debug("[门户登出] principal={} 在 Session 中标记的活跃 client={} 上无有效授权, 可能已被 /oauth2/revoke 提前撤销",
-                                    auth.getName(), activeClientId);
-                        }
-                    } else {
-                        // 兜底: Session 中没有记录活跃客户端, 按 principal 全撤 authorization_code 授权
-                        log.warn("[门户登出] Session 中无 ACTIVE_CLIENT_ID, 按 principal 全撤授权 (可能 ActiveClientTrackingFilter 未记录)");
-                        revokeAuthorizationCodeGrantsForPrincipal(authorizationService, auth.getName());
-                    }
-                }
-                partialLogout(sessionRegistry, req, PORTAL_CONTEXT_KEY, DEVICE_CONTEXT_KEY);
-
-                // 撤销后清理 Session 中的活跃客户端标记 (如果 Session 还存在)
-                HttpSession session = req.getSession(false);
-                if (session != null) {
-                    session.removeAttribute(ActiveClientTrackingFilter.ACTIVE_CLIENT_ID_ATTR);
-                }
-            })
-            // 登出成功处理器：校验 redirect 参数是否在白名单中，合法则 302 跳转，否则回退到登录页
-            .logoutSuccessHandler((req, res, auth) -> {
-                String redirect = req.getParameter("redirect");
-                if (redirect == null || redirect.isEmpty()) {
-                    redirect = req.getParameter("post_logout_redirect_uri");
-                }
-                String target = isRedirectAllowed(redirect) ? redirect : "/login.html";
-                res.setStatus(HttpServletResponse.SC_FOUND);
-                res.setHeader("Location", res.encodeRedirectURL(target));
-                res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-            })
-            .permitAll())
-
-    // 6. 配置 CSRF
-    // 【目的】使用基于 Cookie 的 CSRF 令牌策略，HttpOnly=false 以便前端 JS 可从 cookie 中读到 XSRF-TOKEN 并作为 header 携带回来
-    // 【注意】忽略 /login POST 等表单端点 (原生表单不携带 token)，以及 OAuth2 端点和 /userinfo
-    .csrf(csrf -> csrf
-            .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
-            .ignoringRequestMatchers(
-                    new AntPathRequestMatcher("/oauth2/token"),
-                    new AntPathRequestMatcher("/oauth2/device_authorization"),
-                    new AntPathRequestMatcher("/userinfo", "GET"),
-                    new AntPathRequestMatcher("/userinfo", "POST"),
-                    new AntPathRequestMatcher("/login", "POST")));
-
-    return http.build();
-}
-
-	/**
-	 * 自定义 Token Customizer: 为 access_token 设置 aud claim, 为 id_token 设置 roles +
+ * 自定义 Token Customizer: 为 access_token 设置 aud claim, 为 id_token 设置 roles +
 	 * preferred_username. 处理两种 principal 类型: UserDetails (授权码) 和
 	 * UsernamePasswordAuthenticationToken (密码/刷新).
 	 */

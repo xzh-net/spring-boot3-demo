@@ -21,7 +21,7 @@ import jakarta.servlet.http.HttpSession;
  * 会发现用户未认证, 由 ExceptionTranslationFilter 保存原始请求到 RequestCache
  * 并重定向到登录页. 登录成功后 SavedRequestAwareAuthenticationSuccessHandler
  * 会从 RequestCache 恢复原始请求 (如 /oauth2/authorize?...), 实现强制下线后
- * 重新登录能回到原流程, 而不是跳到默认门户页.
+ * 重新登录能回到原流程, 而不是跳到默认登录页.
  */
 public final class SessionExpirationFilter extends OncePerRequestFilter {
 

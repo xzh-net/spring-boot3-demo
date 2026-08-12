@@ -1,5 +1,0 @@
-backup: 门户拆分前的完整状态
-
-包含双向SSO、设备码、会话隔离、在线用户管理等完整功能
-portal-app 客户端密钥已改为 123456
-即将拆分 portal-app 为独立 Spring Boot 项目

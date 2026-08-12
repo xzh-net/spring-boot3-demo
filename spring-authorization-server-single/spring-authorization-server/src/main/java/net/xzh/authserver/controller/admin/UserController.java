@@ -30,7 +30,7 @@ public class UserController {
 
     @GetMapping()
     public String page() {
-        return "redirect:/admin/user.html";
+        return "admin/user";
     }
 
     @GetMapping("/api/list")
@@ -81,7 +81,7 @@ public class UserController {
         return Result.ok();
     }
 
-    // ========= 在线管理相关 (3个选项卡) =========
+    // ========= 在线管理相关 (2个选项卡: 管理用户 + 客户端用户) =========
 
     /**
      * 管理端在线用户列表。
@@ -93,16 +93,7 @@ public class UserController {
     }
 
     /**
-     * 门户端在线用户列表。
-     */
-    @GetMapping("/api/portal/online")
-    @ResponseBody
-    public Result<List<Map<String, Object>>> portalOnlineUsers() {
-        return Result.ok(authSessionService.listPortalOnlineUsers());
-    }
-
-    /**
-     * 客户端在线用户列表 (OAuth2 对接进来的用户)。
+     * 客户端在线用户列表 (OAuth2 对接进来的用户, 含 portal-server 和各客户端)。
      */
     @GetMapping("/api/client/online")
     @ResponseBody
@@ -120,7 +111,7 @@ public class UserController {
     }
 
     /**
-     * 踢下线单个会话 (HttpSession, 管理端/门户端通用)。
+     * 踢下线单个会话 (HttpSession, 管理端/设备验证端通用)。
      */
     @DeleteMapping("/api/session/{sessionId}")
     @ResponseBody
@@ -150,22 +141,16 @@ public class UserController {
     }
 
     /**
-     * 踢下线用户全部门户端会话 (仅终止 HttpSession, 不撤销 OAuth2)。
-     */
-    @DeleteMapping("/api/portal/online/{username}")
-    @ResponseBody
-    public Result<Integer> kickPortalUser(@PathVariable String username) {
-        int kicked = authSessionService.revokeSessionUser(username, false);
-        return Result.ok(kicked);
-    }
-
-    /**
-     * 踢下线用户全部客户端会话 (撤销 OAuth2 令牌 + 终止 HttpSession)。
+     * 踢下线用户全部客户端会话 (仅撤销 OAuth2 令牌，不终止 auth-server SSO HttpSession)。
+     * <p>
+     * 区别于 revokeUserAll：本接口不影响 auth-server 的 SSO 登录状态，
+     * 只让该用户当前持有的所有 OAuth2 token 失效，用户下次访问时会通过 SSO 重新签发新 token。
+     * 这样踢用户A的全部会话时，不会影响用户B或该用户的其他登录上下文。
      */
     @DeleteMapping("/api/client/online/{username}")
     @ResponseBody
     public Result<Integer> kickClientUser(@PathVariable String username) {
-        int kicked = authSessionService.revokeUserAll(username);
+        int kicked = authSessionService.revokeClientTokensByPrincipal(username);
         return Result.ok(kicked);
     }
 }

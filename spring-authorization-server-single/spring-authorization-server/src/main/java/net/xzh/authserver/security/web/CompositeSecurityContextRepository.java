@@ -12,16 +12,17 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 
 /**
- * 复合只读 SecurityContextRepository: 先查 DEVICE_SECURITY_CONTEXT, 再查 PORTAL_SECURITY_CONTEXT.
+ * 复合 SecurityContextRepository: 先查 DEVICE_SECURITY_CONTEXT, 再查 PORTAL_SECURITY_CONTEXT.
  * <p>
- * 用于 OAuth2 链 (Order 1), 使其能同时读取门户登录态和设备验证登录态:
+ * 用于 OAuth2 链 (Order 1), 使其能同时读取 OAuth2 登录态和设备验证登录态:
  * <ul>
- *   <li>设备码流程: 用户通过 /device-login 登录, 认证态存入 DEVICE_SECURITY_CONTEXT</li>
- *   <li>授权码流程: 用户通过 /login 登录, 认证态存入 PORTAL_SECURITY_CONTEXT</li>
+ *   <li>设备码流程: 用户通过 /device-login 登录, 认证态存入 DEVICE_SECURITY_CONTEXT (由 Order 5 链写入)</li>
+ *   <li>授权码流程: 用户通过 /login 登录, 认证态存入 PORTAL_SECURITY_CONTEXT (由本类 saveContext 写入)</li>
  * </ul>
  * <p>
- * saveContext 为 no-op: OAuth2 链不应回写会话认证态, 避免设备验证的认证污染门户会话.
- * 各链 (portal/device) 自行管理其 SecurityContextRepository 的写入.
+ * 门户安全链 (原 Order 6) 删除后, OAuth2 链 (Order 1) 接管 formLogin,
+ * saveContext 需将认证态写入 PORTAL_SECURITY_CONTEXT, 供后续 /oauth2/authorize 读取.
+ * 设备验证流程走 Order 5 链, 不经过本类, 不会污染 OAuth2 登录会话.
  */
 public final class CompositeSecurityContextRepository implements SecurityContextRepository {
 
@@ -31,7 +32,7 @@ public final class CompositeSecurityContextRepository implements SecurityContext
     private final String deviceContextKey;
 
     /**
-     * 门户登录流程的 SecurityContext 在会话中的属性键.
+     * OAuth2 授权登录流程的 SecurityContext 在会话中的属性键.
      */
     private final String portalContextKey;
 
@@ -52,7 +53,7 @@ public final class CompositeSecurityContextRepository implements SecurityContext
             if (ctx != null) {
                 return ctx;
             }
-            // 再查 PORTAL (授权码流程或用户已登录门户)
+            // 再查 PORTAL (授权码流程的 OAuth2 登录态)
             ctx = readContextFromSession(session, portalContextKey);
             if (ctx != null) {
                 return ctx;
@@ -64,7 +65,15 @@ public final class CompositeSecurityContextRepository implements SecurityContext
     @Override
     public void saveContext(SecurityContext context, HttpServletRequest request,
                             HttpServletResponse response) {
-        // no-op: OAuth2 链只读不写, 不修改会话中的认证状态
+        // OAuth2 链 (Order 1) 接管 formLogin,
+        // 需将认证态写入 PORTAL_SECURITY_CONTEXT, 供后续 /oauth2/authorize 读取
+        if (context == null || context.getAuthentication() == null || !context.getAuthentication().isAuthenticated()) {
+            return;
+        }
+        HttpSession session = request.getSession(false);
+        if (session != null) {
+            session.setAttribute(portalContextKey, context);
+        }
     }
 
     @Override

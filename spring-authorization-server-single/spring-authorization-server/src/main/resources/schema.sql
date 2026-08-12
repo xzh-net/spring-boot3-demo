@@ -112,10 +112,42 @@ INSERT INTO sys_user (username, password, nickname, email, enabled)
 VALUES ('user', '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e', '普通用户', 'user@example.com', 1);
 
 
+-- 客户端: portal-app (门户应用, 用于客户端→门户的SSO)
+-- 典型场景: portal-server (后端 8080) 作为 OAuth2 Client, 通过授权码流程与认证中心交互
+--   portal-app (前端 8000) 为纯前端, 通过 portal-server 后端代理完成 token 交换
+--   client_authentication_method=client_secret_basic (Confidential Client, 密钥 123456)
+--   redirect_uri 指向 portal-server 的标准回调路径: {baseUrl}/login/oauth2/code/{registrationId}
+-- 设计文档 §4: Portal 虽然是 Confidential Client, 仍强制启用 PKCE (requireProofKey=true)
+--   现代安全实践 (RFC 7636 + OAuth 2.1): 即使有 client_secret, PKCE 也能进一步降低授权码被拦截的风险
+INSERT INTO oauth2_registered_client (
+    id, client_id, client_secret, client_name,
+    client_authentication_methods,
+    authorization_grant_types,
+    redirect_uris, post_logout_redirect_uris,
+    scopes,
+    client_settings,
+    token_settings
+) VALUES (
+    '1',
+    'portal-app',
+    '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e',
+    '门户应用 (SSO)',
+    'client_secret_basic',
+    'authorization_code,refresh_token',
+    -- 设计文档 §6-7: 加入 web-app(8081) 和 mobile-app(8083) 的 portal-sso-callback 回调地址
+    -- 因为应用 A → 门户 时, 会为 portal-app 发起 prompt=none 授权, 回调打到各应用自己的 /portal-sso-callback
+    'http://localhost:8080/login/oauth2/code/portal-app-oidc,http://localhost:8081/portal-sso-callback,http://localhost:8083/portal-sso-callback',
+    'http://localhost:8000/logged-out',
+    'openid,profile,email',
+    '{"requireProofKey":true,"requireAuthorizationConsent":false}',
+    '{"accessTokenFormat":"REFERENCE","accessTokenTimeToLive":"PT2H","reuseRefreshTokens":false}'
+);
+
+
 -- 客户端: web-app (授权码模式, Confidential Client)
 -- 典型场景: 传统Web应用 (服务端渲染/SSR), 有 client_secret, 通过 authorization_code + PKCE 完成用户授权
 -- redirect_uris 支持:
---   Node.js 演示 (oauth2-callback-web-app, 端口 8080) -> /callback
+--   Node.js 演示 (oauth2-callback-web-app, 端口 8081) -> /callback
 -- post_logout_redirect_uris 支持:
 --   Node.js 演示 -> /logout
 INSERT INTO oauth2_registered_client (
@@ -127,14 +159,14 @@ INSERT INTO oauth2_registered_client (
     client_settings,
     token_settings
 ) VALUES (
-    '1',
+    '2',
     'web-app',
     '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e',
     'Web 应用客户端',
     'client_secret_basic,client_secret_post',
     'authorization_code,refresh_token,password',
-    'http://localhost:8080/callback,http://127.0.0.1:8080/callback',
-    'http://localhost:8080/logout',
+    'http://localhost:8081/callback,http://127.0.0.1:8081/callback',
+    'http://localhost:8081/logout',
     'openid,profile,email,read,write',
     '{"requireProofKey":false,"requireAuthorizationConsent":true}',
     '{"accessTokenFormat":"REFERENCE","accessTokenTimeToLive":"PT2H","reuseRefreshTokens":false,"idTokenSignatureAlgorithm":"RS256"}'
@@ -152,7 +184,7 @@ INSERT INTO oauth2_registered_client (
     client_settings,
     token_settings
 ) VALUES (
-    '2',
+    '3',
     'device-app',
     NULL,
     '设备码客户端',
@@ -171,7 +203,7 @@ INSERT INTO oauth2_registered_client (
 --   两类场景协议层配置完全一致: 均为 Public Client, 无 client_secret, 必须使用 PKCE 防止授权码拦截
 --   差异仅在 redirect_uri 形式:
 --     - 原生 App: 自定义 scheme (com.example.mobileapp://...), 由操作系统拦截唤起 App (RFC 8252)
---     - SPA:      https URL (http://localhost:8082/callback), 由浏览器直接加载回调页
+--     - SPA:      https URL (http://localhost:8083/callback), 由浏览器直接加载回调页
 INSERT INTO oauth2_registered_client (
     id, client_id, client_secret, client_name,
     client_authentication_methods,
@@ -181,41 +213,17 @@ INSERT INTO oauth2_registered_client (
     client_settings,
     token_settings
 ) VALUES (
-    '3',
+    '4',
     'mobile-app',
     NULL,
-    '移动应用客户端',
+    '移动应用客户端(PKCE)',
     'none',
     'authorization_code,refresh_token',
-    'com.example.mobileapp://oauth2/redirect,http://localhost:8082/callback',
-    'http://localhost:8082/logout',
+    'com.example.mobileapp://oauth2/redirect,http://localhost:8083/callback',
+    'http://localhost:8083/logout',
     'openid,profile,email,read,write',
     '{"requireProofKey":true,"requireAuthorizationConsent":true}',
     '{"accessTokenFormat":"REFERENCE","accessTokenTimeToLive":"PT2H","reuseRefreshTokens":false,"idTokenSignatureAlgorithm":"RS256"}'
-);
-
--- 客户端: portal-app (门户应用, 用于客户端→门户的SSO)
--- 典型场景: 用户在客户端登录后，点击"返回门户"时，通过OAuth2授权码流程自动登录门户
-INSERT INTO oauth2_registered_client (
-    id, client_id, client_secret, client_name,
-    client_authentication_methods,
-    authorization_grant_types,
-    redirect_uris, post_logout_redirect_uris,
-    scopes,
-    client_settings,
-    token_settings
-) VALUES (
-    '5',
-    'portal-app',
-    '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e',
-    '门户应用 (SSO)',
-    'none',
-    'authorization_code,refresh_token',
-    'http://localhost:9000/portal.html,http://127.0.0.1:9000/portal.html',
-    'http://localhost:9000/login.html',
-    'openid,profile,email',
-    '{"requireProofKey":false,"requireAuthorizationConsent":false}',
-    '{"accessTokenFormat":"REFERENCE","accessTokenTimeToLive":"PT2H","reuseRefreshTokens":false}'
 );
 
 -- 客户端: service-app (客户端模式, 服务间调用)
@@ -229,7 +237,7 @@ INSERT INTO oauth2_registered_client (
     client_settings,
     token_settings
 ) VALUES (
-    '4',
+    '5',
     'service-app',
     '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e',
     '服务间调用客户端',

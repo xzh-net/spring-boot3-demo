@@ -5,11 +5,13 @@ import java.time.format.DateTimeFormatter;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.session.SessionInformation;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -20,11 +22,18 @@ import org.springframework.security.oauth2.server.authorization.OAuth2Authorizat
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
 import org.springframework.stereotype.Service;
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.xzh.authserver.entity.SysUser;
+import net.xzh.authserver.mapper.SysUserMapper;
 import net.xzh.authserver.security.repository.RedisOAuth2AuthorizationService;
 import net.xzh.authserver.security.session.RedisSessionRegistry;
+import net.xzh.authserver.vo.ClientSessionVO;
+import net.xzh.authserver.vo.OnlineUserVO;
 import net.xzh.authserver.vo.SessionVO;
+import net.xzh.authserver.vo.SsoSessionVO;
 
 @Slf4j
 @Service
@@ -34,6 +43,7 @@ public class AuthSessionService {
     private final RedisOAuth2AuthorizationService authorizationService;
     private final RegisteredClientRepository clientRepository;
     private final RedisSessionRegistry sessionRegistry;
+    private final SysUserMapper userMapper;
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
             .withZone(ZoneId.systemDefault());
 
@@ -98,18 +108,9 @@ public class AuthSessionService {
     }
 
     /**
-     * 门户端在线用户列表（通过 SessionRegistry 获取，持久化到 Redis）。
-     * <p>
-     * 过滤条件：用户不拥有 ROLE_ADMIN 权限。
-     */
-    public List<Map<String, Object>> listPortalOnlineUsers() {
-        return filterSessionUsers(false);
-    }
-
-    /**
      * 根据是否为管理员角色过滤在线用户。
      *
-     * @param admin true=管理员列表，false=门户用户列表
+     * @param admin true=管理员列表，false=非管理员用户列表（如设备验证用户）
      */
     private List<Map<String, Object>> filterSessionUsers(boolean admin) {
         List<Map<String, Object>> result = new ArrayList<>();
@@ -162,27 +163,22 @@ public class AuthSessionService {
     }
 
     /**
-     * 所有设备码会话 (grantType=device_code)。
-     */
-    public List<SessionVO> listDeviceSessions() {
-        List<SessionVO> result = new ArrayList<>();
-        Set<String> principals = authorizationService.findAllOnlinePrincipals();
-        for (String principal : principals) {
-            for (OAuth2Authorization auth : authorizationService.findByPrincipal(principal)) {
-                if ("urn:ietf:params:oauth:grant-type:device_code".equals(
-                        auth.getAuthorizationGrantType().getValue())) {
-                    result.add(toSessionVO(auth));
-                }
-            }
-        }
-        return result;
-    }
-
-    /**
      * 下线指定用户所有会话: 删除 OAuth2 授权记录 + 终止 HttpSession.
+     * <p>
+     * 注意：会同时撤销 auth-server SSO HttpSession，用于管理端的真正"全部踢下线"场景。
      */
     public int revokeUserAll(String principalName) {
         invalidateHttpSessions(principalName);
+        return authorizationService.revokeAllByPrincipal(principalName);
+    }
+
+    /**
+     * 仅撤销用户的全部 OAuth2 授权令牌，不影响 auth-server 的 SSO HttpSession。
+     * <p>
+     * 用于客户端用户列表的"强制下线"按钮：该用户的所有 OAuth2 客户端会话失效，
+     * 但 auth-server 的 SSO 会话保留，用户重新访问时可以通过 SSO 快速重新签发 token。
+     */
+    public int revokeClientTokensByPrincipal(String principalName) {
         return authorizationService.revokeAllByPrincipal(principalName);
     }
 
@@ -194,7 +190,7 @@ public class AuthSessionService {
     }
 
     /**
-     * 下线单个 HttpSession（管理端/门户端会话）。
+     * 下线单个 HttpSession（管理端/设备验证端会话）。
      * <p>
      * 通过 {@link RedisSessionRegistry#markSessionExpired(String)} 将过期标记持久化到 Redis，
      * 确保多节点部署时所有节点都能检测到过期状态。
@@ -223,13 +219,13 @@ public class AuthSessionService {
     }
 
     /**
-     * 下线指定类型的用户会话（管理端/门户端）。
+     * 下线指定类型的用户会话（管理端/设备验证端）。
      * <p>
-     * 仅终止 HttpSession，不撤销 OAuth2 令牌。适用于管理端/门户端用户踢下线场景。
+     * 仅终止 HttpSession，不撤销 OAuth2 令牌。适用于管理端/设备验证端用户踢下线场景。
      * 通过 {@link RedisSessionRegistry#markSessionExpired(String)} 持久化过期标记。
      *
      * @param principalName  用户名
-     * @param targetAdmin    true=仅踢管理员会话，false=仅踢门户用户会话
+     * @param targetAdmin    true=仅踢管理员会话，false=仅踢非管理员会话（如设备验证用户）
      * @return 被终止的会话数
      */
     public int revokeSessionUser(String principalName, boolean targetAdmin) {
@@ -280,6 +276,144 @@ public class AuthSessionService {
         return count;
     }
 
+    // ========= 统一在线管理 API (设计文档 §9) =========
+
+    /**
+     * 统一在线用户列表 (合并 SSO 会话 + 客户端会话数据).
+     * <p>
+     * 合并 RedisSessionRegistry (HttpSession) 和 RedisOAuth2AuthorizationService (OAuth2Authorization) 的数据,
+     * 返回 User → SSO Session → Client Session 层级模型的最外层.
+     */
+    public List<OnlineUserVO> listOnlineUsersUnified() {
+        // 1. 收集所有在线用户名 (来自 SSO 会话和 OAuth2 授权两个来源)
+        Set<String> allPrincipals = new LinkedHashSet<>();
+        // SSO 会话中的用户
+        for (Object principal : sessionRegistry.getAllPrincipals()) {
+            String name = extractUsername(principal);
+            if (name != null && !name.isBlank()) {
+                allPrincipals.add(name);
+            }
+        }
+        // OAuth2 授权中的用户
+        allPrincipals.addAll(authorizationService.findAllOnlinePrincipals());
+
+        // 2. 过滤: 只保留 sys_user 表中存在的用户 (排除 OAuth2 client_id 等非用户 principal)
+        //    场景: OAuth2 token 端点会将 client_id 注册为 session principal,
+        //    这些出现在 sessionRegistry.getAllPrincipals() 中但不是真正的用户
+        List<OnlineUserVO> result = new ArrayList<>();
+        for (String principal : allPrincipals) {
+            SysUser user = userMapper.selectOne(new QueryWrapper<SysUser>().eq("username", principal));
+            if (user == null) {
+                log.debug("跳过非用户 principal: {}", principal);
+                continue;
+            }
+
+            OnlineUserVO vo = new OnlineUserVO();
+            vo.setUsername(principal);
+            vo.setUserId(user.getId());
+            vo.setNickname(user.getNickname());
+            vo.setRole(user.getRole());
+            vo.setEnabled(user.getEnabled());
+
+            // SSO 会话数
+            List<SessionInformation> ssoSessions = getSessionsForPrincipal(principal);
+            vo.setSsoSessionCount(ssoSessions.size());
+
+            // 客户端会话数 + 客户端列表 + 最近访问时间
+            List<OAuth2Authorization> clientAuths = authorizationService.findByPrincipal(principal);
+            vo.setClientSessionCount(clientAuths.size());
+            vo.setClients(clientAuths.stream()
+                    .map(this::resolveClientName)
+                    .filter(c -> c != null && !c.isEmpty())
+                    .distinct()
+                    .toList());
+
+            // 最近访问时间: 取 SSO 会话和客户端会话中最新的时间
+            String lastAccess = "-";
+            if (!ssoSessions.isEmpty()) {
+                lastAccess = ssoSessions.stream()
+                        .map(SessionInformation::getLastRequest)
+                        .filter(java.util.Objects::nonNull)
+                        .map(d -> FMT.format(Instant.ofEpochMilli(d.getTime()).atZone(ZoneId.systemDefault())))
+                        .max(String::compareTo)
+                        .orElse("-");
+            }
+            if (!clientAuths.isEmpty()) {
+                String clientLast = clientAuths.stream()
+                        .map(a -> unwrap(a.getAccessToken()))
+                        .filter(t -> t != null && t.getIssuedAt() != null)
+                        .map(t -> FMT.format(t.getIssuedAt()))
+                        .max(String::compareTo)
+                        .orElse("-");
+                if (clientLast.compareTo(lastAccess) > 0) {
+                    lastAccess = clientLast;
+                }
+            }
+            vo.setLastAccessTime(lastAccess);
+
+            result.add(vo);
+        }
+        return result;
+    }
+
+    /**
+     * 指定用户的 SSO 会话层级视图 (含嵌套的客户端会话).
+     */
+    public List<SsoSessionVO> listSsoSessionsByUserId(Long userId) {
+        SysUser user = userMapper.selectById(userId);
+        if (user == null) return List.of();
+        String username = user.getUsername();
+        List<SsoSessionVO> result = new ArrayList<>();
+        for (SessionInformation si : getSessionsForPrincipal(username)) {
+            SsoSessionVO vo = new SsoSessionVO();
+            vo.setSessionId(si.getSessionId());
+            vo.setPrincipalName(username);
+            vo.setExpired(si.isExpired());
+            // 登录时间 = 会话创建时间 (creationTime, 仅在 registerNewSession 时写入, 不会更新)
+            Long creationTime = sessionRegistry.getCreationTime(si.getSessionId());
+            if (creationTime != null) {
+                vo.setLoginTime(FMT.format(Instant.ofEpochMilli(creationTime).atZone(ZoneId.systemDefault())));
+            }
+            // 最近访问时间 = lastRequest (每次请求都会更新)
+            if (si.getLastRequest() != null) {
+                vo.setLastAccessTime(FMT.format(Instant.ofEpochMilli(si.getLastRequest().getTime()).atZone(ZoneId.systemDefault())));
+            }
+
+            // 拉取该 SSO 会话下的客户端会话
+            List<OAuth2Authorization> clientAuths = authorizationService.findBySsoSessionId(si.getSessionId());
+            vo.setClientSessions(clientAuths.stream().map(this::toClientSessionVO).toList());
+
+            result.add(vo);
+        }
+        return result;
+    }
+
+    /**
+     * 按用户 ID 踢下线 (撤销所有 SSO 会话 + 客户端会话).
+     */
+    public int revokeUserAllById(Long userId) {
+        SysUser user = userMapper.selectById(userId);
+        if (user == null) return 0;
+        return revokeUserAll(user.getUsername());
+    }
+
+    /**
+     * 按 SSO 会话踢下线 (终止指定 SSO 会话 + 撤销其关联的客户端会话).
+     */
+    public boolean revokeSsoSession(String ssoSessionId) {
+        try {
+            // 1. 标记 SSO 会话过期 (SessionExpirationFilter 会在下次请求时销毁)
+            sessionRegistry.markSessionExpired(ssoSessionId);
+            // 2. 撤销该 SSO 会话关联的所有 OAuth2 授权
+            int revoked = authorizationService.revokeBySsoSessionId(ssoSessionId);
+            log.info("按 SSO 会话踢下线: ssoSessionId={}, 撤销客户端会话数={}", ssoSessionId, revoked);
+            return true;
+        } catch (Exception e) {
+            log.warn("按 SSO 会话踢下线失败 ssoSessionId={}: {}", ssoSessionId, e.getMessage());
+            return false;
+        }
+    }
+
     /**
      * 通过 SessionRegistry 终止用户的所有 HttpSession。
      */
@@ -288,7 +422,10 @@ public class AuthSessionService {
             for (Object principal : sessionRegistry.getAllPrincipals()) {
                 if (principal instanceof User user && principalName.equals(user.getUsername())) {
                     for (SessionInformation session : sessionRegistry.getAllSessions(user, true)) {
+                        // 关键修复: 除了内存中标记过期，还必须持久化到 Redis，
+                        // 否则用户下次请求时 SessionExpirationFilter 检测不到过期状态
                         session.expireNow();
+                        sessionRegistry.markSessionExpired(session.getSessionId());
                         log.info("已终止 HttpSession sessionId={}, principal={}", session.getSessionId(), principalName);
                     }
                 }
@@ -329,22 +466,81 @@ public class AuthSessionService {
         return vo;
     }
 
+    /**
+     * 将 OAuth2Authorization 转换为 ClientSessionVO (层级视图用, 精简掉 token 值).
+     */
+    private ClientSessionVO toClientSessionVO(OAuth2Authorization auth) {
+        ClientSessionVO vo = new ClientSessionVO();
+        vo.setAuthorizationId(auth.getId());
+        vo.setRegisteredClientId(auth.getRegisteredClientId());
+        vo.setGrantType(auth.getAuthorizationGrantType().getValue());
+        vo.setClientName(resolveClientName(auth));
+
+        OAuth2AccessToken at = unwrap(auth.getAccessToken());
+        if (at != null) {
+            if (at.getExpiresAt() != null)
+                vo.setAccessTokenExpiresAt(FMT.format(at.getExpiresAt()));
+            if (at.getIssuedAt() != null)
+                vo.setLoginTime(FMT.format(at.getIssuedAt()));
+            vo.setAccessToken(at.getTokenValue());
+        }
+
+        OAuth2RefreshToken rt = unwrap(auth.getRefreshToken());
+        if (rt != null) {
+            vo.setRefreshToken(rt.getTokenValue());
+        }
+
+        Object clientIp = auth.getAttributes().get("__client_ip");
+        if (clientIp instanceof String ip && !ip.isBlank()) vo.setClientIp(ip);
+        Object userAgent = auth.getAttributes().get("__user_agent");
+        if (userAgent instanceof String ua && !ua.isBlank()) vo.setUserAgent(ua);
+        Object ssoSessionId = auth.getAttributes().get(RedisOAuth2AuthorizationService.ATTR_SSO_SESSION_ID);
+        if (ssoSessionId instanceof String sid && !sid.isBlank()) vo.setSsoSessionId(sid);
+
+        return vo;
+    }
+
+    /**
+     * 从 principal 对象提取用户名.
+     */
+    private String extractUsername(Object principal) {
+        if (principal instanceof UserDetails ud) {
+            return ud.getUsername();
+        }
+        if (principal instanceof String s) {
+            return s;
+        }
+        if (principal != null) {
+            return principal.toString();
+        }
+        return null;
+    }
+
+    /**
+     * 按用户名从 SessionRegistry 获取该用户的所有会话.
+     * 构建 UserDetails 桩对象用于查询, includeExpired=true 以显示被标记过期的会话.
+     */
+    private List<SessionInformation> getSessionsForPrincipal(String principalName) {
+        try {
+            // 尝试从 DB 获取角色信息
+            SysUser user = userMapper.selectOne(new QueryWrapper<SysUser>().eq("username", principalName));
+            String role = (user != null && user.getRole() != null) ? user.getRole() : "ROLE_USER";
+            UserDetails userDetails = User.withUsername(principalName)
+                    .password("[PROTECTED]")
+                    .authorities(new SimpleGrantedAuthority(role))
+                    .build();
+            return sessionRegistry.getAllSessions(userDetails, true);
+        } catch (Exception e) {
+            log.warn("获取用户会话失败 principal={}: {}", principalName, e.getMessage());
+            return List.of();
+        }
+    }
+
     private String resolveClientName(OAuth2Authorization auth) {
         try {
             var client = clientRepository.findByClientId(auth.getRegisteredClientId());
             if (client != null) return client.getClientName();
         } catch (Exception ignored) {}
         return auth.getRegisteredClientId();
-    }
-
-    private String describeGrantType(String grantType) {
-        return switch (grantType) {
-            case "authorization_code" -> "授权码";
-            case "password" -> "密码模式";
-            case "client_credentials" -> "客户端凭证";
-            case "refresh_token" -> "刷新令牌";
-            case "urn:ietf:params:oauth:grant-type:device_code" -> "设备码";
-            default -> grantType;
-        };
     }
 }

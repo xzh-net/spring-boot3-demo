@@ -19,7 +19,7 @@ public class ClientController {
 
     @GetMapping
     public String page() {
-        return "redirect:/admin/client.html";
+        return "admin/client";
     }
 
     @GetMapping("/api/list")

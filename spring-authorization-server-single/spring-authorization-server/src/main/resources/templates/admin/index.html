@@ -1,0 +1,441 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>统一认证中心 · 管理后台</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif; background: #f0f2f5; color: #1e293b; min-height: 100vh; }
+
+        .navbar { background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%); color: #fff; padding: 0 24px; height: 56px; display: flex; align-items: center; gap: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); position: sticky; top: 0; z-index: 10; }
+        .navbar .brand { font-weight: 700; font-size: 16px; color: #ffffff; }
+        .navbar a { color: #dbeafe; text-decoration: none; padding: 8px 14px; border-radius: 6px; font-size: 14px; }
+        .navbar a:hover { background: rgba(255,255,255,0.15); color: #ffffff; }
+        .navbar a.active { background: rgba(255,255,255,0.22); color: #ffffff; }
+        .navbar .spacer { flex: 1; }
+        .navbar .logout { color: #dbeafe; font-size: 13px; cursor: pointer; }
+
+        .container { max-width: 900px; margin: 24px auto; padding: 0 24px; }
+
+        .card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); overflow: hidden; margin-bottom: 18px; }
+        .section { padding: 20px 24px; border-bottom: 1px solid #f0f0f0; }
+        .section:last-child { border-bottom: none; }
+        .section h3 { font-size: 16px; color: #1e3a5f; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+        .section h3::before { content: ""; width: 4px; height: 16px; background: linear-gradient(135deg, #2563eb, #3b82f6); border-radius: 2px; }
+        .section p { font-size: 14px; color: #475569; line-height: 1.8; margin-bottom: 8px; }
+        .section code { background: #f1f5f9; color: #0f172a; border: 1px solid #e2e8f0; padding: 2px 6px; border-radius: 4px; font-size: 13px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+        .section pre { background: #1e293b; color: #e2e8f0; border: 1px solid #334155; padding: 16px; border-radius: 8px; font-size: 12.5px; line-height: 1.6; overflow-x: auto; margin: 8px 0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+        .section ul { margin-left: 20px; margin-top: 6px; }
+        .section li { font-size: 14px; color: #475569; line-height: 1.9; }
+        .tag { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; margin-right: 6px; }
+        .tag.green { background: rgba(34,197,94,0.08); color: #16a34a; }
+        .tag.orange { background: rgba(249,115,22,0.08); color: #ea580c; }
+        .tag.blue { background: rgba(37,99,235,0.08); color: #2563eb; }
+        .tag.purple { background: rgba(168,85,247,0.08); color: #9333ea; }
+        .tag.red { background: rgba(239,68,68,0.08); color: #dc2626; }
+
+        .note { margin-top: 12px; padding: 12px 16px; border-left: 3px solid #2563eb; border-radius: 4px; font-size: 13px; line-height: 1.8; }
+        .note.info { background: #eff6ff; color: #1e40af; border-color: #2563eb; }
+        .note.warn { background: #fff7ed; color: #7c2d12; border-color: #ea580c; }
+        .note.success { background: #f0fdf4; color: #166534; border-color: #16a34a; }
+        .note.danger { background: #fef2f2; color: #991b1b; border-color: #dc2626; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 12px; }
+        table th { padding: 10px 12px; text-align: left; border-bottom: 2px solid #e2e8f0; background: #f1f5f9; }
+        table td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+        table tr:last-child td { border-bottom: none; }
+
+        .client-card { border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; background: #f8fafc; }
+        .client-card .client-name { font-size: 13px; font-weight: 600; color: #0f172a; margin-bottom: 6px; }
+        .client-card .client-desc { font-size: 12px; color: #475569; margin-bottom: 8px; }
+        .client-card .client-features { font-size: 12px; color: #64748b; line-height: 1.8; }
+        .client-card .client-meta { font-size: 11px; color: #94a3b8; margin-top: 8px; word-break: break-all; }
+        .client-card .client-openid { margin-top: 10px; padding: 8px 10px; border-radius: 6px; font-size: 12px; }
+        .client-card .client-openid.supported { background: #f0fdf4; color: #166534; }
+        .client-card .client-openid.unsupported { background: #fef2f2; color: #991b1b; }
+
+        .divider { height: 1px; background: #e2e8f0; margin: 16px 0; }
+
+        .flow-diagram { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+        .flow-node { padding: 8px 14px; border-radius: 8px; font-size: 12px; font-weight: 500; }
+        .flow-node.client { background: #dbeafe; color: #1e40af; }
+        .flow-node.auth { background: #fef3c7; color: #92400e; }
+        .flow-node.resource { background: #dcfce7; color: #166534; }
+        .flow-arrow { color: #94a3b8; font-size: 16px; }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <div class="brand">🔐 统一认证中心</div>
+        <a href="/admin" class="active">首页</a>
+        <a href="/admin/user">用户管理</a>
+        <a href="/admin/client">客户端管理</a>
+        <a href="/admin/authorization">授权管理</a>
+        <a href="/admin/online">在线用户</a>
+        <a href="/admin/monitor">系统监控</a>
+        <div class="spacer"></div>
+        <a href="#" class="logout" id="logoutLink">退出登录</a>
+    </div>
+
+    <div class="container">
+        <div class="card">
+            <!-- 第1部分：客户端类型 -->
+            <div class="section">
+                <h3>一、默认客户端类型与 OIDC 支持</h3>
+                <p>系统初始化时会自动注册四个示例客户端，覆盖四种典型场景。<strong>是否返回 id_token 取决于客户端注册时的 scope 和授权类型</strong>：</p>
+
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">
+                    <div class="client-card">
+                        <div class="client-name">
+                            web-app
+                            <span class="tag blue" style="margin-left:4px;">Web 应用</span>
+                        </div>
+                        <div class="client-desc">传统服务端渲染应用、Web SPA</div>
+                        <div class="client-features">
+                            ✅ 授权码 + Refresh Token + Password<br>
+                            ✅ 有 client_secret<br>
+                            ✅ Basic / Post 认证<br>
+                            ✅ 授权同意页<br>
+                            ❌ 无 PKCE 强制
+                        </div>
+                        <div class="client-meta">
+                            redirect: http://localhost:8080/callback<br>
+                            redirect: http://127.0.0.1:8080/callback<br>
+                            post_logout: http://localhost:8080/logout
+                        </div>
+                        <div class="client-openid supported">
+                            ✅ 注册 scope: <code>openid,profile,email,read,write</code><br>
+                            ✅ 授权码/Password 模式 → 返回 id_token
+                        </div>
+                    </div>
+
+                    <div class="client-card">
+                        <div class="client-name">
+                            device-app
+                            <span class="tag orange" style="margin-left:4px;">Public 客户端</span>
+                        </div>
+                        <div class="client-desc">输入受限设备：智能电视 / IoT 终端 / CLI 工具</div>
+                        <div class="client-features">
+                            ✅ 设备码模式 (device_code)<br>
+                            ✅ Refresh Token<br>
+                            ❌ 无 client_secret (none)<br>
+                            ❌ 不弹同意页 (requireAuthorizationConsent=false)<br>
+                            ✅ Access Token TTL 1h
+                        </div>
+                        <div class="client-meta">
+                            redirect: 无 (设备码流程不需要回调地址)
+                        </div>
+                        <div class="client-openid supported">
+                            ✅ 注册 scope: <code>openid,profile,email,read</code><br>
+                            ✅ 设备码模式 → 返回 id_token
+                        </div>
+                    </div>
+
+                    <div class="client-card">
+                        <div class="client-name">
+                            mobile-app
+                            <span class="tag purple" style="margin-left:4px;">Public Client</span>
+                        </div>
+                        <div class="client-desc">原生移动 App (iOS/Android) / 无后端纯前端 SPA</div>
+                        <div class="client-features">
+                            ✅ 授权码 + 强制 PKCE<br>
+                            ❌ 无 client_secret<br>
+                            ❌ 不签发 refresh_token (RFC 8252)<br>
+                            ✅ 授权同意页<br>
+                            ✅ Access Token TTL 2h
+                        </div>
+                        <div class="client-meta">
+                            redirect: com.example.mobileapp://oauth2/redirect<br>
+                            redirect: http://localhost:8082/callback (SPA)
+                        </div>
+                        <div class="client-openid supported">
+                            ✅ 注册 scope: <code>openid,profile,email,read,write</code><br>
+                            ✅ 授权码模式 → 返回 id_token
+                        </div>
+                    </div>
+
+                    <div class="client-card">
+                        <div class="client-name">
+                            service-app
+                            <span class="tag green" style="margin-left:4px;">服务间调用</span>
+                        </div>
+                        <div class="client-desc">微服务间 API 调用、后台定时任务</div>
+                        <div class="client-features">
+                            ✅ 仅 client_credentials<br>
+                            ✅ 有 client_secret<br>
+                            ❌ 无用户参与<br>
+                            ❌ 无 Refresh Token<br>
+                            ✅ Access Token TTL 30min
+                        </div>
+                        <div class="client-meta">
+                            scope: read, write
+                        </div>
+                        <div class="client-openid unsupported">
+                            ❌ 注册 scope: <code>read,write</code> (无 openid)<br>
+                            ❌ client_credentials 模式 → 永远不返回 id_token
+                        </div>
+                    </div>
+                </div>
+
+                <div class="note info">
+                    <strong>id_token 返回三要素（缺一不可）：</strong><br>
+                    ① 客户端注册时 scope 包含 <code>openid</code> &nbsp; ② 授权类型不是 <code>client_credentials</code> &nbsp; ③ token 请求时 scope 参数显式包含 <code>openid</code><br>
+                    <code>service-app</code> 虽然注册时没有 openid scope，但这是正确的 —— 服务间调用没有终端用户，不需要身份令牌。
+                </div>
+            </div>
+
+            <!-- 第2部分：OIDC 令牌分工 -->
+            <div class="section">
+                <h3>二、OIDC 令牌分工与 openid 使用</h3>
+                <p>OAuth2 有 access_token 和 refresh_token，OIDC 在此基础上增加了 <strong>id_token</strong>。三者职责严格分离：</p>
+
+                <div style="overflow-x:auto; margin-top:12px;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>令牌</th>
+                            <th>用途</th>
+                            <th>消费者</th>
+                            <th>典型 Claims</th>
+                            <th>不应包含</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>id_token</strong> <span class="tag purple">JWT</span></td>
+                            <td>证明用户身份（Authentication）</td>
+                            <td>客户端应用</td>
+                            <td><code>sub</code>, <code>preferred_username</code>, <code>roles</code>, <code>iss</code>, <code>aud</code>(=client_id), <code>exp</code></td>
+                            <td>资源标识(contacts-api)</td>
+                        </tr>
+                        <tr>
+                            <td><strong>access_token</strong> <span class="tag blue">JWT</span></td>
+                            <td>调用资源凭证（Authorization）</td>
+                            <td>资源服务器</td>
+                            <td><code>sub</code>, <code>roles</code>, <code>aud</code>(=contacts-api), <code>scope</code>, <code>exp</code></td>
+                            <td>preferred_username 等身份声明</td>
+                        </tr>
+                        <tr>
+                            <td><strong>refresh_token</strong></td>
+                            <td>续签 access_token</td>
+                            <td>授权服务器 token 端点</td>
+                            <td>opaque（不透明）</td>
+                            <td>不应传给资源服务器</td>
+                        </tr>
+                    </tbody>
+                </table>
+                </div>
+
+                <p style="margin-top:14px; font-weight:600; color:#1e293b;">令牌获取与使用流程：</p>
+                <div class="flow-diagram">
+                    <div class="flow-node client">客户端</div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-node auth">授权服务器</div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-node resource">资源服务器</div>
+                </div>
+                <ul>
+                    <li><strong>① 授权阶段：</strong>客户端请求 <code>scope=openid profile read write</code> → 授权服务器返回 code</li>
+                    <li><strong>② 换 token：</strong>客户端用 code 换 token → 响应同时包含 <code>access_token</code>、<code>id_token</code>、<code>refresh_token</code></li>
+                    <li><strong>③ 识别用户：</strong>客户端解析 <strong>id_token</strong> 的 JWT payload 获取 <code>preferred_username</code>、<code>roles</code> 等身份信息，建立本地会话</li>
+                    <li><strong>④ 调 API：</strong>客户端用 <strong>access_token</strong> 作为 Bearer Token 调用 <code>/api/**</code>、<code>/userinfo</code> 等受保护资源</li>
+                </ul>
+
+                <div class="note warn">
+                    <strong>常见误用：</strong>从 access_token 解码用户身份信息 → 这是错误的。access_token 的 <code>aud</code> 是 <code>contacts-api</code>（资源标识），不是客户端标识。
+                    正确做法是从 id_token 解码身份，用 access_token 调 API。
+                </div>
+
+                <p style="margin-top:14px; font-weight:600; color:#1e293b;">openid scope 使用示例：</p>
+                <pre>// 授权请求时必须带 openid
+GET /oauth2/authorize?response_type=code&client_id=web-app
+    &redirect_uri=http://localhost:8080/callback
+    &scope=openid profile email read write   ← openid 必须在此处
+    &state=demo
+
+// token 响应中会多出 id_token 字段
+{
+  "access_token": "eyJraWQ...",
+  "id_token":     "eyJraWQ...",   ← 仅当 scope 含 openid 时返回
+  "refresh_token": "eyJraWQ...",
+  "token_type": "Bearer",
+  "expires_in": 7200
+}</pre>
+            </div>
+
+            <!-- 第3部分：令牌格式设计原理 -->
+            <div class="section">
+                <h3>三、为什么 access_token 用 Opaque，id_token 必须用 JWT</h3>
+                <p>本系统采用 <strong>access_token = Opaque 引用令牌</strong>、<strong>id_token = JWT 自包含令牌</strong> 的组合策略。这是 OAuth2/OIDC 标准下经过权衡的最优选择，并非随手而为。</p>
+
+                <p style="margin-top:14px; font-weight:600; color:#1e293b;">一、id_token 为什么必须是 JWT（OIDC 规范硬性要求）</p>
+                <ul>
+                    <li><strong>规范要求：</strong>OIDC Core 1.0 §2 明确规定 id_token 必须是 JWT 格式。若改成 opaque，就不再是 OIDC，只是普通 OAuth2。</li>
+                    <li><strong>客户端本地解码：</strong>客户端拿到 id_token 后<strong>无需联网</strong>即可解码出 <code>preferred_username</code>、<code>roles</code>、<code>iss</code>、<code>aud</code>、<code>exp</code> 等身份声明，立即建立本地会话。若用 opaque，每次显示用户名都得调 <code>/userinfo</code>，违反 OIDC 设计初衷。</li>
+                    <li><strong>签名可验证：</strong>JWT 带授权服务器签名，客户端可用公钥验签，防止 token 被伪造。</li>
+                    <li><strong>一次性消费：</strong>id_token 仅在登录时使用一次（解码取身份），用完即弃。后续业务请求不带 id_token，不会带来体积或传输开销。</li>
+                </ul>
+                <div class="note success">
+                    <strong>结论：</strong>id_token 是"身份证明"，用 JWT 是为了让客户端零网络开销拿到身份信息。
+                </div>
+
+                <p style="margin-top:14px; font-weight:600; color:#1e293b;">二、access_token 为什么不用 JWT 而用 Opaque</p>
+                <p>表面看 JWT 也能做 access_token（Google/GitHub 就是这么做的），但在<strong>本项目架构下</strong>用 JWT 不划算。逐条分析 JWT 的三大优势是否成立：</p>
+
+                <div style="overflow-x:auto; margin-top:12px;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>JWT 的理论优势</th>
+                            <th>在本项目是否成立</th>
+                            <th>原因</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>① 无状态（本地验签，零 IO）</td>
+                            <td><span class="tag red">不成立</span></td>
+                            <td>需要主动撤销（强制下线/退出），已实现 <code>JwtDenylistValidator</code> 每请求查 Redis 黑名单 —— 无状态优势被抵消</td>
+                        </tr>
+                        <tr>
+                            <td>② payload 可读，资源服务器直接拿 claims</td>
+                            <td><span class="tag red">不成立</span></td>
+                            <td>客户端不解析 access_token；资源服务器只验签 + 查黑名单，没人消费 payload</td>
+                        </tr>
+                        <tr>
+                            <td>③ 故障隔离（Redis 挂了仍可用）</td>
+                            <td><span class="tag orange">半成立</span></td>
+                            <td>Redis 挂了黑名单也挂了，撤销功能失效，安全性归零</td>
+                        </tr>
+                    </tbody>
+                </table>
+                </div>
+
+                <p style="margin-top:14px;">JWT 的优势都不成立，但<strong>缺点却真实存在</strong>：</p>
+                <ul>
+                    <li><strong>体积大</strong>：JWT 约 1200 字节，Opaque 仅 32 字节，相差 37 倍。移动端弱网、HTTP 头部限制场景下明显劣势。</li>
+                    <li><strong>信息泄露</strong>：JWT 的 payload 是 base64，<strong>任何人</strong>拿到 token 都能解码出 <code>sub</code>、<code>roles</code>、<code>aud</code>。Opaque 是随机串，无信息可泄露。</li>
+                    <li><strong>撤销复杂</strong>：需要额外维护 <code>oauth2:denylist:</code> 黑名单 + sha256 计算 + TTL 管理。Opaque 直接删 Redis key 即可，原生支持。</li>
+                </ul>
+
+                <div class="note warn">
+                    <strong>核心洞察：</strong>JWT 的设计初衷是"让资源服务器不用查存储"，但只要业务需要主动撤销，资源服务器就<strong>必须查存储</strong>（黑名单）。此时 JWT 就退化成"带着多余 payload 的 opaque token"——缺点还在，优势没了。<br>
+                    既然资源服务器总要查存储，那 token 就应该是<strong>最薄的引用</strong>，而不是"自包含的大对象"。这正是 Okta、Auth0 等主流方案默认用 opaque 的根本原因。
+                </div>
+
+                <p style="margin-top:14px; font-weight:600; color:#1e293b;">三、Opaque 模式的工作原理</p>
+                <pre>// 1. 客户端拿到的 access_token 是随机短码
+{
+  "access_token":  "a1b2c3d4e5f67890abcdef1234567890",   ← 32 字符随机串
+  "id_token":      "eyJraWQ...",                          ← JWT 不变
+  "refresh_token": "b2c3d4e5...",                          ← opaque
+  "token_type":    "Bearer",
+  "expires_in":    7200
+}
+
+// 2. 调 API 时原样转发 (客户端不关心格式)
+GET /api/contacts
+Authorization: Bearer a1b2c3d4e5f67890abcdef1234567890
+
+// 3. 资源服务器查 Redis 验证
+  ┌─ 查 oauth2:access:a1b2c3d4... → 找到授权记录
+  ├─ 检查 expiresAt 未过期
+  ├─ 检查 status = active (未被 revoke)
+  └─ 取出 sub/roles/scope → 构造 Authentication → 通过
+
+// 4. 撤销 (强制下线/退出)
+  POST /oauth2/revoke
+  → SAS 标记 invalidated=true
+  → RedisOAuth2AuthorizationService.save() 检测到 → remove() 删 key
+  → 下次 introspect 查不到 → 立即 401</pre>
+
+            </div>
+
+            <!-- 第4部分：退出登录对接指南 -->
+            <div class="section">
+                <h3>四、退出登录对接指南</h3>
+                <p>完整退出需要<strong>两步操作组合</strong>：吊销 token + 销毁 session。单独执行任一步都无法实现真正退出。</p>
+
+                <div style="overflow-x:auto; margin-top:12px;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>步骤</th>
+                            <th>端点</th>
+                            <th>方法</th>
+                            <th>作用</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>① 吊销 token</td>
+                            <td><code>/oauth2/revoke</code></td>
+                            <td><code>POST</code></td>
+                            <td>标记 OAuth2Authorization invalidated → 删除 Redis 授权记录，资源服务器 introspect 查不到即拒绝</td>
+                        </tr>
+                        <tr>
+                            <td>② 销毁 session</td>
+                            <td><code>/logout?post_logout_redirect_uri={url}</code></td>
+                            <td><code>GET</code></td>
+                            <td>销毁 PORTAL HttpSession → 302 回跳到指定地址</td>
+                        </tr>
+                    </tbody>
+                </table>
+                </div>
+
+                <p style="margin-top:14px; font-weight:600; color:#1e293b;">对接示例（客户端退出流程）：</p>
+                <pre>// Step 1: 清理本地会话
+sessionStorage.clear();
+
+// Step 2: 吊销 token（RFC 7009）
+// Authorization: Basic {base64(client_id:client_secret)}
+POST /oauth2/revoke
+Content-Type: application/x-www-form-urlencoded
+Authorization: Basic d2ViLWFwcDoxMjM0NTY=
+
+token=eyJraWQ...&token_type_hint=access_token
+token=eyJraWQ...&token_type_hint=refresh_token
+
+// Step 3: 销毁服务器 session
+// 302 重定向到授权服务器
+GET /logout?post_logout_redirect_uri=http://localhost:8080/
+// 授权服务器销毁 session 后, 再 302 回 post_logout_redirect_uri 参数指定的地址</pre>
+
+                <p style="margin-top:14px; font-weight:600; color:#1e293b;">四种退出场景对比：</p>
+                <ul>
+                    <li><strong>① 客户端完整退出（推荐）</strong><br>
+                        清本地 → <code>/oauth2/revoke</code> 吊销 token → 跳 <code>/logout</code> 销毁 session。<span style="color:#16a34a;">token 失效 + session 销毁，下次必须重新登录。</span></li>
+                    <li><strong>② 仅吊销 token</strong>（<code>/oauth2/revoke</code>）<br>
+                        删除 Redis 授权记录，<span style="color:#dc2626;">但不销毁 HttpSession</span>。客户端首页仍显示"已登录"，直到调 API 收 401 才发现 token 失效。</li>
+                    <li><strong>③ 仅销毁 session</strong>（<code>/logout</code>）<br>
+                        销毁 HttpSession，<span style="color:#dc2626;">但旧 token 在过期前仍可调 API</span>。适合换设备登录场景。</li>
+                    <li><strong>④ 管理员强制下线</strong><br>
+                        服务端组合操作：<code>SessionRegistry.expireNow()</code> + 删除 Redis 授权记录。<span style="color:#16a34a;">完整退出。</span></li>
+                </ul>
+
+                <div class="note danger">
+                    <strong>关键提醒：</strong>单独调 <code>/oauth2/revoke</code> 后，客户端刷新首页仍显示已登录 —— 因为客户端首页只查本地 session，不验证 token。
+                    <strong>完整退出 = revoke token + logout session，缺一不可。</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+    function getCookie(name) {
+        var m = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+        return m ? decodeURIComponent(m[1]) : '';
+    }
+    document.getElementById('logoutLink').addEventListener('click', function (e) {
+        e.preventDefault();
+        if (!confirm('确认退出登录？')) return;
+        fetch('/admin/logout', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'X-XSRF-TOKEN': getCookie('XSRF-TOKEN') }
+        }).then(function () { location.href = '/admin/login.html'; });
+    });
+</script>`n</body>
+</html>

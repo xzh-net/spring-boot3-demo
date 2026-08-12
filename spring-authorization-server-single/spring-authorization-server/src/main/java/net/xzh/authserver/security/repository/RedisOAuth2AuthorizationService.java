@@ -73,6 +73,10 @@ public final class RedisOAuth2AuthorizationService implements OAuth2Authorizatio
     private static final String KEY_PREFIX = "oauth2:auth:";
     /** Redis key 前缀：用户 → 授权 ID 集合索引 */
     private static final String USER_INDEX_PREFIX = "oauth2:user:";
+    /** Redis key 前缀：SSO 会话 → 授权 ID 集合索引 */
+    private static final String SSO_SESSION_INDEX_PREFIX = "oauth2:sso_session:";
+    /** OAuth2Authorization attribute 中存 SSO HttpSession ID 的 key */
+    public static final String ATTR_SSO_SESSION_ID = "__sso_session_id";
 
     /** Redis 操作模板，用于持久化授权数据 */
     private final StringRedisTemplate redisTemplate;
@@ -100,10 +104,23 @@ public final class RedisOAuth2AuthorizationService implements OAuth2Authorizatio
             HttpServletRequest req = sra.getRequest();
             String clientIp = resolveClientIp(req);
             String userAgent = req.getHeader("User-Agent");
-            if (clientIp == null && userAgent == null) return authorization;
+            // 注入 SSO 会话 ID (HttpSession ID), 用于建立 User → SSO Session → Client Session 层级关联.
+            // 仅在 authorization 尚未包含此属性时才注入, 避免 token 刷新 (BFF 服务器对服务器调用, 无用户 session) 时覆盖原值.
+            String existingSsoSessionId = (String) authorization.getAttributes().get(ATTR_SSO_SESSION_ID);
+            String ssoSessionId = existingSsoSessionId;
+            if (ssoSessionId == null || ssoSessionId.isBlank()) {
+                jakarta.servlet.http.HttpSession httpSession = req.getSession(false);
+                if (httpSession != null) {
+                    ssoSessionId = httpSession.getId();
+                }
+            }
+            if (clientIp == null && userAgent == null && ssoSessionId == null) return authorization;
             OAuth2Authorization.Builder b = OAuth2Authorization.from(authorization);
             if (clientIp != null) b.attribute("__client_ip", clientIp);
             if (userAgent != null) b.attribute("__user_agent", userAgent);
+            if (ssoSessionId != null && !ssoSessionId.isBlank()) {
+                b.attribute(ATTR_SSO_SESSION_ID, ssoSessionId);
+            }
             return b.build();
         } catch (Exception e) {
             return authorization;
@@ -220,6 +237,13 @@ public final class RedisOAuth2AuthorizationService implements OAuth2Authorizatio
                 redisTemplate.expire(USER_INDEX_PREFIX + principalName, ttl.toMillis(), TimeUnit.MILLISECONDS);
             }
 
+            // 维护 SSO 会话 → 授权 ID 索引, 用于按 SSO 会话反查客户端会话 (层级视图 + 按会话踢下线)
+            Object ssoSessionIdAttr = authorization.getAttributes().get(ATTR_SSO_SESSION_ID);
+            if (ssoSessionIdAttr instanceof String ssoSessionId && StringUtils.hasText(ssoSessionId)) {
+                redisTemplate.opsForSet().add(SSO_SESSION_INDEX_PREFIX + ssoSessionId, id);
+                redisTemplate.expire(SSO_SESSION_INDEX_PREFIX + ssoSessionId, ttl.toMillis(), TimeUnit.MILLISECONDS);
+            }
+
             log.debug("OAuth2Authorization saved to Redis, id={}, user={}", id, principalName);
         } catch (Exception e) {
             log.error("保存 OAuth2Authorization 到 Redis 失败", e);
@@ -270,6 +294,16 @@ public final class RedisOAuth2AuthorizationService implements OAuth2Authorizatio
                 Long size = redisTemplate.opsForSet().size(USER_INDEX_PREFIX + principalName);
                 if (size != null && size == 0) {
                     redisTemplate.delete(USER_INDEX_PREFIX + principalName);
+                }
+            }
+
+            // 清理 SSO 会话索引 (与 USER_INDEX 清理逻辑一致, 注意并发用 size 检查)
+            Object ssoSessionIdAttr = authorization.getAttributes().get(ATTR_SSO_SESSION_ID);
+            if (ssoSessionIdAttr instanceof String ssoSessionId && StringUtils.hasText(ssoSessionId)) {
+                redisTemplate.opsForSet().remove(SSO_SESSION_INDEX_PREFIX + ssoSessionId, id);
+                Long ssoSize = redisTemplate.opsForSet().size(SSO_SESSION_INDEX_PREFIX + ssoSessionId);
+                if (ssoSize != null && ssoSize == 0) {
+                    redisTemplate.delete(SSO_SESSION_INDEX_PREFIX + ssoSessionId);
                 }
             }
         } catch (Exception e) {
@@ -347,20 +381,46 @@ public final class RedisOAuth2AuthorizationService implements OAuth2Authorizatio
     public List<OAuth2Authorization> findByPrincipal(String principalName) {
         Set<String> ids = redisTemplate.opsForSet().members(USER_INDEX_PREFIX + principalName);
         if (ids == null || ids.isEmpty()) return List.of();
+        
         List<OAuth2Authorization> list = new ArrayList<>();
+        List<String> staleIds = new ArrayList<>(); // 收集无效的 ID，用于后续清理
+        
         for (String id : ids) {
             OAuth2Authorization auth = findById(id);
-            if (auth == null || !hasValidToken(auth)) {
+            // 如果授权记录不存在 (已过期/被删除)，视为僵尸 ID
+            if (auth == null) {
+                staleIds.add(id);
                 continue;
             }
-            // 过滤陈旧索引条目: 设备码流程中, 授权初始以 client_id 为 principalName 创建,
-            // 用户同意后 principalName 变为真实用户名, 但旧 user:{client_id} Set 中仍残留 ID.
-            // 只返回 principalName 与查询参数匹配的授权, 避免重复和误报.
+            
+            // 过滤: principalName 必须匹配 (防止并发或设备码流程残留)
             if (!principalName.equals(auth.getPrincipalName())) {
+                staleIds.add(id);
                 continue;
             }
+            
+            // 检查是否有有效的 Token
+            if (!hasValidToken(auth)) {
+                staleIds.add(id);
+                continue;
+            }
+            
             list.add(auth);
         }
+        
+        // 主动清理 Set 中的僵尸 ID，确保会话数统计的准确性
+        if (!staleIds.isEmpty()) {
+            log.info("清理 principal={} 的 {} 个无效授权记录", principalName, staleIds.size());
+            for (String staleId : staleIds) {
+                redisTemplate.opsForSet().remove(USER_INDEX_PREFIX + principalName, staleId);
+            }
+            // 清理后检查 Set 是否为空，若是则删除整个 Set Key
+            Long remaining = redisTemplate.opsForSet().size(USER_INDEX_PREFIX + principalName);
+            if (remaining != null && remaining == 0) {
+                redisTemplate.delete(USER_INDEX_PREFIX + principalName);
+            }
+        }
+        
         return list;
     }
 
@@ -421,6 +481,72 @@ public final class RedisOAuth2AuthorizationService implements OAuth2Authorizatio
         if (auth == null) return false;
         remove(auth);
         return true;
+    }
+
+    /**
+     * 查询指定 SSO 会话下的所有 OAuth2 授权 (客户端会话).
+     * <p>
+     * 用于管理端层级视图 (User → SSO Session → Client Session) 和按 SSO 会话踢下线.
+     *
+     * @param ssoSessionId SSO HttpSession ID
+     * @return 该 SSO 会话关联的 OAuth2Authorization 列表
+     */
+    public List<OAuth2Authorization> findBySsoSessionId(String ssoSessionId) {
+        if (!StringUtils.hasText(ssoSessionId)) return List.of();
+        Set<String> ids = redisTemplate.opsForSet().members(SSO_SESSION_INDEX_PREFIX + ssoSessionId);
+        if (ids == null || ids.isEmpty()) return List.of();
+
+        List<OAuth2Authorization> list = new ArrayList<>();
+        List<String> staleIds = new ArrayList<>();
+        for (String id : ids) {
+            OAuth2Authorization auth = findById(id);
+            if (auth == null) {
+                staleIds.add(id);
+                continue;
+            }
+            // 校验 SSO 会话 ID 仍匹配 (防止索引残留)
+            Object attr = auth.getAttributes().get(ATTR_SSO_SESSION_ID);
+            if (!ssoSessionId.equals(attr)) {
+                staleIds.add(id);
+                continue;
+            }
+            list.add(auth);
+        }
+        // 清理僵尸 ID
+        if (!staleIds.isEmpty()) {
+            for (String staleId : staleIds) {
+                redisTemplate.opsForSet().remove(SSO_SESSION_INDEX_PREFIX + ssoSessionId, staleId);
+            }
+            Long remaining = redisTemplate.opsForSet().size(SSO_SESSION_INDEX_PREFIX + ssoSessionId);
+            if (remaining != null && remaining == 0) {
+                redisTemplate.delete(SSO_SESSION_INDEX_PREFIX + ssoSessionId);
+            }
+        }
+        return list;
+    }
+
+    /**
+     * 撤销指定 SSO 会话下的所有 OAuth2 授权.
+     * <p>
+     * 用于全局退出: 仅撤销当前 SSO 会话关联的客户端会话, 不影响该用户其他设备的 SSO 会话.
+     *
+     * @param ssoSessionId SSO HttpSession ID
+     * @return 撤销的授权数量
+     */
+    public int revokeBySsoSessionId(String ssoSessionId) {
+        if (!StringUtils.hasText(ssoSessionId)) return 0;
+        List<OAuth2Authorization> auths = findBySsoSessionId(ssoSessionId);
+        int count = 0;
+        for (OAuth2Authorization auth : auths) {
+            remove(auth);
+            count++;
+        }
+        // 确保索引键被清理
+        redisTemplate.delete(SSO_SESSION_INDEX_PREFIX + ssoSessionId);
+        if (count > 0) {
+            log.info("按 SSO 会话撤销授权: ssoSessionId={}, 撤销数={}", ssoSessionId, count);
+        }
+        return count;
     }
 
     /**

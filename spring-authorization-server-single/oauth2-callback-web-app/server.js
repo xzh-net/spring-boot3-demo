@@ -8,17 +8,55 @@
  *   4. 展示 token + 调用资源 API
  *
  * 启动: node server.js
- * 端口: 8080  (零依赖)
+ * 端口: 8081  (零依赖)
  */
 
 const http = require('http');
 const url = require('url');
+const crypto = require('crypto');
 
-const PORT = 8080;
+const PORT = 8081;
 const AUTH_SERVER = 'http://localhost:9000';
+const PORTAL_URL = 'http://localhost:8000';
 const CLIENT_ID = 'web-app';
 const CLIENT_SECRET = '123456';
-const REDIRECT_URI = 'http://localhost:8080/callback';
+const REDIRECT_URI = 'http://localhost:8081/callback';
+
+// ========== 设计文档 §6-7: Web 应用 A → 门户 的 prompt=none 静默 SSO 回流 ==========
+const PORTAL_CLIENT_ID = 'portal-app';
+// 本应用接收门户 prompt=none 授权响应的回调端点
+const PORTAL_SSO_REDIRECT_URI = 'http://localhost:8081/portal-sso-callback';
+// 动态生成 state, 避免 CSRF
+function _generatePortalSsoState() {
+    return Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
+}
+// 用 Map 暂存 state (一次性)
+const _portalSsoStates = new Set();
+
+/**
+ * 生成「返回门户」的静默授权 URL.
+ * 设计文档 §6: A 返回 Portal 时不直接跳门户首页, 而是为 portal-app 客户端
+ * 发起 OIDC 授权请求, 带 prompt=none:
+ *   - 有 SAS SSO Session → 直接发 code, 不弹登录页
+ *   - 无 SAS Session     → 返回 error=login_required, 不弹登录页
+ */
+function getPortalSsoUrl() {
+    const state = _generatePortalSsoState();
+    _portalSsoStates.add(state);
+    // portal-app 配置了 requireProofKey=true (PKCE), 必须发送 code_challenge
+    // 这里生成一次性的 PKCE 参数, code_verifier 不会用于换 token (仅做 SSO 有效性探测)
+    const codeVerifier = crypto.randomBytes(32).toString('base64url');
+    const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
+    let url = `${AUTH_SERVER}/oauth2/authorize?response_type=code&client_id=${PORTAL_CLIENT_ID}`;
+    url += `&redirect_uri=${encodeURIComponent(PORTAL_SSO_REDIRECT_URI)}`;
+    url += `&scope=${encodeURIComponent('openid profile')}`;
+    url += `&state=${state}`;
+    url += `&code_challenge=${codeChallenge}`;
+    url += `&code_challenge_method=S256`;
+    // 设计文档 §6-7: prompt=none — 静默授权, 绝不弹登录页
+    url += `&prompt=none`;
+    return url;
+}
 
 /** 生成 OAuth2 授权码请求 URL — token 失效时直接 302 重定向到此地址 */
 function getAuthorizationUrl() {
@@ -155,7 +193,7 @@ async function revokeToken(token, tokenTypeHint) {
 }
 
 /** 客户端登录页地址 — 授权服务器销毁 session 后回跳到此 (首页带"开始授权登录"按钮) */
-const CLIENT_LOGIN_URL = 'http://localhost:8080/';
+const CLIENT_LOGIN_URL = 'http://localhost:8081/';
 
 /**
  * 退出登录流程:
@@ -199,29 +237,10 @@ async function handleLogout(req, res) {
 // 页面渲染
 // ============================================================
 
-/** 获取门户SSO授权URL（客户端→门户） */
-async function getPortalSsoUrl() {
-    try {
-        const res = await request({
-            hostname: 'localhost', port: 9000, path: '/portal-api/portal-sso-url?currentClientId=' + CLIENT_ID, method: 'GET',
-            headers: { 'Content-Type': 'application/json' }
-        }, null, 5000);
-        if (res.statusCode === 200) {
-            const data = JSON.parse(res.body);
-            if (data.authUrl) {
-                // 将相对URL转换为完整URL
-                return AUTH_SERVER + data.authUrl;
-            }
-        }
-    } catch (e) {
-        console.warn('[SSO] 获取门户URL失败:', e.message);
-    }
-    return null;
-}
-
 function layout(title, content, isLoggedIn = false, portalAuthUrl = null) {
-    const portalBtn = isLoggedIn && portalAuthUrl
-        ? `<a href="${esc(portalAuthUrl)}" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.35);padding:6px 14px;border-radius:6px;text-decoration:none;font-size:13px;margin-right:12px;">🏠 返回门户</a>`
+    // 设计文档 §6: "返回门户" 先打本应用 /return-to-portal 端点, 由服务端构造 prompt=none 静默授权 URL
+    const portalBtn = isLoggedIn
+        ? `<a href="/return-to-portal" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.35);padding:6px 14px;border-radius:6px;text-decoration:none;font-size:13px;margin-right:12px;">🏠 返回门户</a>`
         : '';
     const logoutBtn = isLoggedIn ? '<a href="/logout" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.35);padding:6px 14px;border-radius:6px;text-decoration:none;font-size:13px;">退出登录</a>' : '';
     return `<!DOCTYPE html>
@@ -282,56 +301,17 @@ function layout(title, content, isLoggedIn = false, portalAuthUrl = null) {
 // 路由
 // ============================================================
 
-/** 首页 */
+/** 首页 — 强制跳转到授权服务器，严格遵循 RFC 6749 §4.1 */
 async function renderHome(req, res) {
-    const session = getSessionTokens(req, res);
-    const isLoggedIn = !!session;
-    const portalAuthUrl = isLoggedIn ? await getPortalSsoUrl() : null;
-    let content = '';
-    if (isLoggedIn) {
-        content = `
-            <div class="card">
-                <h1>🎉 欢迎回来</h1>
-                <div class="sub">你已登录,可以继续操作。</div>
-                ${portalAuthUrl ? `
-                <div class="sso-info">
-                    <strong>🔗 SSO 单点登录:</strong> 你已在认证中心登录, 可以点击右上角"返回门户"或下方按钮,
-                    无需再次登录即可访问门户首页。
-                </div>` : ''}
-                <div class="actions">
-                    <a href="/userinfo-demo" class="btn btn-outline">👤 查询用户信息</a>
-                    <a href="/api-demo" class="btn btn-outline">📋 调用通讯录 API</a>
-                    <a href="/refresh-demo" class="btn btn-outline">🔄 刷新 Token</a>
-                    <a href="/introspect-demo" class="btn btn-outline">🔍 验证 Token</a>
-                    ${portalAuthUrl ? `<a href="${esc(portalAuthUrl)}" class="btn btn-primary">🏠 返回门户首页</a>` : ''}
-                </div>
-            </div>
-        `;
-    } else {
-        const authUrl = getAuthorizationUrl();
-        content = `
-            <div class="card">
-                <h1>授权码模式 (Authorization Code)</h1>
-                <div class="sub">最常用、最安全的 OAuth2 流程, 适合有服务端的传统 Web 应用</div>
-                <div class="flow">
-                    <div class="flow-step current">① 发起授权</div>
-                    <span class="flow-arrow">→</span>
-                    <div class="flow-step todo">② 登录确认</div>
-                    <span class="flow-arrow">→</span>
-                    <div class="flow-step todo">③ 回调取码</div>
-                    <span class="flow-arrow">→</span>
-                    <div class="flow-step todo">④ 换取 Token</div>
-                    <span class="flow-arrow">→</span>
-                    <div class="flow-step todo">⑤ 访问资源</div>
-                </div>
-                <p style="font-size:14px;color:#475569;line-height:1.8;margin:16px 0;">
-                    点击下方按钮, 将跳转到授权服务器进行登录和授权确认。
-                </p>
-                <a href="${esc(authUrl)}" class="btn btn-primary">🚀 开始授权登录</a>
-            </div>
-        `;
-    }
-    return layout('OAuth2 授权码登录演示', content, isLoggedIn, portalAuthUrl);
+    // 移除本地会话检查，强制每次都发起新的授权请求
+    // 授权服务器会根据 HttpSession 状态决定是否需要用户交互（SSO）
+    // 如果用户已登录，服务器会直接颁发新的授权码，无需重新登录
+    // 这符合 RFC 6749 §4.1 的标准行为：每次授权请求独立生成令牌
+    res.writeHead(302, {
+        'Location': getAuthorizationUrl(),
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+    });
+    res.end();
 }
 
 /** Token 内省演示 */
@@ -355,7 +335,9 @@ async function renderIntrospectDemo(req, res) {
         return layout('请求失败', `<div class="card"><h1>⚠️ 请求失败</h1><pre>${esc(e.message)}</pre><div class="actions"><a href="/" class="btn btn-outline">返回</a></div></div>`, true, portalAuthUrl);
     }
 
-    if (result.status === 401) {
+    // RFC 7662: introspect 端点在 token 无效时返回 200 + active=false (而非 401)
+    // 但我们仍需要清除本地 session 并跳转到授权服务器，保持与其他按钮行为一致
+    if (result.status === 401 || (result.status === 200 && result.data.active === false)) {
         sessions.delete(session.sessionId);
         clearSessionCookie(res);
         res.writeHead(302, {
@@ -392,7 +374,6 @@ async function renderIntrospectDemo(req, res) {
                 <a href="/userinfo-demo" class="btn btn-outline">👤 查询用户信息</a>
                 <a href="/api-demo" class="btn btn-outline">📋 调用通讯录 API</a>
                 <a href="/refresh-demo" class="btn btn-outline">🔄 刷新 Token</a>
-                ${portalAuthUrl ? `<a href="${esc(portalAuthUrl)}" class="btn btn-primary">🏠 返回门户</a>` : ''}
             </div>
         </div>
     `, true, portalAuthUrl);
@@ -561,7 +542,6 @@ Authorization: Bearer ${esc(session.tokens.access_token.substring(0, 40))}...</p
                 <a href="/userinfo-demo" class="btn btn-outline">👤 查询用户信息</a>
                 <a href="/refresh-demo" class="btn btn-outline">🔄 刷新 Token</a>
                 <a href="/introspect-demo" class="btn btn-outline">🔍 验证 Token</a>
-                ${portalAuthUrl ? `<a href="${esc(portalAuthUrl)}" class="btn btn-primary">🏠 返回门户</a>` : ''}
             </div>
         </div>
     `, true, portalAuthUrl);
@@ -613,7 +593,6 @@ async function renderUserinfoDemo(req, res) {
                 <a href="/api-demo" class="btn btn-outline">📋 调用通讯录 API</a>
                 <a href="/refresh-demo" class="btn btn-outline">🔄 刷新 Token</a>
                 <a href="/introspect-demo" class="btn btn-outline">🔍 验证 Token</a>
-                ${portalAuthUrl ? `<a href="${esc(portalAuthUrl)}" class="btn btn-primary">🏠 返回门户</a>` : ''}
             </div>
         </div>
     `, true, portalAuthUrl);
@@ -675,10 +654,52 @@ async function renderRefreshDemo(req, res) {
                 <a href="/userinfo-demo" class="btn btn-outline">👤 查询用户信息</a>
                 <a href="/api-demo" class="btn btn-outline">📋 调用通讯录 API</a>
                 <a href="/introspect-demo" class="btn btn-outline">🔍 验证 Token</a>
-                ${portalAuthUrl ? `<a href="${esc(portalAuthUrl)}" class="btn btn-primary">🏠 返回门户</a>` : ''}
             </div>
         </div>
     `, true, portalAuthUrl);
+}
+
+// ========== 设计文档 §6-7: Web 应用 A → 门户 的 prompt=none 静默 SSO 回流 ==========
+
+/**
+ * 点击"返回门户"端点: 302 到认证中心为 portal-app 发起静默授权.
+ */
+function handleReturnToPortal(req, res) {
+    res.writeHead(302, {
+        'Location': getPortalSsoUrl(),
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+    });
+    res.end();
+}
+
+/**
+ * 门户 SSO 授权回调端点 (/portal-sso-callback).
+ * 与 mobile-app 的 handlePortalSsoCallback 逻辑一致:
+ *   - code 存在: SAS SSO Session 有效 → 302 到门户首页 (门户自己完成剩余 OAuth2 流程, 依然无感)
+ *   - error=login_required: SSO Session 失效 → 302 到门户 /login 触发正常登录
+ *   - 其他错误 → 跳门户首页
+ */
+function handlePortalSsoCallback(query, res) {
+    const state = query.state;
+    if (state) _portalSsoStates.delete(state);
+
+    let redirectTarget = PORTAL_URL;
+    if (query.error === 'login_required') {
+        // 设计文档 §7: 无 SAS Session → error=login_required → 转门户正常登录
+        console.log('[web-app portal-sso] 认证中心无 SSO Session, 返回 login_required, 转门户正常登录');
+        redirectTarget = PORTAL_URL + '/login';
+    } else if (query.code) {
+        // 设计文档 §7: 有 SAS Session → code 返回 → 用户无感进入门户
+        console.log('[web-app portal-sso] 认证中心 SSO Session 有效, 获得 code, 转门户');
+    } else if (query.error) {
+        console.log('[web-app portal-sso] 授权失败 error=%s desc=%s, 转门户首页', query.error, query.error_description);
+    }
+
+    res.writeHead(302, {
+        'Location': redirectTarget,
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+    });
+    res.end();
 }
 
 // ============================================================
@@ -700,6 +721,14 @@ const server = http.createServer(async (req, res) => {
             case '/callback':
                 html = await renderCallback(query, res);
                 break;
+            // 设计文档 §6: A → Portal 静默 SSO 端点
+            case '/return-to-portal':
+                handleReturnToPortal(req, res);
+                return;
+            // 设计文档 §6-7: A → Portal prompt=none 授权回调
+            case '/portal-sso-callback':
+                handlePortalSsoCallback(query, res);
+                return;
             case '/logout':
                 await handleLogout(req, res);
                 return;

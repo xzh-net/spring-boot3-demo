@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.RequestParam;
  * <p>
  * 设备码流程中, 用户需在浏览器访问此页面输入 user_code 进行设备授权.
  * 路由 /activate 落到 Order(5) deviceVerificationSecurityFilterChain, 使用独立的
- * DEVICE_SECURITY_CONTEXT, 不污染门户会话 (PORTAL_SECURITY_CONTEXT).
+ * DEVICE_SECURITY_CONTEXT, 不污染 OAuth2 登录会话 (PORTAL_SECURITY_CONTEXT).
  * <p>
  * 如果 URL 已携带 user_code (如 verification_uri_complete), 直接重定向到 SAS 验证端点.
  * <p>
@@ -39,7 +39,7 @@ public class DeviceActivateController {
      * LoginController 的 @GetMapping("/").
      * <p>
      * 渲染成功页前, 清除 DEVICE_SECURITY_CONTEXT — 设备验证是一次性动作, 不残留登录态.
-     * 如果用户此前已登录门户 (PORTAL_SECURITY_CONTEXT), 门户会话不受影响.
+     * 如果用户此前已通过 OAuth2 登录 (PORTAL_SECURITY_CONTEXT), 登录会话不受影响.
      */
     @GetMapping(value = "/", params = "success")
     public String deviceActivated(HttpServletRequest request) {

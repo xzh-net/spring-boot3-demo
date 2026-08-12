@@ -1,0 +1,8 @@
+net\xzh\portal\controller\PageController.class
+net\xzh\portal\security\TokenValidationFilter.class
+net\xzh\portal\client\AuthServerClient$1.class
+net\xzh\portal\client\AuthServerClient.class
+net\xzh\portal\security\TokenValidationFilter$CacheEntry.class
+net\xzh\portal\controller\PortalApiController.class
+net\xzh\portal\PortalApplication.class
+net\xzh\portal\config\SecurityConfig.class

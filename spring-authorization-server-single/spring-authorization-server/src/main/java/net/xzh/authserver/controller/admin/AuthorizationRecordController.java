@@ -45,7 +45,7 @@ public class AuthorizationRecordController {
 
     @GetMapping()
     public String page() {
-        return "redirect:/admin/authorization.html";
+        return "admin/authorization";
     }
 
     // ------------------------------------------------------------------

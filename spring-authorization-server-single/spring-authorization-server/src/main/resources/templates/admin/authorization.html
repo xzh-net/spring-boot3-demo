@@ -1,0 +1,247 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>统一认证中心 · 授权管理</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif; background: #f0f2f5; color: #1e293b; min-height: 100vh; }
+        .navbar { background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%); color: #fff; padding: 0 24px; height: 56px; display: flex; align-items: center; gap: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); position: sticky; top: 0; z-index: 10; }
+        .navbar .brand { font-weight: 700; font-size: 16px; color: #ffffff; }
+        .navbar a { color: #dbeafe; text-decoration: none; padding: 8px 14px; border-radius: 6px; font-size: 14px; }
+        .navbar a:hover { background: rgba(255,255,255,0.15); color: #ffffff; }
+        .navbar a.active { background: rgba(255,255,255,0.22); color: #ffffff; }
+        .navbar .spacer { flex: 1; }
+        .navbar .logout { color: #dbeafe; font-size: 13px; cursor: pointer; }
+
+        .container { max-width: 1200px; margin: 24px auto; padding: 0 24px; }
+        .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .page-header h2 { font-size: 22px; color: #1e3a5f; }
+        .page-header .hint { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+        .btn { padding: 8px 18px; border-radius: 6px; border: none; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s; }
+        .btn-primary { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; }
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(37,99,235,0.35); }
+        .btn-link { background: none; border: none; color: #2563eb; cursor: pointer; font-size: 13px; }
+        .btn-link:hover { text-decoration: underline; }
+        .btn-link.danger { color: #dc2626; }
+
+        .card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); overflow: hidden; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px 16px; text-align: left; font-size: 13px; }
+        th { background: #fafafa; color: #475569; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px; border-bottom: 1px solid #e2e8f0; }
+        td { border-bottom: 1px solid #f0f0f0; color: #334155; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover { background: #f8fafc; }
+
+        .scope-pill { display: inline-block; background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; padding: 1px 7px; border-radius: 10px; font-size: 11px; margin: 1px; }
+
+        .tag { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; }
+        .tag.green { background: rgba(34,197,94,0.08); color: #16a34a; }
+        .tag.gray { background: rgba(100,116,139,0.08); color: #64748b; }
+        .tag.blue { background: rgba(37,99,235,0.08); color: #2563eb; }
+        .tag.amber { background: rgba(245,158,11,0.10); color: #d97706; }
+
+        .empty { text-align: center; padding: 40px; color: #94a3b8; font-size: 14px; }
+
+        /* 弹窗 */
+        .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); align-items: center; justify-content: center; z-index: 100; padding: 24px; }
+        .modal-bg.show { display: flex; }
+        .modal { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; width: 1100px; max-width: 100%; max-height: 85vh; overflow-y: auto; overflow-x: auto; box-shadow: 0 16px 50px rgba(0,0,0,0.18); display: flex; flex-direction: column; }
+        .modal-header { padding: 16px 24px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+        .modal-header h3 { font-size: 16px; color: #1e3a5f; }
+        .modal-header .sub { font-size: 12px; color: #94a3b8; margin-top: 2px; }
+        .close-btn { background: none; border: none; font-size: 22px; cursor: pointer; color: #64748b; }
+        .modal-body { padding: 0; }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <div class="brand">🚀 统一认证中心</div>
+        <a href="/admin">首页</a>
+        <a href="/admin/user">用户管理</a>
+        <a href="/admin/client">客户端管理</a>
+        <a href="/admin/authorization" class="active">授权管理</a>
+        <a href="/admin/online">在线用户</a>
+        <a href="/admin/monitor">系统监控</a>
+        <div class="spacer"></div>
+        <a href="#" class="logout" id="logoutLink">退出登录</a>
+    </div>
+
+    <div class="container">
+        <div class="page-header">
+            <div>
+                <h2>授权管理</h2>
+                <div class="hint">主表展示当前已授权用户, 点击「查看历史」查看授权历史</div>
+            </div>
+            <button class="btn btn-primary" onclick="loadConsentList()">刷新</button>
+        </div>
+        <div class="card">
+            <table>
+                <thead>
+                    <tr>
+                        <th>用户名</th>
+                        <th>客户端</th>
+                        <th>授权权限</th>
+                        <th>授权类型</th>
+                        <th>首次授权时间</th>
+                        <th style="width:160px">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="consentTable"></tbody>
+            </table>
+            <div class="empty" id="emptyTip" style="display:none;">暂无授权记录</div>
+        </div>
+    </div>
+
+    <!-- 明细弹窗 -->
+    <div class="modal-bg" id="detailModal">
+        <div class="modal">
+            <div class="modal-header">
+                <div>
+                    <h3>授权明细</h3>
+                    <div class="sub" id="detailSub"></div>
+                </div>
+                <button class="close-btn" onclick="closeDetail()">×</button>
+            </div>
+            <div class="modal-body">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>授权时间</th>
+                            <th>授权类型</th>
+                            <th>授权权限</th>
+                            <th>状态</th>
+                            <th>撤销时间</th>
+                        </tr>
+                    </thead>
+                    <tbody id="detailTable"></tbody>
+                </table>
+                <div class="empty" id="detailEmpty" style="display:none;">暂无明细记录</div>
+            </div>
+        </div>
+    </div>
+
+<script>
+function scopePills(authorities) {
+    if (!authorities) return '-';
+    return authorities.split(',').map(s => {
+        const name = s.trim().replace(/^SCOPE_/, '');
+        return `<span class="scope-pill">${name}</span>`;
+    }).join('');
+}
+
+function statusTag(status) {
+    if (status === 'active') return `<span class="tag green">有效</span>`;
+    return `<span class="tag gray">已撤销</span>`;
+}
+
+function grantTypeTag(gt) {
+    switch (gt) {
+        case 'authorization_code': return `<span class="tag green">授权码</span>`;
+        case 'urn:ietf:params:oauth:grant-type:device_code': return `<span class="tag blue">设备码</span>`;
+        case 'password': return `<span class="tag amber">密码模式</span>`;
+        case 'client_credentials': return `<span class="tag gray">客户端凭证</span>`;
+        case 'refresh_token': return `<span class="tag gray">刷新令牌</span>`;
+        default: return gt ? `<span class="tag gray">${gt}</span>` : '<span style="color:#cbd5e1;">-</span>';
+    }
+}
+
+function fmtTime(t) {
+    return (t || "").replace("T", " ").substring(0, 19);
+}
+
+// ------------------------------------------------------------------
+// 主表: 已授权用户列表
+// ------------------------------------------------------------------
+
+async function loadConsentList() {
+    const res = await fetch("/admin/authorization/api/consent-list");
+    const { code, data } = await res.json();
+    const tbody = document.getElementById("consentTable");
+    const empty = document.getElementById("emptyTip");
+    if (code !== 200 || !data || data.length === 0) {
+        tbody.innerHTML = "";
+        empty.style.display = "block";
+        return;
+    }
+    empty.style.display = "none";
+    tbody.innerHTML = data.map(c => `
+        <tr>
+            <td style="font-family:monospace;">${c.principalName}</td>
+            <td>${c.clientName || c.registeredClientId}</td>
+            <td>${scopePills(c.authorities)}</td>
+            <td>${(c.grantTypes || []).map(gt => grantTypeTag(gt)).join(' ') || '-'}</td>
+            <td style="font-size:12px;color:#64748b;">${fmtTime(c.firstGrantTime) || '-'}</td>
+            <td>
+                <button class="btn-link" onclick="showDetail('${c.registeredClientId}', '${c.principalName}', '${c.clientName || c.registeredClientId}')">查看历史</button>
+                <button class="btn-link danger" onclick="revokeAuth('${c.registeredClientId}', '${c.principalName}', '${c.clientName || c.registeredClientId}')">取消授权</button>
+            </td>
+        </tr>
+    `).join("");
+}
+
+// ------------------------------------------------------------------
+// 子表: 授权历史明细弹窗
+// ------------------------------------------------------------------
+
+async function showDetail(clientId, principalName, clientName) {
+    document.getElementById("detailSub").textContent =
+        `客户端: ${clientName}  |  用户: ${principalName}`;
+    document.getElementById("detailModal").classList.add("show");
+
+    const res = await fetch(`/admin/authorization/api/list?clientId=${encodeURIComponent(clientId)}&principalName=${encodeURIComponent(principalName)}`);
+    const { code, data } = await res.json();
+    const tbody = document.getElementById("detailTable");
+    const empty = document.getElementById("detailEmpty");
+    if (code !== 200 || !data || data.length === 0) {
+        tbody.innerHTML = "";
+        empty.style.display = "block";
+        return;
+    }
+    empty.style.display = "none";
+    tbody.innerHTML = data.map(r => `
+        <tr>
+            <td style="font-size:12px;color:#64748b;">${fmtTime(r.grantTime)}</td>
+            <td>${grantTypeTag(r.grantType)}</td>
+            <td>${scopePills(r.grantedAuthorities)}</td>
+            <td>${statusTag(r.status)}</td>
+            <td style="font-size:12px;color:#64748b;">${r.revokeTime ? fmtTime(r.revokeTime) : '-'}</td>
+        </tr>
+    `).join("");
+}
+
+function closeDetail() {
+    document.getElementById("detailModal").classList.remove("show");
+}
+
+// ------------------------------------------------------------------
+// 取消授权
+// ------------------------------------------------------------------
+
+async function revokeAuth(clientId, principalName, clientName) {
+    if (!confirm(`确认取消用户 "${principalName}" 对客户端 "${clientName}" 的授权 ?\n(将同时强制下线该用户在该客户端上的所有会话)`)) return;
+    const res = await fetch(`/admin/authorization/api/revoke?clientId=${encodeURIComponent(clientId)}&principalName=${encodeURIComponent(principalName)}`, { method: "DELETE" });
+    const json = await res.json();
+    if (json.code === 200) loadConsentList();
+    else alert("取消授权失败: " + (json.msg || ""));
+}
+
+// ------------------------------------------------------------------
+// 初始化
+// ------------------------------------------------------------------
+
+loadConsentList();
+
+document.getElementById("logoutLink").addEventListener("click", function (e) {
+    e.preventDefault();
+    if (!confirm("确认退出登录？")) return;
+    var csrf = (document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]*)/) || [])[1];
+    fetch("/admin/logout", {
+        method: "POST",
+        headers: csrf ? { "X-XSRF-TOKEN": decodeURIComponent(csrf) } : {}
+    }).then(function () { location.href = "/admin/login.html"; });
+});
+</script>`n</body>
+</html>

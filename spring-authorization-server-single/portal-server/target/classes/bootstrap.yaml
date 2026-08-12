@@ -1,0 +1,23 @@
+# ============================================================
+# Bootstrap 配置
+# ============================================================
+# 注意: Spring Boot 3.x 默认不加载 bootstrap.yaml, 需引入
+#       spring-cloud-starter-bootstrap 依赖才会生效。
+# 当前项目使用 application.yml 中的 spring.profiles.active 管理环境,
+# 此文件仅作备用 (如未来引入 Spring Cloud Config 时使用)。
+#
+# profile 对应的配置文件:
+#   application-dev.yml    — 开发环境 (localhost:9000)
+#   application-local.yml  — 本地环境 (localhost:9000)
+#   application-prod.yml   — 生产环境 (环境变量注入)
+
+spring:
+  application:
+    name: portal-server
+
+  profiles:
+    active: dev
+
+logging:
+  file:
+    name: logs/${spring.application.name}.log
