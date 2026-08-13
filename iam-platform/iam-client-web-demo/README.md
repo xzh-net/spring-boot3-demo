@@ -48,7 +48,7 @@ node server.js
 |------|------|
 | `GET /` | 首页，发起授权 |
 | `GET /callback` | 接收回调，服务端换 token，展示结果 |
-| `GET /api-demo?token=xxx` | 用 token 调用 /api/contacts |
+| `GET /api-demo?token=xxx` | 用 token 调用 /api/contacts (位于独立资源服务 :9010) |
 | `GET /userinfo-demo?token=xxx` | 用 token 调用 /userinfo |
 | `GET /refresh-demo?token=xxx` | 用 refresh_token 换新 token |
 | `GET /return-to-portal` | SSO 返回门户：构造 `prompt=none` 静默授权 URL |

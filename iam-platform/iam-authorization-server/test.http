@@ -64,18 +64,23 @@ grant_type=password&username=user&password=123456&scope=openid profile email rea
 
 
 # ========================================
-# 4. 资源服务 (通讯录 API, 需 Bearer Opaque Token)
+# 4. 资源服务 / 用户信息 (需 Bearer Opaque Token)
 # ========================================
+# 注: /api/** 业务接口已迁移到独立资源服务 iam-resource-service (端口 9010),
+#     /oauth2/introspect 与 /userinfo 仍由本授权服务器提供。
 
-### 4.1 查询通讯录 (填入 accessToken)
-GET {{baseUrl}}/api/contacts
+### 4.1 查询通讯录 (填入 accessToken) — 指向资源服务 :9010
+GET http://localhost:9010/api/contacts
 Authorization: Bearer {{accessToken}}
 
-### 4.2 OIDC 用户信息
+### 4.2 公开客户端列表 (无需认证) — 指向资源服务 :9010
+GET http://localhost:9010/api/public/clients
+
+### 4.3 OIDC 用户信息
 GET {{baseUrl}}/userinfo
 Authorization: Bearer {{accessToken}}
 
-### 4.3 令牌自省
+### 4.4 令牌自省
 POST {{baseUrl}}/oauth2/introspect
 Authorization: {{basicAuth}}
 Content-Type: application/x-www-form-urlencoded

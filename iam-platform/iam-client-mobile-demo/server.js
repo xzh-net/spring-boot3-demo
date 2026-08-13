@@ -203,10 +203,12 @@ async function exchangeCodeForToken(code, codeVerifier) {
     return { status: res.statusCode, data: JSON.parse(res.body) };
 }
 
-/** 调用资源 API — 与 web-app 完全一致, 只认 Bearer access_token */
+/** 调用资源 API — 与 web-app 完全一致, 只认 Bearer access_token
+ *  /api/** 由独立资源服务 (iam-resource-service, 9010) 提供, 其余走授权服务器 */
 async function callResourceServer(path, accessToken) {
+    const port = path.startsWith('/api/') ? 9010 : 9000;
     const res = await request({
-        hostname: 'localhost', port: 9000, path: path, method: 'GET',
+        hostname: 'localhost', port: port, path: path, method: 'GET',
         headers: { 'Authorization': `Bearer ${accessToken}` }
     });
     return { status: res.statusCode, body: res.body };

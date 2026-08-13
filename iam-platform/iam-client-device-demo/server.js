@@ -112,10 +112,12 @@ async function pollForToken(deviceCode) {
     return { status: res.statusCode, data };
 }
 
-/** 调用资源 API */
+/** 调用资源 API
+ *  /api/** 由独立资源服务 (iam-resource-service, 9010) 提供, 其余走授权服务器 */
 async function callResourceServer(path, accessToken) {
+    const port = path.startsWith('/api/') ? 9010 : 9000;
     const res = await request({
-        hostname: 'localhost', port: 9000, path: path, method: 'GET',
+        hostname: 'localhost', port: port, path: path, method: 'GET',
         headers: { 'Authorization': `Bearer ${accessToken}` }
     });
     return { status: res.statusCode, body: res.body };

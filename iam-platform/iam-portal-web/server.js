@@ -171,10 +171,10 @@ async function renderHome(req, res) {
             if (data.success && data.clients && data.clients.length > 0) {
                 clientsHtml = '<div class="client-grid">' + data.clients.map(c => {
                     const icon = c.type === 'device' ? '📺' : '📋';
-                    const link = c.authorizationUrl || c.verificationUri || '#';
+                    const link = c.ssoUrl || c.homepage || '#';
                     return `<a href="${esc(link)}" class="client-card">
                         <div class="icon">${icon}</div>
-                        <h3>${esc(c.clientName || c.clientId)}</h3>
+                        <h3>${esc(c.name || c.clientName || c.clientId)}</h3>
                         <p>${esc(c.description || (c.type === 'device' ? '设备码授权应用' : 'Web应用 (SSO)'))}</p>
                         <div class="meta">client_id: ${esc(c.clientId)} · ${esc(c.type || 'web')}</div>
                     </a>`;

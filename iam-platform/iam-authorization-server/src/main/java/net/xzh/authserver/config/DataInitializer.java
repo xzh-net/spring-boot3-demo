@@ -56,6 +56,7 @@ public class DataInitializer implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         ensurePortalAppClient();
+        ensureResourceServerClient();
     }
 
     /**
@@ -177,5 +178,45 @@ public class DataInitializer implements ApplicationRunner {
      */
     public static String getPortalClientSecret() {
         return PORTAL_CLIENT_SECRET;
+    }
+
+    /**
+     * 确保 resource-server 客户端存在 (专属 introspection 调用的集群身份).
+     * <p>
+     * 数据库如果是从旧版 schema.sql 初始化的 (resource-server 客户端尚未加入),
+     * 则 resource-server 缺失会导致 iam-resource-service 调用
+     * /oauth2/introspect 时因客户端认证失败返回 401。这里兜底补建。
+     * </p>
+     */
+    private void ensureResourceServerClient() {
+        try {
+            RegisteredClient existing = clientRepository.findByClientId("resource-server");
+            if (existing != null) {
+                return;
+            }
+            String secretHash = passwordEncoder.encode("123456");
+            RegisteredClient client = RegisteredClient.withId("6")
+                    .clientId("resource-server")
+                    .clientSecret(secretHash)
+                    .clientName("资源服务器")
+                    .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
+                    .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
+                    .scope("read")
+                    .scope("write")
+                    .clientSettings(ClientSettings.builder()
+                            .requireProofKey(false)
+                            .requireAuthorizationConsent(false)
+                            .build())
+                    .tokenSettings(TokenSettings.builder()
+                            .accessTokenFormat(org.springframework.security.oauth2.server.authorization.settings.OAuth2TokenFormat.REFERENCE)
+                            .accessTokenTimeToLive(Duration.ofMinutes(30))
+                            .reuseRefreshTokens(false)
+                            .build())
+                    .build();
+            clientRepository.save(client);
+            log.info("[DataInit] resource-server 客户端已创建 (introspection 专用)");
+        } catch (Exception e) {
+            log.error("[DataInit] 创建 resource-server 客户端失败", e);
+        }
     }
 }

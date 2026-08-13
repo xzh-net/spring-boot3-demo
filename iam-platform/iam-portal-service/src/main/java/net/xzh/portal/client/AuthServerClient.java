@@ -16,9 +16,11 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 认证中心 API 客户端.
+ * 资源服务 API 客户端.
  * <p>
- * 调用认证中心的公开接口获取客户端列表等信息。
+ * 调用资源服务 (iam-resource-service:9010) 的公开客户端列表接口，
+ * 该接口已从认证中心 (`/api/public/clients`) 迁移至资源服务。
+ * </p>
  */
 @Slf4j
 @Component
@@ -29,22 +31,23 @@ public class AuthServerClient {
             .connectTimeout(Duration.ofSeconds(5))
             .build();
 
-    @Value("${auth-server.base-url}")
+    @Value("${resource-server.base-url}")
     private String baseUrl;
 
-    @Value("${auth-server.clients-api}")
+    @Value("${resource-server.clients-api}")
     private String clientsApi;
 
     /**
-     * 获取认证中心的公开客户端列表.
+     * 获取公开客户端列表.
      * <p>
-     * 调用 GET /api/public/clients 接口，返回所有可用的 OAuth2 客户端
-     * (排除 portal-app 自身)。
+     * 调用资源服务 GET /api/public/clients 接口，返回所有可用的 OAuth2 客户端
+     * (排除 portal-app 自身)。响应结构为统一 Result 包装: {@code {code, msg, data, timestamp}}。
+     * </p>
      */
     @SuppressWarnings("unchecked")
     public List<Map<String, Object>> listPublicClients() throws Exception {
         String url = baseUrl + clientsApi;
-        log.debug("[AuthServerClient] 调用认证中心获取客户端列表: {}", url);
+        log.debug("[AuthServerClient] 调用资源服务获取客户端列表: {}", url);
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
@@ -62,9 +65,10 @@ public class AuthServerClient {
         Map<String, Object> body = objectMapper.readValue(response.body(),
                 new TypeReference<Map<String, Object>>() {});
 
-        Object clients = body.get("clients");
-        if (clients instanceof List) {
-            return (List<Map<String, Object>>) clients;
+        // Result 包装: data 为客户端数组
+        Object data = body.get("data");
+        if (data instanceof List) {
+            return (List<Map<String, Object>>) data;
         }
         return Collections.emptyList();
     }

@@ -55,9 +55,13 @@ spring:
             user-name-attribute: sub
             issuer-uri: http://localhost:9000
 
-# 认证中心地址 (用于调用公开 API 获取客户端列表)
+# 认证中心地址 (用于 Token 内省等)
 auth-server:
   base-url: http://localhost:9000
+
+# 资源服务地址 (客户端列表等公开接口已从认证中心迁移到 iam-resource-service:9010)
+resource-server:
+  base-url: http://localhost:9010
   clients-api: /api/public/clients
 
 # iam-portal-web 前端地址 (用于 CORS)

@@ -38,6 +38,7 @@ import org.springframework.security.oauth2.server.authorization.OAuth2Authorizat
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
 import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.server.authorization.authentication.OAuth2DeviceCodeAuthenticationProvider;
+import org.springframework.security.oauth2.server.authorization.authentication.OAuth2TokenIntrospectionAuthenticationProvider;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.config.annotation.web.configuration.OAuth2AuthorizationServerConfiguration;
 import org.springframework.security.oauth2.server.authorization.config.annotation.web.configurers.OAuth2AuthorizationServerConfigurer;
@@ -56,8 +57,6 @@ import org.springframework.security.oauth2.server.authorization.web.authenticati
 import org.springframework.security.oauth2.server.authorization.web.authentication.OAuth2ClientCredentialsAuthenticationConverter;
 import org.springframework.security.oauth2.server.authorization.web.authentication.OAuth2DeviceCodeAuthenticationConverter;
 import org.springframework.security.oauth2.server.authorization.web.authentication.OAuth2RefreshTokenAuthenticationConverter;
-import org.springframework.security.oauth2.server.resource.authentication.OpaqueTokenAuthenticationProvider;
-import org.springframework.security.oauth2.server.resource.introspection.OpaqueTokenIntrospector;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
@@ -86,6 +85,7 @@ import net.xzh.authserver.security.authentication.client.DeviceClientAuthenticat
 import net.xzh.authserver.security.authentication.grant.DeviceCodeGrantAuthenticationProvider;
 import net.xzh.authserver.security.authentication.grant.PasswordGrantAuthenticationProvider;
 import net.xzh.authserver.security.session.RedisSessionRegistry;
+import net.xzh.authserver.security.token.EnrichedOAuth2TokenIntrospectionAuthenticationProvider;
 import net.xzh.authserver.security.web.ActiveClientTrackingFilter;
 import net.xzh.authserver.security.web.CompositeSecurityContextRepository;
 import net.xzh.authserver.security.web.SessionExpirationFilter;
@@ -107,13 +107,18 @@ import net.xzh.authserver.security.web.converter.PasswordGrantAuthenticationConv
  * <li>管理安全上下文隔离：OAuth2 授权登录/管理员/设备验证使用独立的 SecurityContext Key。</li>
  * </ol>
  *
- * 4 条 FilterChain 概览：
+ * 3 条 FilterChain 概览：
  * <ul>
- * <li><b>Order(1)</b> — OAuth2 端点 + 登录页（授权、令牌、内省、撤销、设备码、JWKS、OIDC、/login）</li>
- * <li><b>Order(2)</b> — 资源服务器 /api/**（Bearer Token 认证，无状态）</li>
+ * <li><b>Order(1)</b> — OAuth2 端点 + 登录页（授权、令牌、内省、撤销、设备码、JWKS、OIDC、/login、/userinfo）</li>
  * <li><b>Order(3)</b> — 管理员后台 /admin/**（独立 UserDetailsService + 表单登录）</li>
  * <li><b>Order(5)</b> — 设备验证 /activate、/device-login（独立 UserDetailsService）</li>
  * </ul>
+ * <p>
+ * 原 Order(2) 资源服务器链 (/api/** Bearer 认证) 已随业务接口迁移到独立项目
+ * iam-resource-service (:9010) 一并移除。认证中心遵循"不提供任何业务能力"原则，
+ * 不再承载任何 /api/** 业务或公开接口（含原 PublicClientController 客户端列表）。
+ * 认证相关端点 (如 /userinfo) 由本中心继续提供。
+ * </p>
  * <p>
  * 门户已拆分为独立项目 (iam-portal-web 8000 + iam-portal-service 8080)，通过 OAuth2 授权码流程接入。
  * 认证中心不再包含门户专属安全链，/login 和 /logout 由 Order(1) 链统一处理。
@@ -260,7 +265,6 @@ public class AuthorizationServerConfig {
 	public SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http,
 			RegisteredClientRepository registeredClientRepository, RedisOAuth2AuthorizationService authorizationService,
 			OAuth2AuthorizationConsentService authorizationConsentService, OAuth2TokenGenerator<?> tokenGenerator,
-			OpaqueTokenIntrospector introspector,
 			@Qualifier("portalUserDetailsService") UserDetailsService portalUserDetailsService,
 			PasswordEncoder passwordEncoder,
 			@Qualifier("portalDaoProvider") DaoAuthenticationProvider portalDaoProvider,
@@ -331,13 +335,24 @@ public class AuthorizationServerConfig {
 														new OAuth2DeviceCodeAuthenticationConverter()))))
 								.deviceAuthorizationEndpoint(da -> da.verificationUri("/activate")) // 设置设备验证的用户友好 URI
 								.deviceVerificationEndpoint(dv -> dv.consentPage("/consent")) // 设备验证也使用同一个同意页面
+								// 【增强】Token Introspection: 替换默认提供者,
+								// 保证 Opaque access_token 在授权码等流程下也能内省出 sub/scope/client_id
+								// (默认提供者只读取 token 元数据 claims, Opaque 授权码 token 无 claims => sub 缺失)
+								.tokenIntrospectionEndpoint(tie -> tie.authenticationProviders(
+										providers -> {
+											providers.removeIf(
+													p -> p instanceof OAuth2TokenIntrospectionAuthenticationProvider);
+											providers.add(new EnrichedOAuth2TokenIntrospectionAuthenticationProvider(
+													registeredClientRepository, authorizationService));
+										}))
 								.oidc(Customizer.withDefaults())); // 启用 OIDC 默认配置
 
 		// 4. 注册全局的认证提供者
 		// 用于处理普通的表单登录（如 /login 端点）
 		http.authenticationProvider(portalDaoProvider);
-		// 【目的】注册不透明令牌（Opaque Token）的认证提供者，用于通过 Redis 等方式校验令牌
-		http.authenticationProvider(new OpaqueTokenAuthenticationProvider(introspector));
+		// 【说明】原 OpaqueTokenAuthenticationProvider (Bearer 资源认证) 随 Order(2) 资源服务器链一并移除:
+		//       认证中心不再提供受 Bearer 保护的 /api/** 业务接口;
+		//       /userinfo 由 UserInfoController 直接注入 RedisOpaqueTokenIntrospector 自省, 无需经 Spring Security.
 
 		// 5. 配置其他安全细节
 		http.exceptionHandling(ex -> ex
@@ -372,43 +387,6 @@ public class AuthorizationServerConfig {
 				// 在 SecurityContextHolderFilter 之后添加自定义的会话过期过滤器
 				.addFilterAfter(new SessionExpirationFilter(sessionRegistry), SecurityContextHolderFilter.class)
 				// 跟踪当前活跃客户端 (解析 Bearer Token, 存入 Session)
-				.addFilterAfter(new ActiveClientTrackingFilter(authorizationService), SecurityContextHolderFilter.class);
-
-		return http.build();
-	}
-
-	/**
-	 * 【关键】设置优先级为 2，仅次于授权服务器端点链，确保 /api/** 请求优先被此链处理
-	 */
-	@Bean
-	@Order(2)
-	public SecurityFilterChain resourceServerSecurityFilterChain(HttpSecurity http,
-			OpaqueTokenIntrospector introspector,
-			RedisOAuth2AuthorizationService authorizationService) throws Exception {
-
-		// 1. 配置请求匹配与 CSRF
-		// 【目的】明确指定这条安全链只处理 /api/** 开头的请求
-		// 【注意】RESTful API 通常是无状态的，因此禁用 CSRF 防护
-		http.securityMatcher("/api/**").csrf(csrf -> csrf.disable())
-
-				// 2. 配置会话管理
-				// 【目的】设置为无状态（STATELESS），Spring Security 不会创建或使用 HttpSession 来存储安全上下文
-				// 每次请求都必须携带有效的 Token，服务器端不保留会话状态
-				.sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-
-				// 3. 配置授权规则
-				// 【目的】/api/public/** 公开访问 (供 iam-portal-service BFF 调用获取客户端列表)
-				// 【目的】其余 /api/** 请求必须经过身份认证
-				.authorizeHttpRequests(auth -> auth
-						.requestMatchers("/api/public/**").permitAll()
-						.anyRequest().authenticated())
-
-				// 4. 配置资源服务器
-				// 【目的】启用 OAuth2 资源服务器功能，并指定使用“不透明令牌”（Opaque Token）模式
-				// 当请求携带 Bearer Token 时，Spring Security 会调用 introspector 去授权服务器校验令牌的有效性
-				.oauth2ResourceServer(oauth2 -> oauth2.opaqueToken(opaque -> opaque.introspector(introspector)))
-				// 跟踪当前活跃客户端 (解析 Bearer Token, 存入 Session)
-				// 虽然资源服务器配置为 STATELESS, 但 ActiveClientTrackingFilter 会主动创建 Session
 				.addFilterAfter(new ActiveClientTrackingFilter(authorizationService), SecurityContextHolderFilter.class);
 
 		return http.build();

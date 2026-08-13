@@ -1,6 +1,0 @@
-D:\GitHub\spring-boot3-demo\spring-authorization-server-single\portal-server\src\main\java\net\xzh\portal\client\AuthServerClient.java
-D:\GitHub\spring-boot3-demo\spring-authorization-server-single\portal-server\src\main\java\net\xzh\portal\config\SecurityConfig.java
-D:\GitHub\spring-boot3-demo\spring-authorization-server-single\portal-server\src\main\java\net\xzh\portal\controller\PageController.java
-D:\GitHub\spring-boot3-demo\spring-authorization-server-single\portal-server\src\main\java\net\xzh\portal\controller\PortalApiController.java
-D:\GitHub\spring-boot3-demo\spring-authorization-server-single\portal-server\src\main\java\net\xzh\portal\PortalApplication.java
-D:\GitHub\spring-boot3-demo\spring-authorization-server-single\portal-server\src\main\java\net\xzh\portal\security\TokenValidationFilter.java

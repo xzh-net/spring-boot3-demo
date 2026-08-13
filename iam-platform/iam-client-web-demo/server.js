@@ -17,6 +17,7 @@ const crypto = require('crypto');
 
 const PORT = 8081;
 const AUTH_SERVER = 'http://localhost:9000';
+const RESOURCE_SERVER_PORT = 9010;
 const PORTAL_URL = 'http://localhost:8000';
 const CLIENT_ID = 'web-app';
 const CLIENT_SECRET = '123456';
@@ -144,10 +145,12 @@ async function refreshAccessToken(refreshToken) {
     return { status: res.statusCode, data: JSON.parse(res.body) };
 }
 
-/** 调用资源 API (内置 10s 超时，避免服务端异常时请求挂起) */
+/** 调用资源 API (内置 10s 超时，避免服务端异常时请求挂起)
+ *  /api/** 由独立资源服务 (iam-resource-service) 提供, 其余 (如 /userinfo) 仍走授权服务器 */
 async function callResourceServer(path, accessToken) {
+    const port = path.startsWith('/api/') ? RESOURCE_SERVER_PORT : 9000;
     const res = await request({
-        hostname: 'localhost', port: 9000, path: path, method: 'GET',
+        hostname: 'localhost', port: port, path: path, method: 'GET',
         headers: { 'Authorization': `Bearer ${accessToken}` }
     }, null, 10000);
     return { status: res.statusCode, body: res.body };
@@ -529,7 +532,7 @@ async function renderApiDemo(req, res) {
     return layout('通讯录 API', `
         <div class="card">
             <h1>${ok ? '✅' : '❌'} /api/contacts — HTTP ${result.status}</h1>
-            <div class="sub">资源服务器验证 JWT: 签名 + 过期 + aud=contacts-api</div>
+            <div class="sub">资源服务器验证 access_token (Opaque introspect) — 独立资源服务 :9010</div>
 
             <h2>请求</h2>
             <pre>GET /api/contacts

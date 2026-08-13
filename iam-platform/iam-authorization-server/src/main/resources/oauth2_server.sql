@@ -1,13 +1,18 @@
--- ============================================================
--- Spring Authorization Server 单体版 - MySQL 8 建表脚本
--- 数据库: oauth2_server
--- ============================================================
+/*
+ Navicat Premium Data Transfer
 
-CREATE DATABASE IF NOT EXISTS oauth2_server
-    DEFAULT CHARACTER SET utf8mb4
-    DEFAULT COLLATE utf8mb4_unicode_ci;
+ Source Server         : 192.168.31.161-8
+ Source Server Type    : MySQL
+ Source Server Version : 80410
+ Source Host           : 192.168.31.161:3306
+ Source Schema         : oauth2_server
 
-USE oauth2_server;
+ Target Server Type    : MySQL
+ Target Server Version : 80410
+ File Encoding         : 65001
+
+ Date: 13/08/2026 10:08:31
+*/
 
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
@@ -78,12 +83,12 @@ CREATE TABLE `oauth2_registered_client`  (
 -- ----------------------------
 -- Records of oauth2_registered_client
 -- ----------------------------
-INSERT INTO `oauth2_registered_client` VALUES ('1', 'portal-app', '2026-08-11 20:00:08', '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e', NULL, '门户应用 (SSO)', 'client_secret_basic', 'refresh_token,authorization_code', 'http://localhost:8083/portal-sso-callback,http://localhost:8081/portal-sso-callback,http://localhost:8080/login/oauth2/code/portal-app-oidc', 'http://localhost:8000/logged-out,http://localhost:8080/logged-out', 'openid,profile,email', '{"requireProofKey":false,"requireAuthorizationConsent":false}', '{"accessTokenFormat":"reference","authorizationCodeTimeToLive":"PT5M","accessTokenTimeToLive":"PT2H","reuseRefreshTokens":false}');
-INSERT INTO `oauth2_registered_client` VALUES ('2', 'web-app', '2026-08-11 20:00:08', '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e', NULL, 'Web 应用客户端', 'client_secret_basic,client_secret_post', 'authorization_code,refresh_token,password', 'http://localhost:8081/callback,http://127.0.0.1:8081/callback', 'http://localhost:8081/logout', 'openid,profile,email,read,write', '{"requireProofKey":false,"requireAuthorizationConsent":true}', '{"accessTokenFormat":"REFERENCE","accessTokenTimeToLive":"PT2H","reuseRefreshTokens":false,"idTokenSignatureAlgorithm":"RS256"}');
-INSERT INTO `oauth2_registered_client` VALUES ('3', 'device-app', '2026-08-11 20:00:08', NULL, NULL, '设备码客户端', 'none', 'refresh_token,urn:ietf:params:oauth:grant-type:device_code', NULL, NULL, 'openid,profile,email,read', '{"requireProofKey":false,"requireAuthorizationConsent":true}', '{"accessTokenFormat":"REFERENCE","accessTokenTimeToLive":"PT1H","reuseRefreshTokens":false}');
-INSERT INTO `oauth2_registered_client` VALUES ('4', 'mobile-app', '2026-08-11 20:00:08', NULL, NULL, '移动应用客户端(PKCE)', 'none', 'authorization_code,refresh_token', 'com.example.mobileapp://oauth2/redirect,http://localhost:8083/callback', 'http://localhost:8083/logout', 'openid,profile,email,read,write', '{"requireProofKey":true,"requireAuthorizationConsent":true}', '{"accessTokenFormat":"REFERENCE","accessTokenTimeToLive":"PT2H","reuseRefreshTokens":false,"idTokenSignatureAlgorithm":"RS256"}');
-INSERT INTO `oauth2_registered_client` VALUES ('5', 'service-app', '2026-08-11 20:00:08', '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e', NULL, '服务间调用客户端', 'client_secret_basic', 'client_credentials', NULL, NULL, 'read,write', '{"requireProofKey":false,"requireAuthorizationConsent":true}', '{"accessTokenFormat":"REFERENCE","accessTokenTimeToLive":"PT30M","reuseRefreshTokens":false}');
-INSERT INTO `oauth2_registered_client` VALUES ('6', 'resource-server', '2026-08-13 09:56:12', '$2a$10$AJZZh81d5bT62axwVBkB9uGWYcavRwqLN7eW4X15DUYc2vqz1mQla', NULL, '资源服务器', 'client_secret_basic', 'client_credentials', '', '', 'read,write', '{"requireProofKey":false,"requireAuthorizationConsent":false}', '{"accessTokenFormat":"reference","authorizationCodeTimeToLive":"PT5M","accessTokenTimeToLive":"PT30M","reuseRefreshTokens":false}');
+INSERT INTO `oauth2_registered_client` VALUES ('1', 'portal-app', '2026-08-11 20:00:08', '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e', NULL, '门户应用 (SSO)', 'client_secret_basic', 'refresh_token,authorization_code', 'http://localhost:8083/portal-sso-callback,http://localhost:8081/portal-sso-callback,http://localhost:8080/login/oauth2/code/portal-app-oidc', 'http://localhost:8000/logged-out,http://localhost:8080/logged-out', 'openid,profile,email', '{\"requireProofKey\":false,\"requireAuthorizationConsent\":false}', '{\"accessTokenFormat\":\"reference\",\"authorizationCodeTimeToLive\":\"PT5M\",\"accessTokenTimeToLive\":\"PT2H\",\"reuseRefreshTokens\":false}');
+INSERT INTO `oauth2_registered_client` VALUES ('2', 'web-app', '2026-08-11 20:00:08', '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e', NULL, 'Web 应用客户端', 'client_secret_basic,client_secret_post', 'authorization_code,refresh_token,password', 'http://localhost:8081/callback,http://127.0.0.1:8081/callback', 'http://localhost:8081/logout', 'openid,profile,email,read,write', '{\"requireProofKey\":false,\"requireAuthorizationConsent\":true}', '{\"accessTokenFormat\":\"REFERENCE\",\"accessTokenTimeToLive\":\"PT2H\",\"reuseRefreshTokens\":false,\"idTokenSignatureAlgorithm\":\"RS256\"}');
+INSERT INTO `oauth2_registered_client` VALUES ('3', 'device-app', '2026-08-11 20:00:08', NULL, NULL, '设备码客户端', 'none', 'refresh_token,urn:ietf:params:oauth:grant-type:device_code', NULL, NULL, 'openid,profile,email,read', '{\"requireProofKey\":false,\"requireAuthorizationConsent\":true}', '{\"accessTokenFormat\":\"REFERENCE\",\"accessTokenTimeToLive\":\"PT1H\",\"reuseRefreshTokens\":false}');
+INSERT INTO `oauth2_registered_client` VALUES ('4', 'mobile-app', '2026-08-11 20:00:08', NULL, NULL, '移动应用客户端(PKCE)', 'none', 'authorization_code,refresh_token', 'com.example.mobileapp://oauth2/redirect,http://localhost:8083/callback', 'http://localhost:8083/logout', 'openid,profile,email,read,write', '{\"requireProofKey\":true,\"requireAuthorizationConsent\":true}', '{\"accessTokenFormat\":\"REFERENCE\",\"accessTokenTimeToLive\":\"PT2H\",\"reuseRefreshTokens\":false,\"idTokenSignatureAlgorithm\":\"RS256\"}');
+INSERT INTO `oauth2_registered_client` VALUES ('5', 'service-app', '2026-08-11 20:00:08', '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e', NULL, '服务间调用客户端', 'client_secret_basic', 'client_credentials', NULL, NULL, 'read,write', '{\"requireProofKey\":false,\"requireAuthorizationConsent\":true}', '{\"accessTokenFormat\":\"REFERENCE\",\"accessTokenTimeToLive\":\"PT30M\",\"reuseRefreshTokens\":false}');
+INSERT INTO `oauth2_registered_client` VALUES ('6', 'resource-server', '2026-08-13 09:56:12', '$2a$10$AJZZh81d5bT62axwVBkB9uGWYcavRwqLN7eW4X15DUYc2vqz1mQla', NULL, '资源服务器', 'client_secret_basic', 'client_credentials', '', '', 'read,write', '{\"requireProofKey\":false,\"requireAuthorizationConsent\":false}', '{\"accessTokenFormat\":\"reference\",\"authorizationCodeTimeToLive\":\"PT5M\",\"accessTokenTimeToLive\":\"PT30M\",\"reuseRefreshTokens\":false}');
 
 -- ----------------------------
 -- Table structure for sys_permission

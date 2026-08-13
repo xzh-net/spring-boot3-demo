@@ -1,0 +1,52 @@
+server:
+  port: 9010
+  servlet:
+    context-path: /
+
+spring:
+  profiles:
+    active: dev
+
+  application:
+    name: iam-resource-service
+
+  # ===== MySQL 8 数据源 (Druid 连接池) — 与认证中心同库 (oauth2_server), 仅查询权限数据 =====
+  # 资源服务器不做 Redis 依赖, 身份/权限直接读 MySQL
+  datasource:
+    type: com.alibaba.druid.pool.DruidDataSource
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    druid:
+      initial-size: 5
+      min-idle: 5
+      max-active: 20
+      max-wait: 60000
+      time-between-eviction-runs-millis: 60000
+      min-evictable-idle-time-millis: 300000
+      validation-query: SELECT 1
+      test-while-idle: true
+      test-on-borrow: false
+      test-on-return: false
+      pool-prepared-statements: false
+
+# ===== MyBatis-Plus =====
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: net.xzh.resource.entity
+
+# ===== OAuth2 资源服务器 (Opaque Token introspection) =====
+# 所有 Bearer Token 统一交给授权服务器 /oauth2/introspect 校验
+spring.security.oauth2.resourceserver.opaquetoken.introspection-uri: http://localhost:9000/oauth2/introspect
+spring.security.oauth2.resourceserver.opaquetoken.client-id: resource-server
+spring.security.oauth2.resourceserver.opaquetoken.client-secret: 123456
+
+logging:
+  level:
+    root: INFO
+    net.xzh.resource: DEBUG
+    org.springframework.security: DEBUG

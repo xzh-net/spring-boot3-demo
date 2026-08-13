@@ -74,9 +74,8 @@ net.xzh.authserver
 │   │   ├── AuthorizationRecordController.java  #  授权记录
 │   │   ├── OnlineSessionController.java     #     在线会话管理 API
 │   │   └── HealthController.java            #     健康检查
-│   ├── api/                                 #   业务 API (/api/**, Bearer 保护)
-│   │   ├── ContactsController.java          #     通讯录（资源服务器示例）
-│   │   └── PublicClientController.java       #     公开客户端列表 (/api/public/clients)
+│   ├── api/                                 #  (已清空) 业务/公开 API：一律迁移到 iam-resource-service (:9010)
+│   │   #   认证中心不提供任何业务能力 (原则)，原 PublicClientController (/api/public/clients) 已移除
 │   └── auth/                                #   认证类页面/端点
 │       ├── LoginController.java             #     路由 (/, /admin, /portal)
 │       ├── ConsentController.java           #     授权同意页 (/consent)
@@ -104,7 +103,7 @@ net.xzh.authserver
 │   ├── SessionVO.java
 │   └── SsoSessionVO.java
 └── security/                                # 安全组件（核心）
-    ├── AuthorizationServerConfig.java       #   总配置：4 条 FilterChain + TokenGenerator
+    ├── AuthorizationServerConfig.java       #   总配置：3 条 FilterChain + TokenGenerator
     ├── authentication/                      #   【认证层】纯逻辑，不碰 HTTP
     │   ├── client/                          #     客户端认证逻辑
     │   │   └── DeviceClientAuthenticationProvider.java  # NONE 公共客户端认证（设备码/刷新令牌）
@@ -132,15 +131,18 @@ net.xzh.authserver
         └── SessionExpirationFilter.java              # 会话过期检测 + 自动续签
 ```
 
-### 认证链（4 条 SecurityFilterChain）
+### 认证链（3 条 SecurityFilterChain）
 
 | Order | 匹配路径 | 认证方式 | SecurityContext |
 |-------|---------|---------|-----------------|
-| 1 | `/oauth2/**` `/consent` `/.well-known/**` `/login` `/logout` | OAuth2 客户端 + 表单 + Opaque | Composite (DEVICE→PORTAL) |
-| 2 | `/api/**` | Bearer Opaque introspect | — (STATELESS) |
+| 1 | `/oauth2/**` `/consent` `/.well-known/**` `/login` `/logout` `/userinfo` | OAuth2 客户端 + 表单 | Composite (DEVICE→PORTAL) |
 | 3 | `/admin/**` | 表单 (AdminUserDetailsService) | ADMIN |
 | 5 | `/activate` `/device-login` | 表单 (PortalUserDetailsService) | DEVICE (一次性) |
 
+> 原 Order(2) 资源服务器链 (/api/** Bearer 认证) 已随业务接口迁移到独立项目
+> [iam-resource-service](../iam-resource-service/README.md) (:9010) 一并移除。
+> 认证中心不再提供任何业务/公开 API（含 /api/public/clients 客户端列表，后续由资源服务连接数据库提供）。
+> 认证相关的 /userinfo 仍由本中心提供（Bearer 校验由 UserInfoController 自省实现）。
 > Order(4) 预留。三条表单链通过不同 HttpSession attribute key 隔离 SecurityContext。
 > 门户已拆分为独立项目 (iam-portal-web + iam-portal-service)，不再需要 Order(6) 兜底链。
 
@@ -173,7 +175,7 @@ net.xzh.authserver
 1. **发现端点**：`GET /.well-known/openid-configuration` 获取所有 OAuth2/OIDC 端点地址
 2. **授权**：引导用户到 `/oauth2/authorize?...`（授权码 / 设备码）或直接 `POST /oauth2/token`（密码 / 客户端模式）
 3. **换 token**：`POST /oauth2/token`，按模式带不同参数（授权码带 `code`，密码带 `username/password`，PKCE 带 `code_verifier`，客户端模式带 `client_secret`）
-4. **调 API**：`Authorization: Bearer <access_token>` 调 `/api/**`
+4. **调 API**：`Authorization: Bearer <access_token>` 调业务 API（见 [iam-resource-service](../iam-resource-service/README.md)，:9010，如 `/api/contacts`）
 5. **获取用户信息**：`GET /userinfo`（需 `openid` scope）
 6. **续期 / 退出**：`refresh_token` 续期（Public Client 不可用，用 `prompt=none` 静默重新授权），`/oauth2/revoke` 吊销 token，`/logout?post_logout_redirect_uri=` 销毁会话
 

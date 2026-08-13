@@ -24,9 +24,10 @@ import net.xzh.authserver.security.repository.RedisOAuth2AuthorizationService;
  *   <li><b>Token 端点 (/oauth2/token)</b>：客户端用 authorization_code / refresh_token /
  *       password 等 grant 换取 token 时，从请求参数或 Basic Auth header 中提取 client_id。
  *       仅在响应成功 (HTTP 200) 时更新，避免失败的 token 请求污染 Session。</li>
- *   <li><b>资源请求 (携带 Bearer Token)</b>：客户端访问 /api/** 或 /userinfo 时，
+ *   <li><b>资源请求 (携带 Bearer Token)</b>：客户端访问 /userinfo 时，
  *       解析 Authorization 头中的 Bearer Token，通过 RedisOAuth2AuthorizationService
- *       反查对应的 OAuth2Authorization，提取 registeredClientId。</li>
+ *       反查对应的 OAuth2Authorization，提取 registeredClientId。
+ *       (受 Bearer 保护的 /api/** 业务接口已迁移至 iam-resource-service, 不再经过本认证中心)</li>
  * </ol>
  * </p>
  *
@@ -77,17 +78,17 @@ public final class ActiveClientTrackingFilter extends OncePerRequestFilter {
             return;
         }
         // 【关键】响应已提交时不能创建 session (Spring Session 限制)
-        // 这在 STATELESS 资源服务器链 (/api/**) 上会发生: 控制器返回响应后 filter 才执行到这里
-        // 此时若强制 request.getSession(true) 会抛 IllegalStateException, 导致 8080 客户端请求挂起
+        // 该 Filter 属于 after-filter, 控制器返回响应后才执行到这里,
+        // 此时若强制 request.getSession(true) 会抛 IllegalStateException, 导致客户端请求挂起
         if (response.isCommitted()) {
             log.debug("[ActiveClientTracking] 响应已提交, 跳过 session 写入 clientId={}", clientId);
             return;
         }
         try {
-            // getSession(false) 不强制创建: STATELESS 链上没有 session 时跳过, 避免破坏无状态语义
+            // getSession(false) 不强制创建: 无 session 时跳过, 避免无谓地创建会话
             HttpSession session = request.getSession(false);
             if (session == null) {
-                log.debug("[ActiveClientTracking] 无可用 session, 跳过 clientId={} (STATELESS 链)", clientId);
+                log.debug("[ActiveClientTracking] 无可用 session, 跳过 clientId={}", clientId);
                 return;
             }
             String existingId = (String) session.getAttribute(ACTIVE_CLIENT_ID_ATTR);
