@@ -44,6 +44,7 @@ import org.springframework.security.oauth2.server.authorization.token.OAuth2Toke
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenGenerator;
 
 import lombok.extern.slf4j.Slf4j;
+import net.xzh.authserver.security.ClientUserPolicyService;
 import net.xzh.authserver.security.web.converter.PasswordGrantAuthenticationConverter;
 
 /**
@@ -86,17 +87,22 @@ public class PasswordGrantAuthenticationProvider implements AuthenticationProvid
     /** 令牌生成器，根据 TokenSettings.accessTokenFormat 选择生成策略 */
     private final OAuth2TokenGenerator<?> tokenGenerator;
 
+    /** 令牌签发准入策略 (客户端 × 身份类型) */
+    private final ClientUserPolicyService clientUserPolicyService;
+
     public PasswordGrantAuthenticationProvider(
             RegisteredClientRepository registeredClientRepository,
             UserDetailsService userDetailsService,
             PasswordEncoder passwordEncoder,
             OAuth2AuthorizationService authorizationService,
-            OAuth2TokenGenerator<?> tokenGenerator) {
+            OAuth2TokenGenerator<?> tokenGenerator,
+            ClientUserPolicyService clientUserPolicyService) {
         this.registeredClientRepository = registeredClientRepository;
         this.userDetailsService = userDetailsService;
         this.passwordEncoder = passwordEncoder;
         this.authorizationService = authorizationService;
         this.tokenGenerator = tokenGenerator;
+        this.clientUserPolicyService = clientUserPolicyService;
     }
 
     @Override
@@ -132,6 +138,9 @@ public class PasswordGrantAuthenticationProvider implements AuthenticationProvid
             throw new OAuth2AuthenticationException(
                     new OAuth2Error(OAuth2ErrorCodes.INVALID_GRANT, "用户名或密码错误", ERROR_URI));
         }
+
+        // 令牌签发准入策略: 客户端 × 身份类型不匹配则拒绝签发 (不产生任何 token/授权记录)
+        clientUserPolicyService.check(registeredClient, user.getUsername());
 
         TokenSettings tokenSettings = registeredClient.getTokenSettings();
         Instant now = Instant.now();

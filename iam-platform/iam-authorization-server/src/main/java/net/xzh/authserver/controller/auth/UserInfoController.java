@@ -14,14 +14,23 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+
+import lombok.extern.slf4j.Slf4j;
+import net.xzh.authserver.entity.SysUser;
+import net.xzh.authserver.mapper.SysUserMapper;
+
+@Slf4j
 @RestController
 @RequestMapping
 public class UserInfoController {
 
     private final OpaqueTokenIntrospector introspector;
+    private final SysUserMapper sysUserMapper;
 
-    public UserInfoController(OpaqueTokenIntrospector introspector) {
+    public UserInfoController(OpaqueTokenIntrospector introspector, SysUserMapper sysUserMapper) {
         this.introspector = introspector;
+        this.sysUserMapper = sysUserMapper;
     }
 
     @GetMapping("/userinfo")
@@ -56,11 +65,11 @@ public class UserInfoController {
             for (String s : scope.split(" ")) {
                 switch (s) {
                     case "profile" -> {
-                        result.put("preferred_username", principal.getName());
+                        result.put("preferred_username", resolveUsername(principal.getName()));
                         result.put("updated_at", attrs.get("exp"));
                     }
                     case "email" -> {
-                        result.put("email", principal.getName() + "@example.com");
+                        result.put("email", resolveUsername(principal.getName()) + "@example.com");
                         result.put("email_verified", true);
                     }
                     case "openid" -> { /* sub 已添加 */ }
@@ -69,5 +78,18 @@ public class UserInfoController {
             }
         }
         return result;
+    }
+
+    /** 按业务用户编码反查真实登录用户名 (查不到时降级返回 user_code)。 */
+    private String resolveUsername(String userCode) {
+        try {
+            SysUser u = sysUserMapper.selectOne(new QueryWrapper<SysUser>().eq("user_code", userCode));
+            if (u != null && u.getUsername() != null && !u.getUsername().isBlank()) {
+                return u.getUsername();
+            }
+        } catch (Exception e) {
+            log.debug("反查用户名失败 userCode={}: {}", userCode, e.getMessage());
+        }
+        return userCode;
     }
 }

@@ -18,10 +18,4 @@ public class LoginController {
     public String root() {
         return "redirect:http://localhost:8000/";
     }
-
-    /** 管理后台入口, 渲染 admin/index 模板 */
-    @GetMapping("/admin")
-    public String adminRoot() {
-        return "admin/index";
-    }
 }

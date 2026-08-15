@@ -16,6 +16,9 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.authorization.AuthorizationDecision;
+import org.springframework.security.authorization.AuthorizationManager;
+import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -28,16 +31,16 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
-import org.springframework.security.oauth2.server.authorization.OAuth2Authorization;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationConsentService;
-import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationService;
-import org.springframework.security.oauth2.core.AuthorizationGrantType;
+import org.springframework.security.oauth2.server.authorization.authentication.OAuth2AuthorizationCodeAuthenticationProvider;
 import org.springframework.security.oauth2.server.authorization.authentication.OAuth2DeviceCodeAuthenticationProvider;
+import org.springframework.security.oauth2.server.authorization.authentication.OAuth2RefreshTokenAuthenticationProvider;
 import org.springframework.security.oauth2.server.authorization.authentication.OAuth2TokenIntrospectionAuthenticationProvider;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.config.annotation.web.configuration.OAuth2AuthorizationServerConfiguration;
@@ -79,14 +82,23 @@ import com.nimbusds.jose.proc.SecurityContext;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import lombok.extern.slf4j.Slf4j;
+import net.xzh.authserver.config.AuthServerProperties;
+import net.xzh.authserver.entity.SysUser;
+import net.xzh.authserver.mapper.SysUserMapper;
+import net.xzh.authserver.security.ClientUserPolicyService;
 import net.xzh.authserver.security.repository.RedisOAuth2AuthorizationService;
 import net.xzh.authserver.security.authentication.client.DeviceClientAuthenticationProvider;
 import net.xzh.authserver.security.authentication.grant.DeviceCodeGrantAuthenticationProvider;
 import net.xzh.authserver.security.authentication.grant.PasswordGrantAuthenticationProvider;
+import net.xzh.authserver.security.authentication.grant.PolicyAwareAuthorizationCodeAuthenticationProvider;
+import net.xzh.authserver.security.authentication.grant.PolicyAwareRefreshTokenAuthenticationProvider;
 import net.xzh.authserver.security.session.RedisSessionRegistry;
 import net.xzh.authserver.security.token.EnrichedOAuth2TokenIntrospectionAuthenticationProvider;
+import net.xzh.authserver.security.token.RedisOpaqueTokenIntrospector;
 import net.xzh.authserver.security.web.ActiveClientTrackingFilter;
+import net.xzh.authserver.security.web.AuthorizePolicyFilter;
 import net.xzh.authserver.security.web.CompositeSecurityContextRepository;
 import net.xzh.authserver.security.web.SessionExpirationFilter;
 import net.xzh.authserver.security.web.converter.DeviceClientAuthenticationConverter;
@@ -97,65 +109,47 @@ import net.xzh.authserver.security.web.converter.PasswordGrantAuthenticationConv
  * <p>
  * 职责：
  * <ol>
- * <li>定义 4 条 SecurityFilterChain，按优先级处理不同的请求路径。</li>
+ * <li>定义 3 条 SecurityFilterChain，按优先级处理不同的请求路径。</li>
  * <li>配置 OAuth2 授权服务器端点（授权码、设备码、令牌、内省、撤销、JWKS、OIDC）。</li>
- * <li>配置 TokenGenerator 链路：OAuth2AccessTokenGenerator → JwtGenerator，优先 Opaque
- * 格式。</li>
- * <li>注册自定义 AuthenticationProvider（密码授权、设备码授权、设备码客户端认证）。</li>
- * <li>配置客户端认证 Converter 链路，支持 NONE（公共客户端）和 CLIENT_SECRET_BASIC。</li>
- * <li>配置 OIDC UserInfo 和 ClientRegistration 端点。</li>
- * <li>管理安全上下文隔离：OAuth2 授权登录/管理员/设备验证使用独立的 SecurityContext Key。</li>
+ * <li>配置 TokenGenerator 链路：OAuth2AccessTokenGenerator → JwtGenerator，access_token 固定为 Opaque 格式，id_token 为 JWT。</li>
+ * <li>注册自定义认证 Provider（密码授权、设备码授权、设备码客户端认证、增强内省）。</li>
+ * <li>管理安全上下文隔离：OAuth2 授权登录 / 设备验证使用独立的 SecurityContext Key。</li>
  * </ol>
  *
  * 3 条 FilterChain 概览：
  * <ul>
- * <li><b>Order(1)</b> — OAuth2 端点 + 登录页（授权、令牌、内省、撤销、设备码、JWKS、OIDC、/login、/userinfo）</li>
- * <li><b>Order(3)</b> — 管理员后台 /admin/**（独立 UserDetailsService + 表单登录）</li>
- * <li><b>Order(5)</b> — 设备验证 /activate、/device-login（独立 UserDetailsService）</li>
+ * <li><b>Order(1)</b> — OAuth2 认证链：OAuth2 端点 + 登录页（授权、令牌、内省、撤销、设备码、JWKS、OIDC、/login、/logout、/userinfo）</li>
+ * <li><b>Order(2)</b> — 管理 REST API 链：/api/admin/**（Bearer + ROLE_ADMIN + 白名单客户端）</li>
+ * <li><b>Order(3)</b> — 设备验证链：/activate、/device-login（独立 SecurityContext Key）</li>
  * </ul>
- * <p>
- * 原 Order(2) 资源服务器链 (/api/** Bearer 认证) 已随业务接口迁移到独立项目
- * iam-resource-service (:9010) 一并移除。认证中心遵循"不提供任何业务能力"原则，
- * 不再承载任何 /api/** 业务或公开接口（含原 PublicClientController 客户端列表）。
- * 认证相关端点 (如 /userinfo) 由本中心继续提供。
- * </p>
- * <p>
- * 门户已拆分为独立项目 (iam-portal-web 8000 + iam-portal-service 8080)，通过 OAuth2 授权码流程接入。
- * 认证中心不再包含门户专属安全链，/login 和 /logout 由 Order(1) 链统一处理。
  */
 @Slf4j
 @Configuration
 @EnableWebSecurity
 public class AuthorizationServerConfig {
 
-	/** OAuth2 授权码流程登录态的 SecurityContext 在会话中的属性键（历史命名 PORTAL，实际用于 /login 表单登录会话） */
+	/** OAuth2 授权码登录态的 SecurityContext 在会话中的属性键 */
 	public static final String PORTAL_CONTEXT_KEY = "PORTAL_SECURITY_CONTEXT";
-
-	/** 管理员后台的 SecurityContext 在会话中的属性键 */
-	static final String ADMIN_CONTEXT_KEY = "ADMIN_SECURITY_CONTEXT";
 
 	/** 设备验证流程的 SecurityContext 在会话中的属性键 */
 	static final String DEVICE_CONTEXT_KEY = "DEVICE_SECURITY_CONTEXT";
 
-	/** OAuth2 令牌的预期受众（用于 introspection 和 UserInfo 的 aud claim） */
+	/** OAuth2 令牌的预期受众（用于 introspection 的 aud claim） */
 	static final String CONTACTS_API_AUD = "contacts-api";
 
-	/** 创建使用指定 key 的 HttpSessionSecurityContextRepository，隔离各链路的安全上下文 */
-	private static HttpSessionSecurityContextRepository contextRepo(String key) {
-		HttpSessionSecurityContextRepository repo = new HttpSessionSecurityContextRepository();
-		repo.setSpringSecurityContextKey(key);
-		return repo;
+	private final AuthServerProperties authServerProperties;
+
+	public AuthorizationServerConfig(AuthServerProperties authServerProperties) {
+		this.authServerProperties = authServerProperties;
 	}
 
+	// ------------------------------------------------------------------
+	// Bean 组件
+	// ------------------------------------------------------------------
+
 	/**
-	 * 基于 Redis 的 SessionRegistry Bean。
-	 * <p>
-	 * 使用 {@link RedisSessionRegistry} 将会话跟踪信息持久化到 Redis，
-	 * 确保服务器重启后管理端/客户端在线用户列表数据不丢失。
-	 * <ul>
-	 *   <li>HttpSession 数据通过 Spring Session 持久化到 Redis (登录状态不丢失)</li>
-	 *   <li>SessionRegistry 跟踪索引也持久化到 Redis (在线列表不丢失)</li>
-	 * </ul>
+	 * 基于 Redis 的 SessionRegistry：会话跟踪索引持久化到 Redis，
+	 * 服务器重启后在线用户列表不丢失。
 	 */
 	@Bean
 	public RedisSessionRegistry sessionRegistry(StringRedisTemplate redisTemplate) {
@@ -163,15 +157,11 @@ public class AuthorizationServerConfig {
 		return new RedisSessionRegistry(redisTemplate);
 	}
 
-	/** 将 HttpSession 事件转发给 SessionRegistry，确保会话生命周期正确跟踪 */
+	/** 将 HttpSession 事件转发给 SessionRegistry，保证会话生命周期正确跟踪 */
 	@Bean
 	public HttpSessionEventPublisher httpSessionEventPublisher() {
 		return new HttpSessionEventPublisher();
 	}
-
-	// ------------------------------------------------------------------
-	// 密钥 & 编码器
-	// ------------------------------------------------------------------
 
 	@Bean
 	public RSAKey rsaKey() {
@@ -233,10 +223,9 @@ public class AuthorizationServerConfig {
 				new OAuth2RefreshTokenGenerator());
 	}
 
-	// ------------------------------------------------------------------
-	// DaoAuthenticationProvider（OAuth2 授权登录 + 管理员，各链路按需注入）
-	// ------------------------------------------------------------------
-
+	/**
+	 * 授权登录用户的 DaoAuthenticationProvider，供 OAuth2 授权登录与设备验证链路共用。
+	 */
 	@Bean("portalDaoProvider")
 	public DaoAuthenticationProvider portalDaoProvider(
 			@Qualifier("portalUserDetailsService") UserDetailsService portalUserDetailsService,
@@ -247,19 +236,79 @@ public class AuthorizationServerConfig {
 		return provider;
 	}
 
-	@Bean("adminDaoProvider")
-	public DaoAuthenticationProvider adminDaoProvider(
-			@Qualifier("adminUserDetailsService") UserDetailsService adminUserDetailsService,
-			PasswordEncoder passwordEncoder) {
-		DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
-		provider.setUserDetailsService(adminUserDetailsService);
-		provider.setPasswordEncoder(passwordEncoder);
-		return provider;
+	/**
+	 * 自定义 Token Customizer: 为 access_token 设置 aud claim, 为 id_token 设置 roles +
+	 * preferred_username. 处理两种 principal 类型: UserDetails (授权码) 和
+	 * UsernamePasswordAuthenticationToken (密码/刷新).
+	 * <p>
+	 * V6.2: principal name 为业务用户编码 user_code (令牌 sub), roles 来自资源中心 RBAC;
+	 * preferred_username 保持真实登录用户名 (按 user_code 反查 iam_identity.sys_user)。
+	 */
+	@Bean
+	public OAuth2TokenCustomizer<JwtEncodingContext> jwtTokenCustomizer(SysUserMapper sysUserMapper) {
+		return context -> {
+			String tokenType = context.getTokenType().getValue();
+			if ("access_token".equals(tokenType)) {
+				context.getClaims().claim("aud", Set.of(CONTACTS_API_AUD));
+			}
+			if (context.getAuthorization() == null || context.getPrincipal() == null)
+				return;
+			Object principal = context.getPrincipal();
+			String userCode = null;
+			Collection<? extends GrantedAuthority> authorities = List.of();
+			if (principal instanceof UserDetails user) {
+				userCode = user.getUsername();
+				authorities = user.getAuthorities();
+			} else if (principal instanceof UsernamePasswordAuthenticationToken upat) {
+				Object inner = upat.getPrincipal();
+				if (inner instanceof UserDetails innerUser) {
+					userCode = innerUser.getUsername();
+					authorities = innerUser.getAuthorities();
+				} else if (inner != null) {
+					userCode = inner.toString();
+					authorities = upat.getAuthorities();
+				}
+			}
+			final String codeFinal = userCode;
+			final var authFinal = authorities;
+			if (codeFinal != null) {
+				context.getClaims().claims(claims -> {
+					claims.put("roles", authFinal.stream().map(a -> a.getAuthority()).toList());
+					if ("id_token".equals(tokenType)) {
+						claims.put("preferred_username", resolveUsername(sysUserMapper, codeFinal));
+					}
+				});
+			}
+		};
 	}
 
 	/**
-	 * 【关键】设置最高优先级，确保 OAuth2 请求最先被这条链处理
+	 * 按业务用户编码反查真实登录用户名 (id_token preferred_username 用, 查不到时降级返回 user_code)。
 	 */
+	private static String resolveUsername(SysUserMapper sysUserMapper, String userCode) {
+		try {
+			SysUser u = sysUserMapper.selectOne(new QueryWrapper<SysUser>().eq("user_code", userCode));
+			if (u != null && u.getUsername() != null && !u.getUsername().isBlank()) {
+				return u.getUsername();
+			}
+		} catch (Exception e) {
+			// ignore, fallback to user_code
+		}
+		return userCode;
+	}
+
+	/** 全局 TokenSettings: 固定 Opaque 格式, 不允许客户端覆盖 */
+	@Bean
+	public TokenSettings tokenSettings() {
+		return TokenSettings.builder().accessTokenFormat(OAuth2TokenFormat.REFERENCE)
+				.accessTokenTimeToLive(Duration.ofHours(2)).authorizationCodeTimeToLive(Duration.ofMinutes(5))
+				.reuseRefreshTokens(true).build();
+	}
+
+	// ------------------------------------------------------------------
+	// 链 1: OAuth2 认证链（最高优先级）
+	// ------------------------------------------------------------------
+
 	@Bean
 	@Order(1)
 	public SecurityFilterChain authorizationServerSecurityFilterChain(HttpSecurity http,
@@ -268,7 +317,7 @@ public class AuthorizationServerConfig {
 			@Qualifier("portalUserDetailsService") UserDetailsService portalUserDetailsService,
 			PasswordEncoder passwordEncoder,
 			@Qualifier("portalDaoProvider") DaoAuthenticationProvider portalDaoProvider,
-			SessionRegistry sessionRegistry) throws Exception {
+			SessionRegistry sessionRegistry, ClientUserPolicyService clientUserPolicyService) throws Exception {
 
 		// 1. 准备自定义的认证组件
 		// 创建用于设备授权流程的客户端认证转换器，指定其处理的端点路径
@@ -283,8 +332,6 @@ public class AuthorizationServerConfig {
 
 		// 3. 开始配置 HttpSecurity
 		// 【目的】明确指定这条安全链处理 OAuth2/OIDC 端点 + 登录流程
-		// 【注意】/login.html 和 /login 加入此链: 门户链 (原 Order 6) 删除后,
-		//        登录页和表单提交端点需要由本链处理, 否则 formLogin().loginProcessingUrl("/login") 不生效
 		http.securityMatcher("/oauth2/authorize", "/oauth2/token", "/oauth2/introspect", "/oauth2/revoke",
 				"/oauth2/device_authorization", "/oauth2/device/verify", "/oauth2/jwks", "/oauth2/connect/register",
 				"/consent", "/logout", "/login.html", "/login",
@@ -292,20 +339,18 @@ public class AuthorizationServerConfig {
 						authzConfigurer, as -> as
 								// 3.1 配置授权服务器的各项设置
 								.authorizationServerSettings(
-											AuthorizationServerSettings.builder().issuer("http://localhost:9000") // 设置发行者标识
-													.authorizationEndpoint("/oauth2/authorize") // 授权端点
-													.tokenEndpoint("/oauth2/token") // 令牌端点
-													.deviceAuthorizationEndpoint("/oauth2/device_authorization")
-													.deviceVerificationEndpoint("/oauth2/device/verify")
-													.oidcUserInfoEndpoint("/userinfo")
-													.oidcClientRegistrationEndpoint("/oauth2/connect/register")
-													// OIDC RP-Initiated Logout 端点配置。
-													// 注意: 实际的 /logout 由 LogoutController 处理 (partialLogout + 重定向),
-													// OidcLogoutEndpointFilter 的匹配路径设为 /oidc/logout 以避免拦截 /logout 请求。
-													// OIDC discovery 中的 end_session_endpoint 仍指向 /oidc/logout,
-													// 但 iam-portal-service 和各客户端均直接使用 /logout, 不依赖 discovery。
-													.oidcLogoutEndpoint("/oidc/logout")
-													.build())
+										AuthorizationServerSettings.builder().issuer("http://localhost:9000") // 设置发行者标识
+												.authorizationEndpoint("/oauth2/authorize") // 授权端点
+												.tokenEndpoint("/oauth2/token") // 令牌端点
+												.deviceAuthorizationEndpoint("/oauth2/device_authorization")
+												.deviceVerificationEndpoint("/oauth2/device/verify")
+												.oidcUserInfoEndpoint("/userinfo")
+												.oidcClientRegistrationEndpoint("/oauth2/connect/register")
+												// OIDC RP-Initiated Logout 端点。
+												// OidcLogoutEndpointFilter 的匹配路径设为 /oidc/logout 以避免拦截
+												// /logout 请求（/logout 由 LogoutController 处理 partialLogout + 重定向）。
+												.oidcLogoutEndpoint("/oidc/logout")
+												.build())
 								.authorizationEndpoint(endpoint -> endpoint.consentPage("/consent")) // 指定用户同意授权的页面路径
 								.clientAuthentication(clientAuth -> clientAuth
 										// 【目的】注入自定义的客户端认证组件，以支持设备授权流程
@@ -317,14 +362,31 @@ public class AuthorizationServerConfig {
 											// 移除默认的设备码认证提供者
 											providers
 													.removeIf(p -> p instanceof OAuth2DeviceCodeAuthenticationProvider);
-											// 添加自定义的密码模式认证提供者
+											// 令牌签发准入策略: 移除默认的授权码/刷新令牌提供者,
+											// 换成策略感知包装器 (签发前先做"客户端 × 身份类型"校验)
+											providers
+													.removeIf(p -> p instanceof OAuth2AuthorizationCodeAuthenticationProvider);
+											providers
+													.removeIf(p -> p instanceof OAuth2RefreshTokenAuthenticationProvider);
+											// 添加自定义的密码模式认证提供者 (内置准入校验)
 											providers.add(new PasswordGrantAuthenticationProvider(
 													registeredClientRepository, portalUserDetailsService,
-													passwordEncoder, authorizationService, tokenGenerator));
-											// 添加自定义的设备码认证提供者
+													passwordEncoder, authorizationService, tokenGenerator,
+													clientUserPolicyService));
+											// 添加自定义的设备码认证提供者 (内置准入校验)
 											providers.add(new DeviceCodeGrantAuthenticationProvider(
 													registeredClientRepository, authorizationService,
-													portalUserDetailsService, tokenGenerator));
+													portalUserDetailsService, tokenGenerator,
+													clientUserPolicyService));
+											// 授权码兑换 / 刷新令牌: 包装 SAS 默认提供者, 带准入策略
+											providers.add(new PolicyAwareAuthorizationCodeAuthenticationProvider(
+													new OAuth2AuthorizationCodeAuthenticationProvider(
+															authorizationService, tokenGenerator),
+													clientUserPolicyService, authorizationService));
+											providers.add(new PolicyAwareRefreshTokenAuthenticationProvider(
+													new OAuth2RefreshTokenAuthenticationProvider(
+															authorizationService, tokenGenerator),
+													clientUserPolicyService, authorizationService));
 										})
 										// 【目的】组合多种认证转换器，确保能处理密码模式、授权码、刷新令牌等多种请求
 										.accessTokenRequestConverter(new DelegatingAuthenticationConverter(
@@ -349,23 +411,19 @@ public class AuthorizationServerConfig {
 
 		// 4. 注册全局的认证提供者
 		// 用于处理普通的表单登录（如 /login 端点）
-		http.authenticationProvider(portalDaoProvider);
-		// 【说明】原 OpaqueTokenAuthenticationProvider (Bearer 资源认证) 随 Order(2) 资源服务器链一并移除:
-		//       认证中心不再提供受 Bearer 保护的 /api/** 业务接口;
-		//       /userinfo 由 UserInfoController 直接注入 RedisOpaqueTokenIntrospector 自省, 无需经 Spring Security.
-
-		// 5. 配置其他安全细节
-		http.exceptionHandling(ex -> ex
-				// 处理未认证的 HTML 请求，重定向到登录页
-				.defaultAuthenticationEntryPointFor(new LoginUrlAuthenticationEntryPoint("/login.html"),
-						new MediaTypeRequestMatcher(MediaType.TEXT_HTML)))
+		http.authenticationProvider(portalDaoProvider)
+				// 5. 配置其他安全细节
+				.exceptionHandling(ex -> ex
+						// 处理未认证的 HTML 请求，重定向到登录页
+						.defaultAuthenticationEntryPointFor(new LoginUrlAuthenticationEntryPoint("/login.html"),
+								new MediaTypeRequestMatcher(MediaType.TEXT_HTML)))
 				.authorizeHttpRequests(auth -> auth
 						// 【目的】放行所有 OAuth2 端点和登录页，让请求能到达对应的过滤器进行处理
 						.requestMatchers("/login.html", "/login", "/error", "/.well-known/openid-configuration",
-							"/.well-known/oauth-authorization-server", "/oauth2/token", "/oauth2/introspect",
-							"/oauth2/revoke", "/oauth2/device_authorization", "/oauth2/jwks",
-							"/oauth2/connect/register", "/userinfo", "/logout")
-					.permitAll()
+								"/.well-known/oauth-authorization-server", "/oauth2/token", "/oauth2/introspect",
+								"/oauth2/revoke", "/oauth2/device_authorization", "/oauth2/jwks",
+								"/oauth2/connect/register", "/userinfo", "/logout")
+						.permitAll()
 						// 其他所有请求都需要认证
 						.anyRequest().authenticated())
 				.formLogin(form -> form.loginPage("/login.html") // 自定义登录页面
@@ -387,206 +445,68 @@ public class AuthorizationServerConfig {
 				// 在 SecurityContextHolderFilter 之后添加自定义的会话过期过滤器
 				.addFilterAfter(new SessionExpirationFilter(sessionRegistry), SecurityContextHolderFilter.class)
 				// 跟踪当前活跃客户端 (解析 Bearer Token, 存入 Session)
-				.addFilterAfter(new ActiveClientTrackingFilter(authorizationService), SecurityContextHolderFilter.class);
+				.addFilterAfter(new ActiveClientTrackingFilter(authorizationService), SecurityContextHolderFilter.class)
+				// 【增强】授权端点发码前先做"客户端 × 身份类型"准入:
+				// 不合规直接回认证中心登录页 /login.html?error, 不向客户端签发授权码
+				// (过滤器内部用 /oauth2/authorize 匹配器限定范围, 不影响令牌等其它端点)
+				.addFilterAfter(new AuthorizePolicyFilter(clientUserPolicyService), SecurityContextHolderFilter.class);
 
 		return http.build();
 	}
 
+	// ------------------------------------------------------------------
+	// 链 2: 管理 REST API 链
+	// ------------------------------------------------------------------
+
 	/**
-	 * 【关键】设置优先级为 3，确保 /admin/** 请求优先被此链处理
+	 * 认证中心管理 REST API 安全链。
+	 * <p>
+	 * 保护 {@code /api/admin/**} 四域管理接口（用户 / 客户端 / 会话 / 授权记录）。
+	 * 仅接受 {@code authserver.admin-client-ids} 白名单内客户端签发的令牌访问，
+	 * 且令牌主体需具备 {@code ROLE_ADMIN}，实现管理资源的客户端级隔离保护。
 	 */
+	@Bean
+	@Order(2)
+	public SecurityFilterChain adminApiSecurityFilterChain(HttpSecurity http,
+			RedisOpaqueTokenIntrospector redisOpaqueTokenIntrospector) throws Exception {
+		// 1. 配置请求匹配与授权规则
+		// 【目的】明确指定这条安全链只处理 /api/admin/** 管理接口
+		http.securityMatcher("/api/admin/**")
+				// 授权决策: 令牌需来自白名单客户端且具备 ROLE_ADMIN
+				.authorizeHttpRequests(auth -> auth
+						.requestMatchers("/api/admin/**")
+						.access(adminAccessManager(authServerProperties.getAdminClientIds())))
+
+				// 2. 配置 OAuth2 资源服务器
+				// 【目的】用本地 Redis 自省器校验 Bearer Token, 认证中心不依赖远程 introspection 调用
+				.oauth2ResourceServer(rs -> rs.opaqueToken(token -> token.introspector(redisOpaqueTokenIntrospector)))
+
+				// 3. 配置异常处理
+				// 【目的】认证/授权失败分别以 JSON 401 / 403 返回, 避免与认证链的登录页跳转冲突
+				.exceptionHandling(ex -> ex
+						.authenticationEntryPoint((req, res, e) -> {
+							res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+							res.setContentType("application/json;charset=UTF-8");
+							res.getWriter().write("{\"code\":401,\"msg\":\"未认证或令牌无效\",\"data\":null}");
+						})
+						.accessDeniedHandler((req, res, e) -> {
+							res.setStatus(HttpServletResponse.SC_FORBIDDEN);
+							res.setContentType("application/json;charset=UTF-8");
+							res.getWriter().write("{\"code\":403,\"msg\":\"无权访问\",\"data\":null}");
+						}))
+
+				// 4. 配置 CSRF
+				// 【目的】管理接口为 Bearer Token 鉴权, 无会话 Cookie, 禁用 CSRF 防护
+				.csrf(csrf -> csrf.disable());
+		return http.build();
+	}
+
+	// ------------------------------------------------------------------
+	// 链 3: 设备验证链
+	// ------------------------------------------------------------------
+
 	@Bean
 	@Order(3)
-	public SecurityFilterChain adminSecurityFilterChain(HttpSecurity http,
-			@Qualifier("adminDaoProvider") DaoAuthenticationProvider adminDaoProvider,
-			RedisOAuth2AuthorizationService authorizationService,
-			SessionRegistry sessionRegistry) throws Exception {
-
-		// 1. 配置请求匹配与认证提供者
-		// 【目的】明确指定这条安全链只处理 /admin/** 开头的请求
-		// 【注意】注入了专门为管理员配置的 DaoAuthenticationProvider，使用独立的用户详情服务
-		http.securityMatcher("/admin/**").authenticationProvider(adminDaoProvider)
-
-				// 2. 配置异常处理
-				// 【目的】当未认证的用户访问受保护的管理员页面时，重定向到管理员专属的登录页
-				.exceptionHandling(ex -> ex.defaultAuthenticationEntryPointFor(
-						new LoginUrlAuthenticationEntryPoint("/admin/login.html"),
-						new MediaTypeRequestMatcher(MediaType.TEXT_HTML)))
-
-				// 3. 配置安全上下文与会话管理
-				// 【目的】使用独立的 SecurityContext Key，将管理员会话与普通用户会话隔离
-				.securityContext(sc -> sc.securityContextRepository(contextRepo(ADMIN_CONTEXT_KEY)))
-				// 【目的】配置会话并发控制，使用全局的 SessionRegistry 跟踪会话，不限制最大会话数
-				.sessionManagement(sm -> sm.sessionConcurrency(sc -> sc.sessionRegistry(sessionRegistry)
-						.maximumSessions(-1).expiredUrl("/admin/login.html?expired")))
-				// 【注意】在用户名密码过滤器之前添加自定义的会话过期过滤器
-				.addFilterBefore(new SessionExpirationFilter(sessionRegistry),
-						UsernamePasswordAuthenticationFilter.class)
-
-				// 4. 配置授权规则
-				// 【目的】放行管理员登录相关页面，要求所有 /admin/** 请求必须具有 ADMIN 角色
-				.authorizeHttpRequests(auth -> auth.requestMatchers("/admin/login.html", "/admin/login", "/admin/error")
-						.permitAll().requestMatchers("/admin/**").hasRole("ADMIN"))
-
-				// 5. 配置表单登录
-				// 【目的】指定管理员的登录页面、登录处理 URL 以及登录成功/失败后的跳转地址
-				.formLogin(form -> form.loginPage("/admin/login.html").loginProcessingUrl("/admin/login")
-						.defaultSuccessUrl("/admin", true).failureUrl("/admin/login.html?error").permitAll())
-
-				// 6. 配置登出
-				// 【目的】管理员登出时只清理 ADMIN_SECURITY_CONTEXT, 保留同一会话中的 OAuth2/设备登录态
-				// 【在线会话同步】同步撤销该管理员通过授权码流程产生的 OAuth2Authorization
-				// 【注意】必须显式 .invalidateHttpSession(false).clearAuthentication(false),
-				//       否则 LogoutConfigurer 自动注入的 SecurityContextLogoutHandler
-				//       会在我们自定义 handler 之前就调用 session.invalidate(), 导致部分登出失效
-				.logout(logout -> logout.logoutUrl("/admin/logout")
-						.invalidateHttpSession(false)
-						.clearAuthentication(false)
-						.addLogoutHandler((HttpServletRequest req, HttpServletResponse res, Authentication auth) -> {
-							if (auth != null && auth.getName() != null) {
-								revokeAuthorizationCodeGrantsForPrincipal(authorizationService, auth.getName());
-							}
-							partialLogout(sessionRegistry, req, ADMIN_CONTEXT_KEY);
-						})
-						.logoutSuccessHandler((req, res, auth) -> {
-							res.setContentType("application/json;charset=UTF-8");
-							res.getWriter().write("{\"authenticated\":false}");
-						}).permitAll())
-
-				// 7. 配置 CSRF
-				// 【注意】为管理员后台禁用了 CSRF 防护
-				.csrf(csrf -> csrf.disable());
-
-		return http.build();
-	}
-
-	/**
-	 * 允许的 post-logout 重定向目标. 防止 open-redirect 漏洞:
-	 *  1. 本站同源路径 (以 / 开头, 不包含 // 协议跳)
-	 *  2. OAuth2 回调客户端地址 (http://localhost:8000~8084, http://localhost:9000)
-	 */
-	private static final Set<String> ALLOWED_REDIRECT_HOSTS = Set.of(
-					"localhost:8000", "localhost:8080", "localhost:8081", "localhost:8082", "localhost:8083", "localhost:8084", "localhost:9000",
-					"127.0.0.1:8000", "127.0.0.1:8080", "127.0.0.1:8081", "127.0.0.1:8082", "127.0.0.1:8083", "127.0.0.1:8084", "127.0.0.1:9000"
-	);
-
-	/** 检查退出跳转 URL 是否在白名单内（同源路径自动通过） */
-	private static boolean isRedirectAllowed(String url) {
-		if (url == null || url.isEmpty())
-			return false;
-		try {
-			if (url.startsWith("/") && !url.startsWith("//"))
-				return true;
-			URI u = URI.create(url);
-			String host = u.getHost();
-			int port = u.getPort();
-			if (host == null)
-				return false;
-			String key = (port <= 0) ? host : host + ":" + port;
-			return ALLOWED_REDIRECT_HOSTS.contains(key);
-		} catch (Exception ignore) {
-			return false;
-		}
-	}
-
-	/**
-	 * 部分登出: 只移除指定的 SecurityContext 属性, 避免误删同一会话中其他链路的登录态.
-	 *
-	 * <p>背景: OAuth2 授权登录(PORTAL)、管理员(ADMIN)、设备验证(DEVICE)三条链路共用同一个
-	 * HttpSession(都在 localhost:9000, 共享 JSESSIONID cookie),
-	 * SecurityContext 通过不同的 session 属性 key 隔离。
-	 * 如果直接调用 {@code session.invalidate()} 会销毁所有链路的登录态，
-	 * 比如在 8083 客户端 OIDC 登出回调触发 /logout 时，管理员会话也会被连带踢掉。</p>
-	 *
-	 * <p>处理步骤:</p>
-	 * <ol>
-	 *   <li>从 session 中移除传入的 contextKeys</li>
-	 *   <li>检查 session 中是否还留有其他 SecurityContext 属性
-	 *       (ADMIN/DEVICE 之一; PORTAL 登出代表 OAuth2 SSO 终结, 不参与残留检查)</li>
-	 *   <li>全部为空时才真正 {@code session.invalidate()} 并通知 SessionRegistry;
-	 *       有残留时只清掉指定属性，保留其他链路的登录态</li>
-	 * </ol>
-	 *
-	 * @param sessionRegistry 会话注册表，用于在完全销毁会话时移除 sessionId 跟踪
-	 * @param req             当前请求
-	 * @param contextKeysToRemove 本次要移除的 SecurityContext session 属性键
-	 */
-	public static void partialLogout(SessionRegistry sessionRegistry,
-									  HttpServletRequest req,
-									  String... contextKeysToRemove) {
-		var session = req.getSession(false);
-		if (session == null) {
-			SecurityContextHolder.clearContext();
-			return;
-		}
-		// 1. 移除本次指定的 context keys
-		for (String key : contextKeysToRemove) {
-			session.removeAttribute(key);
-		}
-		// 2. 检查 ADMIN/DEVICE 两个 context 键中是否还有任何一个残留
-		//    (PORTAL 登出代表 OAuth2 SSO 终结, 不参与残留检查;
-		//     残留检查只看 ADMIN/DEVICE, 决定是否保留 session 给其他链路)
-		boolean anyLeft = false;
-		for (String key : List.of(ADMIN_CONTEXT_KEY, DEVICE_CONTEXT_KEY)) {
-			if (session.getAttribute(key) != null) {
-				anyLeft = true;
-				break;
-			}
-		}
-		// 3. 无论是否还有残留 context, 都从 SessionRegistry 移除当前 session 的跟踪记录
-		sessionRegistry.removeSessionInformation(session.getId());
-		// 全部清空 → 销毁 session；还有残留 → 只清 SecurityContextHolder, 保留 session
-		if (!anyLeft) {
-			session.invalidate();
-		}
-		SecurityContextHolder.clearContext();
-	}
-
-	/**
-	 * 管理员登出时,同步撤销该用户通过「授权码模式 (authorization_code)」
-	 * 产生的所有 OAuth2Authorization 记录。
-	 * <p>
-	 * 这会让管理后台「在线用户」列表中的对应会话减少或消失,
-	 * 因为在线用户列表是基于 Redis 的 oauth2:user:* 索引统计的。
-	 * <p>
-	 * 只清理 authorization_code 类型的原因:
-	 * <ul>
-	 *   <li>authorization_code: 完全依赖 OAuth2 SSO 会话,登出=会话终结,必须撤销</li>
-	 *   <li>password: 用账号密码直接换 token,不依赖 SSO,不能误删</li>
-	 *   <li>device_code / client_credentials: 均为独立流程,不受 SSO 登出影响</li>
-	 * </ul>
-	 *
-	 * @param authorizationService Redis 授权服务,用于查询和删除授权记录
-	 * @param principalName        当前登出的用户名
-	 */
-	private static void revokeAuthorizationCodeGrantsForPrincipal(
-			RedisOAuth2AuthorizationService authorizationService,
-			String principalName) {
-		try {
-			int revoked = 0;
-			// 遍历该用户名下所有授权记录,只删 authorization_code 类型
-			for (OAuth2Authorization auth : authorizationService.findByPrincipal(principalName)) {
-				if (AuthorizationGrantType.AUTHORIZATION_CODE.equals(
-						auth.getAuthorizationGrantType())) {
-					authorizationService.revoke(auth);
-					revoked++;
-				}
-			}
-			if (revoked > 0) {
-				log.info("[管理员登出] 已撤销 {} 的 {} 条 authorization_code 型 OAuth2 授权",
-						principalName, revoked);
-			}
-		} catch (Exception e) {
-			log.warn("[管理员登出] 撤销 authorization_code 授权失败 principal={}: {}",
-					principalName, e.getMessage());
-		}
-	}
-
-	/**
-	 * 【关键】设置优先级为 5，确保 /activate 和 /device-login 请求被此链处理
-	 */
-	@Bean
-	@Order(5) 
 	public SecurityFilterChain deviceVerificationSecurityFilterChain(HttpSecurity http,
 			@Qualifier("portalDaoProvider") DaoAuthenticationProvider portalDaoProvider,
 			SessionRegistry sessionRegistry) throws Exception {
@@ -597,7 +517,7 @@ public class AuthorizationServerConfig {
 		http.securityMatcher("/activate", "/device-login").authenticationProvider(portalDaoProvider)
 
 				// 2. 配置安全上下文与会话管理
-				// 【目的】使用独立的 SecurityContext Key，将设备验证流程的会话与普通用户、管理员会话隔离
+				// 【目的】使用独立的 SecurityContext Key，将设备验证流程的会话与普通用户会话隔离
 				.securityContext(sc -> sc.securityContextRepository(contextRepo(DEVICE_CONTEXT_KEY)))
 				// 【目的】配置会话并发控制，使用全局的 SessionRegistry 跟踪会话
 				.sessionManagement(sm -> sm.sessionConcurrency(sc -> sc.sessionRegistry(sessionRegistry)
@@ -626,60 +546,93 @@ public class AuthorizationServerConfig {
 		return http.build();
 	}
 
-	// ====== 已删除: 原 @Order(6) 门户安全链 ======
-	// 门户已拆分为独立项目 (iam-portal-web 8000 前端 + iam-portal-service 8080 BFF),
-	// 通过 OAuth2 授权码流程接入认证中心。
-	// /login 和 /logout 现由 Order(1) 链统一处理, 不再需要独立的门户安全链。
-	// 兜底请求 (不匹配 Order 1~5) 由 Spring Security 默认链处理, 返回 401/403。
+	// ------------------------------------------------------------------
+	// 私有辅助方法
+	// ------------------------------------------------------------------
 
-/**
- * 自定义 Token Customizer: 为 access_token 设置 aud claim, 为 id_token 设置 roles +
-	 * preferred_username. 处理两种 principal 类型: UserDetails (授权码) 和
-	 * UsernamePasswordAuthenticationToken (密码/刷新).
+	/**
+	 * 管理 API 访问决策：请求令牌需同时满足「客户端在白名单内」且「具备 ROLE_ADMIN」。
 	 */
-	@Bean
-	public OAuth2TokenCustomizer<JwtEncodingContext> jwtTokenCustomizer() {
-		return context -> {
-			String tokenType = context.getTokenType().getValue();
-			if ("access_token".equals(tokenType)) {
-				context.getClaims().claim("aud", Set.of(CONTACTS_API_AUD));
+	private static AuthorizationManager<RequestAuthorizationContext> adminAccessManager(Set<String> adminClientIds) {
+		return (authentication, context) -> {
+			Authentication auth = authentication.get();
+			if (auth == null || !auth.isAuthenticated()) {
+				return new AuthorizationDecision(false);
 			}
-			if (context.getAuthorization() == null || context.getPrincipal() == null)
-				return;
-			Object principal = context.getPrincipal();
-			String username = null;
-			Collection<? extends GrantedAuthority> authorities = List.of();
-			if (principal instanceof UserDetails user) {
-				username = user.getUsername();
-				authorities = user.getAuthorities();
-			} else if (principal instanceof UsernamePasswordAuthenticationToken upat) {
-				Object inner = upat.getPrincipal();
-				if (inner instanceof UserDetails innerUser) {
-					username = innerUser.getUsername();
-					authorities = innerUser.getAuthorities();
-				} else if (inner != null) {
-					username = inner.toString();
-					authorities = upat.getAuthorities();
+			boolean isAdmin = auth.getAuthorities().stream()
+					.anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
+			if (!isAdmin) {
+				return new AuthorizationDecision(false);
+			}
+			if (auth.getPrincipal() instanceof OAuth2AuthenticatedPrincipal principal) {
+				Object clientId = principal.getAttributes().get("client_id");
+				if (clientId != null && adminClientIds.contains(clientId.toString())) {
+					return new AuthorizationDecision(true);
 				}
 			}
-			final String userFinal = username;
-			final var authFinal = authorities;
-			if (userFinal != null) {
-				context.getClaims().claims(claims -> {
-					claims.put("roles", authFinal.stream().map(a -> a.getAuthority()).toList());
-					if ("id_token".equals(tokenType)) {
-						claims.put("preferred_username", userFinal);
-					}
-				});
-			}
+			return new AuthorizationDecision(false);
 		};
 	}
 
-	/** 全局 TokenSettings: 固定 Opaque 格式, 不允许客户端覆盖 */
-	@Bean
-	public TokenSettings tokenSettings() {
-		return TokenSettings.builder().accessTokenFormat(OAuth2TokenFormat.REFERENCE)
-				.accessTokenTimeToLive(Duration.ofHours(2)).authorizationCodeTimeToLive(Duration.ofMinutes(5))
-				.reuseRefreshTokens(true).build();
+	/** 创建使用指定 key 的 HttpSessionSecurityContextRepository，隔离各链路的安全上下文 */
+	private static HttpSessionSecurityContextRepository contextRepo(String key) {
+		HttpSessionSecurityContextRepository repo = new HttpSessionSecurityContextRepository();
+		repo.setSpringSecurityContextKey(key);
+		return repo;
+	}
+
+	/**
+	 * 允许的 post-logout 重定向目标, 防止 open-redirect 漏洞:
+	 * 本站同源路径 (以 / 开头, 不包含 // 协议跳) 或 OAuth2 回调客户端地址。
+	 */
+	private static final Set<String> ALLOWED_REDIRECT_HOSTS = Set.of(
+			"localhost:8000", "localhost:8080", "localhost:8081", "localhost:8082", "localhost:8083", "localhost:8084", "localhost:9000",
+			"127.0.0.1:8000", "127.0.0.1:8080", "127.0.0.1:8081", "127.0.0.1:8082", "127.0.0.1:8083", "127.0.0.1:8084", "127.0.0.1:9000"
+	);
+
+	/** 检查退出跳转 URL 是否在白名单内（同源路径自动通过） */
+	private static boolean isRedirectAllowed(String url) {
+		if (url == null || url.isEmpty())
+			return false;
+		try {
+			if (url.startsWith("/") && !url.startsWith("//"))
+				return true;
+			URI u = URI.create(url);
+			String host = u.getHost();
+			int port = u.getPort();
+			if (host == null)
+				return false;
+			String key = (port <= 0) ? host : host + ":" + port;
+			return ALLOWED_REDIRECT_HOSTS.contains(key);
+		} catch (Exception ignore) {
+			return false;
+		}
+	}
+
+	/**
+	 * 部分登出: 只移除指定的 SecurityContext 属性, 避免误删同一会话中其他链路的登录态.
+	 * <p>
+	 * OAuth2 授权登录 (PORTAL)、设备验证 (DEVICE) 共用同一个 HttpSession (共享 JSESSIONID),
+	 * SecurityContext 通过不同的 session 属性 key 隔离。若直接 session.invalidate()
+	 * 会销毁所有链路的登录态。此方法仅清除本次登出涉及的 context key,
+	 * 全部清空时才真正销毁 session, 否则保留其余链路的登录态。
+	 */
+	public static void partialLogout(SessionRegistry sessionRegistry,
+			HttpServletRequest req,
+			String... contextKeysToRemove) {
+		var session = req.getSession(false);
+		if (session == null) {
+			SecurityContextHolder.clearContext();
+			return;
+		}
+		for (String key : contextKeysToRemove) {
+			session.removeAttribute(key);
+		}
+		boolean anyLeft = session.getAttribute(DEVICE_CONTEXT_KEY) != null;
+		sessionRegistry.removeSessionInformation(session.getId());
+		if (!anyLeft) {
+			session.invalidate();
+		}
+		SecurityContextHolder.clearContext();
 	}
 }

@@ -2,6 +2,7 @@ package net.xzh.authserver.service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
@@ -23,13 +24,22 @@ public class UserService {
     private final SysUserMapper mapper;
     private final PasswordEncoder passwordEncoder;
     private final AuthSessionService authSessionService;
+    private final TenantService tenantService;
 
     public List<SysUser> list() {
-        return mapper.selectList(null);
+        List<SysUser> users = mapper.selectList(new QueryWrapper<SysUser>().orderByAsc("id"));
+        for (SysUser user : users) {
+            user.setTenantIds(tenantService.listTenantsOfUser(user.getId()).stream().map(t -> t.getId()).toList());
+        }
+        return users;
     }
 
     public SysUser get(Long id) {
-        return mapper.selectById(id);
+        SysUser user = mapper.selectById(id);
+        if (user != null) {
+            user.setTenantIds(tenantService.listTenantsOfUser(id).stream().map(t -> t.getId()).toList());
+        }
+        return user;
     }
 
     public SysUser getByUsername(String username) {
@@ -47,14 +57,29 @@ public class UserService {
             user.setPassword(passwordEncoder.encode(user.getPassword()));
         }
         if (user.getEnabled() == null) user.setEnabled(true);
-        if (user.getRole() == null) user.setRole("ROLE_USER");
+        // 业务标签 (仅展示/审计, 不参与准入判定): admin=管理端, client=客户端, 默认客户端
+        if (user.getUserLabel() == null || user.getUserLabel().isBlank()) user.setUserLabel("client");
+        if (!Set.of("admin", "client", "wechat").contains(user.getUserLabel())) {
+            throw new IllegalArgumentException("业务标签不合法, 仅支持 admin=管理端, client=客户端, wechat=微信端: " + user.getUserLabel());
+        }
         if (user.getAccountNonExpired() == null) user.setAccountNonExpired(true);
         if (user.getAccountNonLocked() == null) user.setAccountNonLocked(true);
         if (user.getCredentialsNonExpired() == null) user.setCredentialsNonExpired(true);
+        // 生成业务用户编码 (对外/下放引用, 内部主键不下放)
+        if (user.getUserCode() == null || user.getUserCode().isBlank()) {
+            user.setUserCode(generateUserCode());
+        }
         user.setCreateTime(LocalDateTime.now());
         user.setUpdateTime(LocalDateTime.now());
         mapper.insert(user);
-        log.info("新增用户 username={}", user.getUsername());
+        // 租户成员关系
+        tenantService.assignTenantsToUser(user.getId(), user.getTenantIds());
+        log.info("新增用户 username={}, userCode={}", user.getUsername(), user.getUserCode());
+    }
+
+    /** 业务用户编码: u_ + 32 位随机十六进制 */
+    private String generateUserCode() {
+        return "u_" + UUID.randomUUID().toString().replace("-", "");
     }
 
     @Transactional
@@ -67,7 +92,12 @@ public class UserService {
         if (user.getEmail() != null) existing.setEmail(user.getEmail());
         if (user.getPhone() != null) existing.setPhone(user.getPhone());
         if (user.getAvatar() != null) existing.setAvatar(user.getAvatar());
-        if (user.getRole() != null) existing.setRole(user.getRole());
+        if (user.getUserLabel() != null && !user.getUserLabel().isBlank()) {
+            if (!Set.of("admin", "client", "wechat").contains(user.getUserLabel())) {
+                throw new IllegalArgumentException("业务标签不合法, 仅支持 admin=管理端, client=客户端, wechat=微信端");
+            }
+            existing.setUserLabel(user.getUserLabel());
+        }
         if (user.getEnabled() != null) existing.setEnabled(user.getEnabled());
         // 处理密码: 编辑时若填了新密码则加密更新, 留空则不修改
         if (StringUtils.hasText(user.getPassword()) && !user.getPassword().startsWith("$")) {
@@ -80,7 +110,7 @@ public class UserService {
 
         // 修改密码后强制下线 (放在事务外执行, 避免 Redis 异常导致回滚)
         if (passwordChanged) {
-            kickOfflineSafely(existing.getUsername());
+            kickOfflineSafely(existing.getUserCode(), existing.getUsername());
         }
     }
 
@@ -93,7 +123,7 @@ public class UserService {
         log.info("删除用户 id={}", id);
 
         // 先强制下线所有会话 (事务外执行, 避免 Redis 异常导致删除回滚)
-        kickOfflineSafely(user.getUsername());
+        kickOfflineSafely(user.getUserCode(), user.getUsername());
     }
 
     @Transactional
@@ -105,7 +135,7 @@ public class UserService {
         mapper.updateById(user);
         if (!enabled) {
             log.info("禁用用户, 强制下线 username={}", user.getUsername());
-            kickOfflineSafely(user.getUsername());
+            kickOfflineSafely(user.getUserCode(), user.getUsername());
         }
     }
 
@@ -124,17 +154,17 @@ public class UserService {
         log.info("重置密码 username={}, newPassword={}", user.getUsername(), newPassword);
 
         // 重置密码后强制下线 (事务外执行, 避免 Redis 异常导致密码更新回滚)
-        kickOfflineSafely(user.getUsername());
+        kickOfflineSafely(user.getUserCode(), user.getUsername());
     }
 
     /**
      * 安全强制下线: 捕获 Redis 异常, 不影响数据库事务。
      * (Kick offline safely: catch Redis exceptions so they don't roll back DB transactions)
      */
-    private void kickOfflineSafely(String username) {
+    private void kickOfflineSafely(String userCode, String username) {
         try {
-            int kicked = authSessionService.revokeUserAll(username);
-            log.info("强制下线 username={}, 会话数={}", username, kicked);
+            int kicked = authSessionService.revokeUserAll(userCode);
+            log.info("强制下线 username={} (userCode={}), 会话数={}", username, userCode, kicked);
         } catch (Exception e) {
             log.warn("强制下线失败 (Redis), username={}, error={}", username, e.getMessage());
         }

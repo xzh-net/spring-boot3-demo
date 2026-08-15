@@ -731,10 +731,14 @@ public final class RedisOAuth2AuthorizationService implements OAuth2Authorizatio
         if (SKIP_ATTRIBUTES.contains(key)) {
             if (value instanceof Map m) {
                 Object name = m.get("name");
-                if (name != null) {
-                    return new UsernamePasswordAuthenticationToken(name, null,
-                            List.of(new SimpleGrantedAuthority("ROLE_USER")));
+                // 从序列化的 Authentication 中恢复真实 authorities.
+                // 不能固定 ROLE_USER: 否则 admin 用户 (ROLE_ADMIN) 的 authorization
+                // 从 Redis 恢复后 principal 权限被降级, 导致 id_token/刷新令牌的 roles 变成 ROLE_USER.
+                List<SimpleGrantedAuthority> authorities = extractAuthorities(m.get("authorities"));
+                if (authorities.isEmpty()) {
+                    authorities = List.of(new SimpleGrantedAuthority("ROLE_USER"));
                 }
+                return new UsernamePasswordAuthenticationToken(name, null, authorities);
             }
             return null;
         }
@@ -751,6 +755,29 @@ public final class RedisOAuth2AuthorizationService implements OAuth2Authorizatio
             log.debug("跳过无法转换的 attribute {}: {}", key, e.getMessage());
             return value;
         }
+    }
+
+    /**
+     * 从 Jackson 反序列化的 authorities 数组 (如 [{authority:ROLE_ADMIN}]) 恢复权限集合.
+     */
+    private List<SimpleGrantedAuthority> extractAuthorities(Object raw) {
+        List<SimpleGrantedAuthority> result = new ArrayList<>();
+        if (!(raw instanceof Iterable<?> iter)) {
+            return result;
+        }
+        for (Object item : iter) {
+            if (item instanceof Map<?, ?> am) {
+                Object a = am.get("authority");
+                if (a != null) {
+                    result.add(new SimpleGrantedAuthority(a.toString()));
+                }
+            } else if (item instanceof SimpleGrantedAuthority ga) {
+                result.add(ga);
+            } else if (item != null) {
+                result.add(new SimpleGrantedAuthority(item.toString()));
+            }
+        }
+        return result;
     }
 
     // ------------------------------------------------------------------

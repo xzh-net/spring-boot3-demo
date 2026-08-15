@@ -214,7 +214,7 @@ public class JdbcRegisteredClientRepository implements RegisteredClientRepositor
         entity.setPostLogoutRedirectUris(String.join(",", client.getPostLogoutRedirectUris()));
         entity.setScopes(String.join(",", client.getScopes()));
 
-        // 统一用 camelCase key 序列化, 与 schema.sql 初始数据格式保持一致.
+        // 统一用 camelCase key 序列化, 与 iam_identity.sql 初始数据格式保持一致.
         //
         // 读取时不直接调用 getter (isRequireProofKey / getAccessTokenTimeToLive 等):
         //   SAS 1.4.1 这些 getter 内部会对设置值做 Boolean/Duration 自动拆箱,

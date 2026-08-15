@@ -7,40 +7,35 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 
 import lombok.RequiredArgsConstructor;
-import net.xzh.resource.entity.SysUser;
-import net.xzh.resource.mapper.SysUserMapper;
+import net.xzh.resource.mapper.SysPermissionMapper;
+import net.xzh.resource.mapper.SysRoleMapper;
 
 /**
  * 身份/权限解析服务 (DB 版).
  * <p>
- * 通过内省 token 中的 sub (用户名) 到 MySQL 的 RBAC 表
- * (sys_user / sys_user_role / sys_role / sys_role_permission / sys_permission)
- * 解析出当前用户的身份信息与权限集合 (如 app:portal / app:oa ...)。
+ * V6.2: 移除影子用户表 sys_user, 以 token sub (业务用户编码 user_code)
+ * 直接经 sys_user_role → sys_role/sys_permission 解析角色与权限。
  * </p>
  */
 @Service
 @RequiredArgsConstructor
 public class PermissionService {
 
-    private final SysUserMapper sysUserMapper;
-
-    /** 按用户名查询用户身份 (sub → sys_user) */
-    public SysUser findByUsername(String username) {
-        return sysUserMapper.selectByUsername(username);
-    }
+    private final SysRoleMapper sysRoleMapper;
+    private final SysPermissionMapper sysPermissionMapper;
 
     /** 用户拥有的角色编码 (ADMIN / USER) */
-    public List<String> findRoleCodes(String username) {
-        return sysUserMapper.selectRoleCodes(username);
+    public List<String> findRoleCodes(String userCode) {
+        return sysRoleMapper.selectRoleCodesByUserCode(userCode);
     }
 
     /** 用户拥有的权限编码集合 (app:portal / app:oa / ...) */
-    public Set<String> findPermissions(String username) {
-        return new LinkedHashSet<>(sysUserMapper.selectPermissionCodes(username));
+    public Set<String> findPermissions(String userCode) {
+        return new LinkedHashSet<>(sysPermissionMapper.selectPermissionCodesByUserCode(userCode));
     }
 
     /** 当前用户是否可访问指定应用 (权限标识 app:xxx) */
-    public boolean canAccessApp(String username, String appCode) {
-        return findPermissions(username).contains(appCode);
+    public boolean canAccessApp(String userCode, String appCode) {
+        return findPermissions(userCode).contains(appCode);
     }
 }

@@ -300,9 +300,10 @@ public class AuthSessionService {
         // 2. 过滤: 只保留 sys_user 表中存在的用户 (排除 OAuth2 client_id 等非用户 principal)
         //    场景: OAuth2 token 端点会将 client_id 注册为 session principal,
         //    这些出现在 sessionRegistry.getAllPrincipals() 中但不是真正的用户
+        //    V6.2: session principal name = 业务用户编码 user_code, 故按 user_code 反查
         List<OnlineUserVO> result = new ArrayList<>();
         for (String principal : allPrincipals) {
-            SysUser user = userMapper.selectOne(new QueryWrapper<SysUser>().eq("username", principal));
+            SysUser user = userMapper.selectOne(new QueryWrapper<SysUser>().eq("user_code", principal));
             if (user == null) {
                 log.debug("跳过非用户 principal: {}", principal);
                 continue;
@@ -312,8 +313,7 @@ public class AuthSessionService {
             vo.setUsername(principal);
             vo.setUserId(user.getId());
             vo.setNickname(user.getNickname());
-            vo.setRole(user.getRole());
-            vo.setEnabled(user.getEnabled());
+            vo.setUserLabel(user.getUserLabel());            vo.setEnabled(user.getEnabled());
 
             // SSO 会话数
             List<SessionInformation> ssoSessions = getSessionsForPrincipal(principal);
@@ -362,12 +362,12 @@ public class AuthSessionService {
     public List<SsoSessionVO> listSsoSessionsByUserId(Long userId) {
         SysUser user = userMapper.selectById(userId);
         if (user == null) return List.of();
-        String username = user.getUsername();
+        String userCode = user.getUserCode();
         List<SsoSessionVO> result = new ArrayList<>();
-        for (SessionInformation si : getSessionsForPrincipal(username)) {
+        for (SessionInformation si : getSessionsForPrincipal(userCode)) {
             SsoSessionVO vo = new SsoSessionVO();
             vo.setSessionId(si.getSessionId());
-            vo.setPrincipalName(username);
+            vo.setPrincipalName(userCode);
             vo.setExpired(si.isExpired());
             // 登录时间 = 会话创建时间 (creationTime, 仅在 registerNewSession 时写入, 不会更新)
             Long creationTime = sessionRegistry.getCreationTime(si.getSessionId());
@@ -394,7 +394,7 @@ public class AuthSessionService {
     public int revokeUserAllById(Long userId) {
         SysUser user = userMapper.selectById(userId);
         if (user == null) return 0;
-        return revokeUserAll(user.getUsername());
+        return revokeUserAll(user.getUserCode());
     }
 
     /**
@@ -522,12 +522,13 @@ public class AuthSessionService {
      */
     private List<SessionInformation> getSessionsForPrincipal(String principalName) {
         try {
-            // 尝试从 DB 获取角色信息
-            SysUser user = userMapper.selectOne(new QueryWrapper<SysUser>().eq("username", principalName));
-            String role = (user != null && user.getRole() != null) ? user.getRole() : "ROLE_USER";
+            // V6.2: principal name = 业务用户编码 user_code; 查询 user_code 确认是真实用户
+            SysUser user = userMapper.selectOne(new QueryWrapper<SysUser>().eq("user_code", principalName));
+            String authority = (user != null && "admin".equals(user.getUserLabel()))
+                    ? "ROLE_ADMIN" : "ROLE_USER";
             UserDetails userDetails = User.withUsername(principalName)
                     .password("[PROTECTED]")
-                    .authorities(new SimpleGrantedAuthority(role))
+                    .authorities(new SimpleGrantedAuthority(authority))
                     .build();
             return sessionRegistry.getAllSessions(userDetails, true);
         } catch (Exception e) {
@@ -538,8 +539,13 @@ public class AuthSessionService {
 
     private String resolveClientName(OAuth2Authorization auth) {
         try {
-            var client = clientRepository.findByClientId(auth.getRegisteredClientId());
-            if (client != null) return client.getClientName();
+            // getRegisteredClientId() 是内部注册 id (如 "2"), 需按 id 查询取 client_id / client_name
+            var client = clientRepository.findById(auth.getRegisteredClientId());
+            if (client != null) {
+                String name = client.getClientName();
+                if (name != null && !name.isBlank()) return name;
+                return client.getClientId();
+            }
         } catch (Exception ignored) {}
         return auth.getRegisteredClientId();
     }

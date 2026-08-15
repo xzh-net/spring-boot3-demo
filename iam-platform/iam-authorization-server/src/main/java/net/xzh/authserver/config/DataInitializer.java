@@ -57,6 +57,51 @@ public class DataInitializer implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         ensurePortalAppClient();
         ensureResourceServerClient();
+        ensureAdminAppClient();
+    }
+
+    /**
+     * 确保 admin-app 客户端存在 (管理后台 OAuth2 Client).
+     * <p>
+     * iam-admin-service (8085) 以授权码模式登录认证中心, 获取 ROLE_ADMIN 用户的
+     * token 后代理访问 /api/admin/** 与资源中心业务接口。
+     * </p>
+     */
+    private void ensureAdminAppClient() {
+        try {
+            RegisteredClient existing = clientRepository.findByClientId("admin-app");
+            if (existing != null) {
+                return;
+            }
+            String secretHash = passwordEncoder.encode("123456");
+            RegisteredClient client = RegisteredClient.withId("7")
+                    .clientId("admin-app")
+                    .clientSecret(secretHash)
+                    .clientName("管理后台")
+                    .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
+                    .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+                    .authorizationGrantType(AuthorizationGrantType.REFRESH_TOKEN)
+                    .redirectUri("http://localhost:8085/login/oauth2/code/admin-app")
+                    .postLogoutRedirectUri("http://localhost:8001/logged-out")
+                    .scope("openid")
+                    .scope("profile")
+                    .scope("read")
+                    .scope("write")
+                    .clientSettings(ClientSettings.builder()
+                            .requireProofKey(false)
+                            .requireAuthorizationConsent(false)
+                            .build())
+                    .tokenSettings(TokenSettings.builder()
+                            .accessTokenFormat(org.springframework.security.oauth2.server.authorization.settings.OAuth2TokenFormat.REFERENCE)
+                            .accessTokenTimeToLive(Duration.ofHours(2))
+                            .reuseRefreshTokens(true)
+                            .build())
+                    .build();
+            clientRepository.save(client);
+            log.info("[DataInit] admin-app 客户端已创建 (管理后台授权码登录)");
+        } catch (Exception e) {
+            log.error("[DataInit] 创建 admin-app 客户端失败", e);
+        }
     }
 
     /**
@@ -183,7 +228,7 @@ public class DataInitializer implements ApplicationRunner {
     /**
      * 确保 resource-server 客户端存在 (专属 introspection 调用的集群身份).
      * <p>
-     * 数据库如果是从旧版 schema.sql 初始化的 (resource-server 客户端尚未加入),
+     * 数据库如果是从旧版脚本初始化的 (resource-server 客户端尚未加入),
      * 则 resource-server 缺失会导致 iam-resource-service 调用
      * /oauth2/introspect 时因客户端认证失败返回 401。这里兜底补建。
      * </p>

@@ -16,8 +16,8 @@ public class OnlineUserVO {
     private String username;
     /** 昵称 */
     private String nickname;
-    /** 角色 */
-    private String role;
+    /** 业务标签: admin=管理端, client=客户端, wechat=微信端 (仅展示/审计) */
+    private String userLabel;
     /** 是否启用 */
     private Boolean enabled;
     /** SSO 会话数 (HttpSession) */

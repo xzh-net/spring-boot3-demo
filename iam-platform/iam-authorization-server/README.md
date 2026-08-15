@@ -1,27 +1,25 @@
 # Spring Authorization Server — 统一认证中心
 
-基于 Spring Authorization Server 1.4.1 的单体认证中心，提供 OAuth2 / OIDC 能力。管理后台页面使用 Thymeleaf 模板渲染（templates/admin/），不可直接通过 URL 访问静态资源。
+基于 Spring Authorization Server 1.4.1 的单体认证中心，提供 OAuth2 / OIDC 能力。管理后台已剥离为独立工程（[iam-admin-service](../iam-admin-service) + [iam-admin-web](../iam-admin-web)，见下方「管理后台」）。
 
 - 端口：`9000`
-- 依赖：MySQL 8（客户端 / 用户 / 授权同意 / 授权日志）、Redis（token / code / session 运行时状态）
+- 依赖：MySQL 8（客户端 / 用户 / 授权同意 / 授权日志，库 `iam_identity`）、Redis（token / code / session 运行时状态）
 - access_token 格式：**Opaque (REFERENCE)**，撤销即删 Redis key，无 JWT 黑名单
 - id_token 格式：**JWT (RS256)**，仅 `openid` scope 且非 `client_credentials` 时签发
 
 ## 管理后台
 
-管理后台位于 `/admin/**`，使用独立的 `AdminUserDetailsService`（ROLE_ADMIN）和独立的 SecurityContext，与门户完全隔离。页面由 Controller 渲染 Thymeleaf 模板，不可直接通过 URL 访问静态文件：
+管理后台自 V6 起由独立模块提供，认证中心仅暴露管理 REST API：
 
-| 路径 | 页面 | 数据维护能力 |
-|------|------|-------------|
-| `/admin/login.html` | 管理员登录 | — |
-| `/admin` | 开发手册首页 | 内置对接说明（客户端类型、OIDC、退出、架构） |
-| `/admin/user` | 用户管理 | 用户 CRUD、启用/禁用、重置密码 |
-| `/admin/client` | 客户端管理 | 客户端 CRUD、重置密钥 |
-| `/admin/authorization` | 授权记录 | 查询授权同意（主表）+ 授权历史（子表）、撤销 |
-| `/admin/online` | 在线管理 | 管理员列表 + 客户端用户（含门户），强制下线 |
-| `/admin/monitor` | 运行监控 | 服务状态监控 |
+| 模块 | 端口 | 说明 |
+|------|------|------|
+| `iam-admin-service` | 8085 | 管理 BFF：OAuth2 Client (`admin-app`) 授权码登录认证中心，Bearer 透传管理 API |
+| `iam-admin-web` | 8001 | 纯 HTML 管理台（用户/客户端/授权/在线/监控），由 admin-service 代理后端 |
 
-> 门户已拆分为独立项目：iam-portal-web（8000 前端）+ iam-portal-service（8080 BFF），通过 OAuth2 授权码流程接入认证中心。
+访问 `http://localhost:8001` → 任一管理页触发登录 → 跳转认证中心登录页（`admin / 123456`）→ 回跳管理台。
+页面调用的 `GET /api/admin/**` 等管理 API 由认证中心 Order(2) 安全链保护（Bearer + `ROLE_ADMIN`）。
+
+> 认证中心的 `/admin/**` 页面、`AdminUserDetailsService`、`templates/admin/*` 已随迁移删除。
 
 ## 在线用户与会话管理
 
@@ -38,12 +36,19 @@ User (用户)
 
 ### 管理 API
 
+三域管理 REST API 经 `/api/admin/**` 暴露（Order(2) 安全链：Bearer + `ROLE_ADMIN`），由管理后台 / 运维脚本调用：
+
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/admin/online/users` | 统一在线用户列表（合并 SSO + 客户端会话） |
-| GET | `/admin/users/{id}/sessions` | 用户会话层级视图 |
-| POST | `/admin/users/{id}/logout` | 按用户踢下线（所有设备退出） |
-| POST | `/admin/sessions/{id}/logout` | 按 SSO 会话踢下线（仅指定设备退出） |
+| GET/POST/PUT/DELETE | `/api/admin/users` ... | 用户域 CRUD、启用/禁用、重置密码、踢会话 |
+| GET/POST/PUT/DELETE | `/api/admin/clients` ... | 客户端域 CRUD、重置密钥 |
+| GET | `/api/admin/sessions/online` | 统一在线用户列表（合并 SSO + 客户端会话） |
+| GET | `/api/admin/sessions/users/{id}` | 用户会话层级视图 |
+| POST | `/api/admin/sessions/users/{id}/logout` | 按用户踢下线（所有设备退出） |
+| POST | `/api/admin/sessions/{ssoSessionId}/logout` | 按 SSO 会话踢下线（仅指定设备退出） |
+| DELETE | `/api/admin/sessions/online/{username}` | 按用户撤销客户端令牌 |
+| GET | `/api/admin/records/consents` | 授权同意主表 |
+| GET/DELETE | `/api/admin/records` | 授权历史 / 取消授权 |
 
 ### UI 设计要点
 
@@ -67,17 +72,13 @@ net.xzh.authserver
 │   ├── MybatisPlusConfig.java               #   MyBatis-Plus
 │   └── RedisConfig.java                     #   Redis
 ├── controller/                              # Controller 层（按职责分包）
-│   ├── admin/                               #   管理后台 API (/admin/**, /health)
-│   │   ├── AdminPageController.java         #     管理后台页面路由
-│   │   ├── UserController.java              #     用户管理 + 在线会话
-│   │   ├── ClientController.java            #     客户端管理
-│   │   ├── AuthorizationRecordController.java  #  授权记录
-│   │   ├── OnlineSessionController.java     #     在线会话管理 API
-│   │   └── HealthController.java            #     健康检查
-│   ├── api/                                 #  (已清空) 业务/公开 API：一律迁移到 iam-resource-service (:9010)
-│   │   #   认证中心不提供任何业务能力 (原则)，原 PublicClientController (/api/public/clients) 已移除
+│   ├── api/                                 #   管理 REST API（三域）
+│   │   ├── AdminUserApiController.java      #     /api/admin/users 用户域
+│   │   ├── AdminClientApiController.java    #     /api/admin/clients 客户端域
+│   │   ├── AdminSessionApiController.java   #     /api/admin/sessions 会话域
+│   │   └── AdminRecordApiController.java    #     /api/admin/records 授权记录域
 │   └── auth/                                #   认证类页面/端点
-│       ├── LoginController.java             #     路由 (/, /admin, /portal)
+│       ├── LoginController.java             #     路由 (/, /portal)
 │       ├── ConsentController.java           #     授权同意页 (/consent)
 │       ├── DeviceActivateController.java    #     设备验证页 (/activate)
 │       ├── LogoutController.java            #     OIDC Logout (支持 post_logout_redirect_uri / redirect)
@@ -119,9 +120,8 @@ net.xzh.authserver
     │   └── RedisSessionRegistry.java        #     SSO 会话跟踪（含 creationTime / lastAccessTime / expired）
     ├── token/                               #   Token 内省
     │   └── RedisOpaqueTokenIntrospector.java         # Opaque Bearer token 校验 (Redis 查询)
-    ├── userdetails/                         #   双 UserDetailsService（按角色隔离）
-    │   ├── AdminUserDetailsService.java     #     管理员 (ROLE_ADMIN, Order 3)
-    │   └── PortalUserDetailsService.java    #     门户 / 设备用户 (Order 5/6, 为 id_token 加载真实 authorities)
+    ├── userdetails/                         #   UserDetailsService
+    │   └── PortalUserDetailsService.java    #     统一账号 (admin/普通用户, 为 id_token 加载真实 authorities)
     └── web/                                 #   【Web 层】HTTP 请求处理
         ├── converter/                       #     AuthenticationConverter（请求 → 未认证 Token）
         │   ├── DeviceClientAuthenticationConverter.java  # 解析 device_code / refresh_token 请求
@@ -136,14 +136,14 @@ net.xzh.authserver
 | Order | 匹配路径 | 认证方式 | SecurityContext |
 |-------|---------|---------|-----------------|
 | 1 | `/oauth2/**` `/consent` `/.well-known/**` `/login` `/logout` `/userinfo` | OAuth2 客户端 + 表单 | Composite (DEVICE→PORTAL) |
-| 3 | `/admin/**` | 表单 (AdminUserDetailsService) | ADMIN |
+| 2 | `/api/admin/**` | Bearer (RedisOpaqueTokenIntrospector) | — |
 | 5 | `/activate` `/device-login` | 表单 (PortalUserDetailsService) | DEVICE (一次性) |
 
 > 原 Order(2) 资源服务器链 (/api/** Bearer 认证) 已随业务接口迁移到独立项目
-> [iam-resource-service](../iam-resource-service/README.md) (:9010) 一并移除。
-> 认证中心不再提供任何业务/公开 API（含 /api/public/clients 客户端列表，后续由资源服务连接数据库提供）。
+> [iam-resource-service](../iam-resource-service/README.md) (:9010)。
+> 认证中心保留的管理 API 位于 Order(2) 链：`/api/admin/**`（Bearer + `ROLE_ADMIN`）。
 > 认证相关的 /userinfo 仍由本中心提供（Bearer 校验由 UserInfoController 自省实现）。
-> Order(4) 预留。三条表单链通过不同 HttpSession attribute key 隔离 SecurityContext。
+> Order(3) 原管理后台表单链已随管理台迁移删除；Order(4) 预留。
 > 门户已拆分为独立项目 (iam-portal-web + iam-portal-service)，不再需要 Order(6) 兜底链。
 
 ### 关键设计约束
@@ -153,8 +153,7 @@ net.xzh.authserver
 - Token 端点用 `DelegatingAuthenticationConverter` 组合 5 个 Converter，不可单替换
 - `revokeSession(id)` 只撤 Redis token，不终止 HttpSession；终止会话用 `revokeUserAll`
 - `LogoutController` 同时支持 OIDC 标准 `post_logout_redirect_uri` 和自定义 `redirect` 参数
-- `/admin/logout` 调用 `partialLogout(ADMIN_CONTEXT_KEY)` 仅清除管理员认证
-- `/logout` 调用 `partialLogout(DEVICE_CONTEXT_KEY)` 清除设备认证，保留管理员
+- `/logout` 调用 `partialLogout(DEVICE_CONTEXT_KEY)` 清除设备认证
 - partialLogout 在 `anyLeft=true` 时仍需调用 `removeSessionInformation()`，否则退出用户仍显示在在线列表
 - 用户禁用 / 重置密码 / 修改用户信息 / 删除用户均触发 `kickOfflineSafely → revokeUserAll`
 
@@ -165,9 +164,9 @@ net.xzh.authserver
 | 接入方 | client_id | 模式 | 参考演示 |
 |--------|-----------|------|---------|
 | 门户（前后端分离） | `portal-app` | 授权码 + PKCE | [iam-portal-web](../iam-portal-web/README.md) + [iam-portal-service](../iam-portal-service/README.md) |
-| 传统 Web 应用（有后端） | `web-app` | 授权码 / 密码 | [iam-client-web-demo](../iam-client-web-demo/README.md) |
-| 输入受限设备（TV/IoT/CLI） | `device-app` | 设备码 (RFC 8628) | [iam-client-device-demo](../iam-client-device-demo/README.md) |
-| 原生 App / SPA（无后端） | `mobile-app` | 授权码 + PKCE | [iam-client-mobile-demo](../iam-client-mobile-demo/README.md) |
+| 传统 Web 应用（有后端） | `web-app` | 授权码 / 密码 | [example/iam-client-web-demo](../example/iam-client-web-demo/README.md) |
+| 输入受限设备（TV/IoT/CLI） | `device-app` | 设备码 (RFC 8628) | [example/iam-client-device-demo](../example/iam-client-device-demo/README.md) |
+| 原生 App / SPA（无后端） | `mobile-app` | 授权码 + PKCE | [example/iam-client-mobile-demo](../example/iam-client-mobile-demo/README.md) |
 | 后端服务间调用 (M2M) | `service-app` | 客户端模式 | 见 [test.http](./test.http) |
 
 ### 通用接入步骤
@@ -189,11 +188,11 @@ net.xzh.authserver
 
 ### 接口测试
 
-完整的 curl / REST Client 测试用例见 [test.http](./test.http)，覆盖健康检查、4 种授权模式、资源访问、内省、撤销。可直接在 VS Code / IntelliJ 中逐条执行。
+完整的 curl / REST Client 测试用例见 [test.http](./test.http)，覆盖 4 种授权模式、资源访问、内省、撤销、管理 API、管理后台模块（admin-service / admin-web），可直接在 VS Code / IntelliJ 中逐条执行。
 
 ## 数据库
 
-建表脚本 [schema.sql](./src/main/resources/schema.sql)，含 4 张表：
+身份库建表脚本 [iam_identity.sql](./src/main/resources/iam_identity.sql)（库 `iam_identity`），含 4 张表：
 
 | 表 | 用途 | 存储 |
 |----|------|------|
@@ -217,12 +216,14 @@ net.xzh.authserver
 | client_id | 模式 | 认证方式 | 适用场景 |
 |-----------|------|---------|---------|
 | `portal-app` | 授权码 + PKCE | client_secret_basic | 门户 BFF |
+| `admin-app` | 授权码 | client_secret_basic | 管理后台 BFF (8085) |
 | `web-app` | 授权码 / 密码 | client_secret_basic | 传统 Web 应用 |
 | `device-app` | 设备码 | none | 电视 / IoT / CLI |
 | `mobile-app` | 授权码 + PKCE | none | 原生 App / SPA |
 | `service-app` | 客户端模式 | client_secret_basic | 服务间调用 (M2M) |
+| `resource-server` | 客户端模式 | client_secret_basic | 资源中心 introspection / 目录 API |
 
-客户端配置详见 [schema.sql](./src/main/resources/schema.sql)，对接方式见各演示项目 README。
+客户端配置详见 [iam_identity.sql](./src/main/resources/iam_identity.sql)（运行时由 `DataInitializer` 兜底创建），对接方式见各演示项目 README。
 
 ## 相关文档
 

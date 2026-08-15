@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>统一认证中心 · 角色管理</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif; background: #f0f2f5; color: #1e293b; min-height: 100vh; }
+        .navbar { background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%); color: #fff; padding: 0 24px; height: 56px; display: flex; align-items: center; gap: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); position: sticky; top: 0; z-index: 10; }
+        .navbar .brand { font-weight: 700; font-size: 16px; color: #ffffff; margin-right: 8px; }
+        .navbar a { color: #dbeafe; text-decoration: none; padding: 8px 12px; border-radius: 6px; font-size: 14px; white-space: nowrap; }
+        .navbar a:hover { background: rgba(255,255,255,0.15); color: #ffffff; }
+        .navbar a.active { background: rgba(255,255,255,0.22); color: #ffffff; }
+        .navbar .spacer { flex: 1; }
+        .navbar .logout { color: #dbeafe; font-size: 13px; cursor: pointer; }
+
+        .container { max-width: 1200px; margin: 24px auto; padding: 0 24px; }
+        .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .page-header h2 { font-size: 22px; color: #1e3a5f; }
+        .page-header .hint { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+        .btn { padding: 8px 18px; border-radius: 6px; border: none; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s; }
+        .btn-primary { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; }
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(37,99,235,0.35); }
+        .btn-link { background: none; border: none; color: #2563eb; cursor: pointer; font-size: 13px; }
+        .btn-link:hover { text-decoration: underline; }
+        .btn-link.danger { color: #dc2626; }
+
+        .card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); overflow: hidden; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px 16px; text-align: left; font-size: 13px; }
+        th { background: #fafafa; color: #475569; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px; border-bottom: 1px solid #e2e8f0; }
+        td { border-bottom: 1px solid #f0f0f0; color: #334155; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover { background: #f8fafc; }
+
+        .tag { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; }
+        .tag.green { background: rgba(34,197,94,0.08); color: #16a34a; }
+        .tag.gray { background: rgba(100,116,139,0.08); color: #64748b; }
+        .tag.blue { background: rgba(37,99,235,0.08); color: #2563eb; }
+        .tag.amber { background: rgba(245,158,11,0.10); color: #d97706; }
+
+        .empty { text-align: center; padding: 40px; color: #94a3b8; font-size: 14px; }
+
+        .form { display: flex; flex-direction: column; gap: 14px; }
+        .form-row { display: flex; flex-direction: column; gap: 6px; }
+        .form-row label { display: block; font-size: 12px; color: #475569; margin-bottom: 4px; font-weight: 500; }
+        .form-row input, .form-row textarea { width: 100%; padding: 8px 10px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; outline: none; color: #1e293b; }
+        .form-row input:focus, .form-row textarea:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.12); }
+        .form-row input::placeholder, .form-row textarea::placeholder { color: #94a3b8; opacity: 0.8; }
+
+        /* 权限勾选 */
+        .perm-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+        .perm-item { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid #dbe3ee; border-radius: 8px; cursor: pointer; font-size: 13px; transition: all 0.15s; background: #f8fafc; user-select: none; }
+        .perm-item:hover { border-color: #2563eb; background: #eff6ff; }
+        .perm-item.checked { border-color: #2563eb; background: #eff6ff; color: #1d4ed8; }
+        .perm-item input { accent-color: #2563eb; }
+        .perm-item .perm-code { font-size: 11px; color: #94a3b8; font-family: monospace; }
+
+        .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); align-items: center; justify-content: center; z-index: 100; padding: 24px; }
+        .modal-bg.show { display: flex; }
+        .modal { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; width: 680px; max-width: 100%; max-height: 85vh; overflow-y: auto; box-shadow: 0 16px 50px rgba(0,0,0,0.18); display: flex; flex-direction: column; }
+        .modal-header { padding: 16px 24px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+        .modal-header h3 { font-size: 16px; color: #1e3a5f; }
+        .modal-header .sub { font-size: 12px; color: #94a3b8; margin-top: 2px; }
+        .close-btn { background: none; border: none; font-size: 22px; cursor: pointer; color: #64748b; }
+        .modal-body { padding: 24px; }
+        .modal-footer { padding: 14px 24px; border-top: 1px solid #f0f0f0; display: flex; justify-content: flex-end; gap: 10px; flex-shrink: 0; }
+        .btn-ghost { background: #eef2f7; color: #334155; }
+        .btn-ghost:hover { background: #e2e8f0; }
+    </style>
+</head>
+<body>
+    <div class="navbar" id="navbar"></div>
+
+    <div class="container">
+        <div class="page-header">
+            <div>
+                <h2>角色管理</h2>
+                <div class="hint">RBAC 角色维护 · 点击「分配权限」绑定该角色的权限集合</div>
+            </div>
+            <div>
+                <button class="btn btn-primary" onclick="openRoleModal()">＋ 新增角色</button>
+                <button class="btn btn-primary" style="margin-left:10px;" onclick="loadRoles()">🔄 刷新</button>
+            </div>
+        </div>
+        <div class="card">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>角色编码</th>
+                        <th>角色名称</th>
+                        <th>备注</th>
+                        <th>权限数</th>
+                        <th>创建时间</th>
+                        <th style="width:220px">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="roleTable"></tbody>
+            </table>
+            <div class="empty" id="emptyTip" style="display:none;">暂无角色, 点击「新增角色」创建</div>
+        </div>
+    </div>
+
+    <!-- 新增/编辑角色弹窗 -->
+    <div class="modal-bg" id="roleModal">
+        <div class="modal">
+            <div class="modal-header">
+                <div>
+                    <h3 id="roleModalTitle">新增角色</h3>
+                    <div class="sub" id="roleModalSub"></div>
+                </div>
+                <button class="close-btn" onclick="closeRoleModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form">
+                    <div class="form-row">
+                        <label>角色编码 (唯一, 如 ADMIN / USER / OPS)</label>
+                        <input id="roleCode" placeholder="请输入角色编码">
+                    </div>
+                    <div class="form-row">
+                        <label>角色名称</label>
+                        <input id="roleName" placeholder="请输入角色名称">
+                    </div>
+                    <div class="form-row">
+                        <label>备注</label>
+                        <textarea id="roleRemark" rows="2" placeholder="角色描述 (可选)"></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" onclick="closeRoleModal()">取消</button>
+                <button class="btn btn-primary" onclick="saveRole()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 分配权限弹窗 -->
+    <div class="modal-bg" id="permModal">
+        <div class="modal">
+            <div class="modal-header">
+                <div>
+                    <h3>分配权限</h3>
+                    <div class="sub" id="permModalSub"></div>
+                </div>
+                <button class="close-btn" onclick="closePermModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="perm-grid" id="permGrid"></div>
+                <div class="empty" id="permEmpty" style="display:none;">暂无可用权限, 请先到「权限管理」创建</div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" onclick="closePermModal()">取消</button>
+                <button class="btn btn-primary" onclick="savePermBinding()">保存绑定</button>
+            </div>
+        </div>
+    </div>
+
+<script src="/common.js"></script>
+<script>
+let roleList = [];
+let permList = [];
+let editingRoleId = null;      // 编辑中的角色 ID (null = 新增)
+let bindingRoleId = null;      // 分配权限的角色 ID
+
+// ------------------------------------------------------------------
+// 数据加载
+// ------------------------------------------------------------------
+
+async function loadRoles() {
+    try {
+        roleList = await App.api('/api/admin/roles') || [];
+    } catch (e) {
+        alert('加载角色失败: ' + e.message);
+        return;
+    }
+    const tbody = document.getElementById('roleTable');
+    const empty = document.getElementById('emptyTip');
+    if (roleList.length === 0) {
+        tbody.innerHTML = '';
+        empty.style.display = 'block';
+        return;
+    }
+    empty.style.display = 'none';
+    tbody.innerHTML = roleList.map(r => `
+        <tr>
+            <td style="font-family:monospace;">${r.id}</td>
+            <td><span class="tag blue">${App.esc(r.code)}</span></td>
+            <td>${App.esc(r.name || '-')}</td>
+            <td style="font-size:12px;color:#64748b;">${App.esc(r.remark || '-')}</td>
+            <td><span class="tag ${(r.permissionIds || []).length ? 'green' : 'gray'}">${(r.permissionIds || []).length} 项</span></td>
+            <td style="font-size:12px;color:#64748b;">${App.fmtTime(r.createTime)}</td>
+            <td>
+                <button class="btn-link" onclick="openPermModal(${r.id})">分配权限</button>
+                <button class="btn-link" onclick="openRoleModal(${r.id})">编辑</button>
+                <button class="btn-link danger" onclick="deleteRole(${r.id})">删除</button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function loadPerms() {
+    try {
+        permList = await App.api('/api/admin/permissions') || [];
+    } catch (e) {
+        alert('加载权限失败: ' + e.message);
+    }
+}
+
+// ------------------------------------------------------------------
+// 新增 / 编辑角色
+// ------------------------------------------------------------------
+
+function openRoleModal(id) {
+    editingRoleId = id || null;
+    document.getElementById('roleModalTitle').textContent = id ? '编辑角色' : '新增角色';
+    document.getElementById('roleModalSub').textContent = id ? '编辑后保存将刷新角色权限' : '';
+    document.getElementById('roleCode').value = '';
+    document.getElementById('roleName').value = '';
+    document.getElementById('roleRemark').value = '';
+    document.getElementById('roleCode').disabled = !!id; // 编码不可改
+    if (id) {
+        const r = roleList.find(x => x.id === id);
+        if (r) {
+            document.getElementById('roleCode').value = r.code || '';
+            document.getElementById('roleName').value = r.name || '';
+            document.getElementById('roleRemark').value = r.remark || '';
+        }
+    }
+    document.getElementById('roleModal').classList.add('show');
+}
+
+function closeRoleModal() {
+    document.getElementById('roleModal').classList.remove('show');
+    editingRoleId = null;
+}
+
+async function saveRole() {
+    const code = document.getElementById('roleCode').value.trim();
+    const name = document.getElementById('roleName').value.trim();
+    const remark = document.getElementById('roleRemark').value.trim();
+    if (!code) { alert('角色编码不能为空'); return; }
+    if (!name) { alert('角色名称不能为空'); return; }
+    const body = { code, name, remark };
+    try {
+        if (editingRoleId) {
+            body.permissionIds = (roleList.find(r => r.id === editingRoleId) || {}).permissionIds || [];
+            await App.api('/api/admin/roles/' + editingRoleId, { method: 'PUT', body });
+        } else {
+            await App.api('/api/admin/roles', { method: 'POST', body });
+        }
+        alert(editingRoleId ? '✅ 角色已更新' : '✅ 角色已创建');
+        closeRoleModal();
+        loadRoles();
+    } catch (e) {
+        alert('保存失败: ' + e.message);
+    }
+}
+
+async function deleteRole(id) {
+    const r = roleList.find(x => x.id === id);
+    if (!confirm(`确认删除角色 "${r ? r.name : id}" ?\n将同时解除该角色与所有用户、权限的绑定关系`)) return;
+    try {
+        await App.api('/api/admin/roles/' + id, { method: 'DELETE' });
+        alert('✅ 角色已删除');
+        loadRoles();
+    } catch (e) {
+        alert('删除失败: ' + e.message);
+    }
+}
+
+// ------------------------------------------------------------------
+// 角色-权限绑定
+// ------------------------------------------------------------------
+
+async function openPermModal(id) {
+    const r = roleList.find(x => x.id === id);
+    bindingRoleId = id;
+    document.getElementById('permModalSub').textContent =
+        `角色: ${r ? r.name : id} (${r ? r.code : ''})  ·  勾选该角色可访问的权限`;
+    document.getElementById('permModal').classList.add('show');
+
+    if (permList.length === 0) await loadPerms();
+    const grid = document.getElementById('permGrid');
+    const empty = document.getElementById('permEmpty');
+    if (permList.length === 0) {
+        grid.innerHTML = '';
+        empty.style.display = 'block';
+        return;
+    }
+    empty.style.display = 'none';
+    const current = (r && r.permissionIds) || [];
+    grid.innerHTML = permList.map(p => `
+        <label class="perm-item ${current.includes(p.id) ? 'checked' : ''}">
+            <input type="checkbox" data-id="${p.id}"
+                   ${current.includes(p.id) ? 'checked' : ''}
+                   onchange="this.closest('.perm-item').classList.toggle('checked', this.checked)">
+            <span>${App.esc(p.name || p.code)}</span>
+            <span class="perm-code">${App.esc(p.code)}</span>
+        </label>
+    `).join('');
+}
+
+function closePermModal() {
+    document.getElementById('permModal').classList.remove('show');
+    bindingRoleId = null;
+}
+
+async function savePermBinding() {
+    const selected = Array.from(document.querySelectorAll('#permGrid input:checked'))
+        .map(input => Number(input.getAttribute('data-id')));
+    try {
+        const r = roleList.find(x => x.id === bindingRoleId);
+        await App.api('/api/admin/roles/' + bindingRoleId, {
+            method: 'PUT',
+            body: { name: r.name, remark: r.remark || '', permissionIds: selected }
+        });
+        alert('✅ 权限绑定已保存 (共 ' + selected.length + ' 项)');
+        closePermModal();
+        loadRoles();
+    } catch (e) {
+        alert('保存失败: ' + e.message);
+    }
+}
+
+// ------------------------------------------------------------------
+// 初始化
+// ------------------------------------------------------------------
+
+App.guard().then(function (me) {
+    App.renderNavbar('role', me);
+    loadRoles();
+});
+</script>
+</body>
+</html>

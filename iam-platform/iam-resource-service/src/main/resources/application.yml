@@ -5,12 +5,12 @@ server:
 
 spring:
   profiles:
-    active: dev
+    active: local
 
   application:
     name: iam-resource-service
 
-  # ===== MySQL 8 数据源 (Druid 连接池) — 与认证中心同库 (oauth2_server), 仅查询权限数据 =====
+  # ===== MySQL 8 数据源 (Druid 连接池) — 资源中心专用库 (iam_authorization), 承载 RBAC + 业务数据 =====
   # 资源服务器不做 Redis 依赖, 身份/权限直接读 MySQL
   datasource:
     type: com.alibaba.druid.pool.DruidDataSource
@@ -44,6 +44,15 @@ mybatis-plus:
 spring.security.oauth2.resourceserver.opaquetoken.introspection-uri: http://localhost:9000/oauth2/introspect
 spring.security.oauth2.resourceserver.opaquetoken.client-id: resource-server
 spring.security.oauth2.resourceserver.opaquetoken.client-secret: 123456
+
+# ===== 认证中心对接 (V6 分库后客户端目录经目录 API 获取) =====
+authserver:
+  base-url: http://localhost:9000
+  client-id: resource-server
+  client-secret: 123456
+  # 服务令牌白名单 (M2M): 该列表内 client_id 签发的令牌视为服务间调用 (注入 ROLE_SERVICE),
+  # 供 /api/internal/** 鉴权; 未来对外 API 服务平台接入时在此追加
+  service-client-ids: [resource-server]
 
 logging:
   level:

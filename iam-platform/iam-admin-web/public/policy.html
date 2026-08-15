@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>统一认证中心 · 准入策略</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+            background: #f0f2f5; color: #1e293b; min-height: 100vh;
+        }
+        .navbar {
+            background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+            color: #fff; padding: 0 24px; height: 56px;
+            display: flex; align-items: center; gap: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            position: sticky; top: 0; z-index: 10; overflow-x: auto; flex-wrap: nowrap;
+        }
+        .navbar .brand { font-weight: 700; font-size: 16px; color: #ffffff; }
+        .navbar a { color: #dbeafe; text-decoration: none; padding: 8px 14px; border-radius: 6px; font-size: 14px; }
+        .navbar a:hover { background: rgba(255,255,255,0.15); color: #ffffff; }
+        .navbar a.active { background: rgba(255,255,255,0.22); color: #ffffff; }
+        .navbar .spacer { flex: 1; }
+        .navbar .logout { color: #dbeafe; font-size: 13px; }
+
+        .container { max-width: 1100px; margin: 24px auto; padding: 0 24px; }
+        .page-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 20px;
+        }
+        .page-header h2 { font-size: 22px; color: #1e3a5f; }
+        .page-header .hint { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+        .btn {
+            padding: 8px 18px; border-radius: 6px; border: none; cursor: pointer;
+            font-size: 14px; font-weight: 500; transition: all 0.2s;
+        }
+        .btn-primary { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; }
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(37,99,235,0.35); }
+        .btn-sm { padding: 5px 12px; font-size: 12px; }
+        .btn-link { background: none; border: none; color: #2563eb; cursor: pointer; font-size: 13px; }
+        .btn-link:hover { text-decoration: underline; }
+        .btn-link.danger { color: #dc2626; }
+
+        .card {
+            background: #ffffff; border-radius: 10px; border: 1px solid #e2e8f0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.06); overflow: hidden;
+        }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px 16px; text-align: left; font-size: 13px; }
+        th { background: #fafafa; color: #475569; border-bottom: 1px solid #e2e8f0; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px; }
+        td { border-bottom: 1px solid #f0f0f0; color: #334155; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover { background: #f8fafc; }
+        .tag { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; background: rgba(37,99,235,0.08); color: #2563eb; border: 1px solid rgba(37,99,235,0.2); margin-right: 4px; }
+        .tag.green { background: rgba(34,197,94,0.08); color: #16a34a; border-color: rgba(34,197,94,0.2); }
+        .tag.orange { background: rgba(249,115,22,0.08); color: #ea580c; border-color: rgba(249,115,22,0.2); }
+        .tag.gray { background: rgba(148,163,184,0.08); color: #64748b; border-color: rgba(148,163,184,0.2); }
+
+        .empty { text-align: center; padding: 40px; color: #94a3b8; font-size: 14px; }
+        .note { margin-top: 16px; padding: 12px 16px; border-left: 3px solid #2563eb; border-radius: 4px; font-size: 13px; line-height: 1.8; }
+        .note.info { background: #eff6ff; color: #1e40af; border-color: #2563eb; }
+
+        .modal-bg {
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+            align-items: center; justify-content: center; z-index: 100;
+        }
+        .modal-bg.show { display: flex; }
+        .modal {
+            background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; width: 520px;
+            box-shadow: 0 16px 50px rgba(0,0,0,0.18); color: #1e293b;
+        }
+        .modal-header {
+            padding: 16px 24px; border-bottom: 1px solid #f0f0f0; display: flex;
+            justify-content: space-between; align-items: center;
+        }
+        .modal-header h3 { font-size: 16px; color: #1e3a5f; }
+        .close-btn { background: none; border: none; font-size: 22px; cursor: pointer; color: #64748b; }
+        .modal-body { padding: 20px 24px; }
+        .form-row { margin-bottom: 14px; }
+        .form-row label { display: block; font-size: 12px; color: #475569; margin-bottom: 5px; font-weight: 500; }
+        .form-row input, .form-row textarea {
+            width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px;
+            font-size: 13px; outline: none; transition: border-color 0.2s;
+            background: #ffffff; color: #1e293b;
+        }
+        .form-row input:focus, .form-row textarea:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.12); }
+        .form-row textarea { min-height: 60px; resize: vertical; font-family: inherit; color: #1e293b; }
+        .form-row .hint { font-size: 11px; color: #64748b; margin-top: 4px; }
+        .form-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; padding-top: 16px; border-top: 1px solid #f0f0f0; }
+    </style>
+</head>
+<body>
+    <div class="navbar" id="navbar"></div>
+
+    <div class="container">
+        <div class="page-header">
+            <div>
+                <h2>客户端准入策略</h2>
+                <div class="hint">令牌签发准入 · 配置各客户端允许访问的角色集合 (原 yaml client-identity-policy 已迁移至该表)</div>
+            </div>
+            <div>
+                <button class="btn btn-primary" onclick="add()">＋ 新增策略</button>
+                <button class="btn" onclick="list()" style="padding:8px 18px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;color:#1e293b;cursor:pointer;font-size:14px;font-weight:500;">🔄 刷新</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <table>
+                <thead>
+                    <tr>
+                        <th>client_id</th>
+                        <th>名称</th>
+                        <th>允许角色</th>
+                        <th>状态</th>
+                        <th>备注</th>
+                        <th style="width: 120px">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="policyTable"></tbody>
+            </table>
+            <div class="empty" id="emptyTip" style="display:none;">暂无客户端数据</div>
+        </div>
+
+        <div class="note info">
+            准入规则：表中无该客户端策略行 → 默认放行；allowed_roles 为空或 <code>*</code> → 放行全部；
+            否则用户业务 RBAC 角色（资源中心 <code>sys_user_role</code>，经 D6 内部接口获取）与允许集合有交集才放行。
+            角色解析失败且配置了策略时按拒绝处理（fail-closed）。
+        </div>
+    </div>
+
+    <div class="modal-bg" id="modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modalTitle">配置准入策略</h3>
+                <button class="close-btn" onclick="closeModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editClientId">
+                <input type="hidden" id="editClientName">
+                <div class="form-row">
+                    <label>client_id</label>
+                    <select id="fClientId" style="width:100%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;background:#ffffff;color:#1e293b;"></select>
+                </div>
+                <div class="form-row">
+                    <label>允许角色编码 (逗号分隔, 空或 * 表示不限制)</label>
+                    <input type="text" id="fAllowedRoles" placeholder="ADMIN">
+                    <div class="hint">示例: ADMIN / OPERATOR / USER ; 留空或填 * 表示该客户端不限制登录用户</div>
+                </div>
+                <div class="form-row">
+                    <label>备注</label>
+                    <textarea id="fRemark" placeholder="策略说明"></textarea>
+                </div>
+                <div class="form-row">
+                    <label><input type="checkbox" id="fStatus" checked style="width:auto;margin-right:6px;">启用</label>
+                </div>
+                <div class="form-actions">
+                    <button class="btn" onclick="closeModal()">取消</button>
+                    <button class="btn btn-primary" onclick="save()">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script src="/common.js"></script>
+<script>
+function renderRoles(roles) {
+    if (!roles) return '<span class="tag gray">默认放行</span>';
+    const r = roles.trim();
+    if (!r || r === '*') return '<span class="tag gray">不限制</span>';
+    return r.split(",").map(x => `<span class="tag green">${App.esc(x.trim())}</span>`).join("");
+}
+
+async function list() {
+    let data;
+    try { data = await App.api("/api/admin/policies"); }
+    catch (e) { alert("加载失败: " + e.message); return; }
+    const tbody = document.getElementById("policyTable");
+    const empty = document.getElementById("emptyTip");
+    if (!data || data.length === 0) {
+        tbody.innerHTML = ""; empty.style.display = "block"; return;
+    }
+    empty.style.display = "none";
+    tbody.innerHTML = data.map(p => {
+        const configured = !!(p.allowedRoles && p.allowedRoles.trim());
+        const statusText = p.status === false ? "停用" : (configured ? "启用" : "未配置");
+        const statusTag = p.status === false ? "tag gray" : (configured ? "tag green" : "tag orange");
+        return `<tr>
+            <td style="font-family:monospace;">${App.esc(p.clientId)}</td>
+            <td>${App.esc(p.clientName || "-")}</td>
+            <td>${renderRoles(p.allowedRoles)}</td>
+            <td><span class="${statusTag}">${statusText}</span></td>
+            <td>${App.esc(p.remark || "-")}</td>
+            <td>
+                <button class="btn-link" onclick='edit(${JSON.stringify(JSON.stringify(p))})'>编辑</button>
+                ${configured ? `<button class="btn-link danger" onclick='del("${App.esc(p.clientId)}")'>重置默认</button>` : ''}
+            </td>
+        </tr>`;
+    }).join("");
+}
+
+function edit(pStr) {
+    const p = JSON.parse(pStr);
+    document.getElementById("modalTitle").textContent = "配置准入策略";
+    document.getElementById("editClientId").value = p.clientId;
+    document.getElementById("editClientName").value = p.clientName || "";
+    fillClientOptions([{ clientId: p.clientId, clientName: p.clientName }]);
+    document.getElementById("fClientId").value = p.clientId;
+    document.getElementById("fClientId").disabled = true;
+    document.getElementById("fAllowedRoles").value = (p.allowedRoles && p.allowedRoles !== '*') ? p.allowedRoles : "";
+    document.getElementById("fRemark").value = p.remark || "";
+    document.getElementById("fStatus").checked = p.status !== false;
+    document.getElementById("modal").classList.add("show");
+}
+
+function fillClientOptions(clients) {
+    const sel = document.getElementById("fClientId");
+    sel.innerHTML = (clients || []).map(c =>
+        `<option value="${App.esc(c.clientId)}">${App.esc(c.clientId)}${c.clientName ? " (" + App.esc(c.clientName) + ")" : ""}</option>`
+    ).join("");
+}
+
+async function add() {
+    document.getElementById("modalTitle").textContent = "新增准入策略";
+    document.getElementById("editClientId").value = "";
+    document.getElementById("editClientName").value = "";
+    document.getElementById("fAllowedRoles").value = "";
+    document.getElementById("fRemark").value = "";
+    document.getElementById("fStatus").checked = true;
+    try {
+        const data = await App.api("/api/admin/policies");
+        const unconfigured = (data || []).filter(p => !(p.allowedRoles && p.allowedRoles.trim()));
+        const clients = unconfigured.length > 0 ? unconfigured : (data || []);
+        fillClientOptions(clients);
+        document.getElementById("fClientId").disabled = clients.length === 0;
+        document.getElementById("modal").classList.add("show");
+        if (clients.length === 0) alert("所有已注册客户端均已配置策略，无新增对象");
+    } catch (e) { alert("加载客户端失败: " + e.message); }
+}
+
+function closeModal() { document.getElementById("modal").classList.remove("show"); }
+
+async function save() {
+    const sel = document.getElementById("fClientId");
+    const clientId = document.getElementById("editClientId").value || sel.value;
+    if (!clientId) { alert("请选择 client_id"); return; }
+    const body = {
+        clientId: clientId,
+        allowedRoles: document.getElementById("fAllowedRoles").value.trim(),
+        remark: document.getElementById("fRemark").value.trim(),
+        status: document.getElementById("fStatus").checked
+    };
+    try {
+        await App.api("/api/admin/policies", { method: "POST", body });
+        closeModal(); list();
+    } catch (e) {
+        alert("保存失败: " + e.message);
+    }
+}
+
+async function del(clientId) {
+    if (!confirm(`确认清除客户端 "${clientId}" 的准入策略 ? (恢复默认放行)`)) return;
+    try {
+        await App.api("/api/admin/policies/" + encodeURIComponent(clientId), { method: "DELETE" });
+        list();
+    } catch (e) { alert("删除失败: " + e.message); }
+}
+
+App.guard().then(function (me) {
+    App.renderNavbar('policy', me);
+    list();
+});
+</script>
+</body>
+</html>

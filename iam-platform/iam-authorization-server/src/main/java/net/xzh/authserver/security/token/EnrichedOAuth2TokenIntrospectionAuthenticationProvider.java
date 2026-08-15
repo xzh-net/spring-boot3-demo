@@ -118,6 +118,12 @@ public final class EnrichedOAuth2TokenIntrospectionAuthenticationProvider implem
 		//          client_credentials 为 client_id). 这是资源服务器定位用户的依据.
 		tokenClaims.subject(authorization.getPrincipalName());
 
+		// 【增强】无条件写入 grant_type = 该 token 的授权类型 (authorization_code / password /
+		//          client_credentials ...). 资源服务器据此区分「用户令牌」与「服务令牌」(M2M).
+		if (authorization.getAuthorizationGrantType() != null) {
+			tokenClaims.claim("grant_type", authorization.getAuthorizationGrantType().getValue());
+		}
+
 		// 【增强】无条件写入 client_id = 签发该 token 的客户端对外标识
 		String clientId = (authorizedClient != null) ? authorizedClient.getClientId()
 				: authorization.getRegisteredClientId();

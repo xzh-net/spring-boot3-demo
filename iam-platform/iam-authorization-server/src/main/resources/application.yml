@@ -5,7 +5,7 @@ server:
 
 spring:
   profiles:
-    active: dev
+    active: local
 
   application:
     name: iam-authorization-server
@@ -29,12 +29,10 @@ spring:
       test-on-borrow: false
       test-on-return: false
       pool-prepared-statements: false
+      # [安全加固] 禁用 Druid 监控台 (/druid/*): 认证中心未有安全链匹配该路径,
+      # 启用 stat-view-servlet 会让控制台对外裸奔且口令硬编码. 如需监控改用本应用日志/Actuator.
       stat-view-servlet:
-        enabled: true
-        url-pattern: /druid/*
-        login-username: admin
-        login-password: admin123
-        reset-enable: false
+        enabled: false
       web-stat-filter:
         enabled: true
         url-pattern: /*
@@ -81,6 +79,16 @@ authserver:
   refresh-token-time-to-live: PT168H
   authorization-code-time-to-live: PT5M
   device-code-time-to-live: PT5M
+  # 允许访问管理 API (/api/admin/**) 的客户端 client_id 白名单
+  admin-client-ids:
+    - admin-app
+  # ===== 令牌签发准入 (改造清单: 准入配置 yaml → iam_client_policy 表) =====
+  # 策略行: 管理端用户可经 /api/admin/policies 维护 (admin-app 默认仅允许 ADMIN 角色)
+  # 用户业务角色权威在资源中心 iam_authorization (sys_user_role), 认证中心以 D6 内部接口获取
+  resource-service-base-url: http://localhost:9010
+  service-token-endpoint: http://localhost:9000/oauth2/token
+  service-token-client-id: resource-server
+  service-token-client-secret: 123456
 
 logging:
   level:

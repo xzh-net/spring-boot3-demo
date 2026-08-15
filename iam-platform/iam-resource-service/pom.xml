@@ -43,6 +43,14 @@
             <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
         </dependency>
 
+        <!-- NimbusOpaqueTokenIntrospector 运行期依赖 (oauth2-oidc-sdk; 部分镜像的
+             spring-security-oauth2-resource-server pom 缺失该传递依赖, 显式声明保证运行) -->
+        <dependency>
+            <groupId>com.nimbusds</groupId>
+            <artifactId>oauth2-oidc-sdk</artifactId>
+            <version>11.7</version>
+        </dependency>
+
         <!-- 方法级安全注解 @PreAuthorize 依赖 AOP -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
