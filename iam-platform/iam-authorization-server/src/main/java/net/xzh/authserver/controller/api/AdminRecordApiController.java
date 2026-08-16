@@ -30,7 +30,7 @@ import net.xzh.authserver.service.AuthSessionService;
  * <p>
  * 授权确认主表 (oauth2_authorization_consent) + 授权历史子表
  * (oauth2_authorization_record) 的 REST 接口, 经 Order(2) 安全链保护
- * (Bearer + ROLE_ADMIN)。逻辑与既有 /admin/authorization/api 对齐。
+ * (Bearer + ADMIN_SERVICE_TOKEN 管理服务凭证)。逻辑与既有 /admin/authorization/api 对齐。
  * </p>
  */
 @Slf4j

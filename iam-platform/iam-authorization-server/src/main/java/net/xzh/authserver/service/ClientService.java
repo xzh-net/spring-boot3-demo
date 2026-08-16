@@ -51,6 +51,7 @@ public class ClientService {
 
     @Transactional
     public String create(ClientVO vo) {
+        validate(vo);
         String id = UUID.randomUUID().toString().replace("-", "");
         RegisteredClient.Builder builder = RegisteredClient.withId(id)
                 .clientId(vo.getClientId())
@@ -104,6 +105,7 @@ public class ClientService {
 
     @Transactional
     public void update(String id, ClientVO vo) {
+        validate(vo);
         RegisteredClient existing = repository.findById(id);
         if (existing == null) throw new IllegalArgumentException("客户端不存在: " + id);
 
@@ -202,6 +204,28 @@ public class ClientService {
     }
 
     // ------------------------------------------------------------------
+
+    /**
+     * 参数校验: 与 SAS RegisteredClient.Builder.build() 的校验对齐,
+     * 用中文给出明确错误, 避免返回裸 500.
+     */
+    private void validate(ClientVO vo) {
+        if (vo.getClientId() == null || vo.getClientId().isBlank()) {
+            throw new IllegalArgumentException("client_id 不能为空");
+        }
+        Set<String> grants = vo.getAuthorizationGrantTypes();
+        if (grants == null || grants.isEmpty()) {
+            throw new IllegalArgumentException("授权模式 (authorizationGrantTypes) 至少选择一项");
+        }
+        if (grants.contains("authorization_code")
+                && (vo.getRedirectUris() == null || vo.getRedirectUris().isEmpty())) {
+            throw new IllegalArgumentException("授权码模式必须配置至少一个 Redirect URI");
+        }
+        Set<String> methods = vo.getClientAuthenticationMethods();
+        if (methods != null && methods.contains("none") && StringUtils.hasText(vo.getClientSecret())) {
+            throw new IllegalArgumentException("Public 客户端 (认证方式=none) 不能设置 client_secret");
+        }
+    }
 
     private AuthorizationGrantType mapGrantType(String v) {
         return switch (v) {

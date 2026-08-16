@@ -22,7 +22,7 @@ import net.xzh.resource.service.PermissionService;
  * 仅供认证中心（iam-authorization-server）M2M 调用，用于登录时注入 id_token claims
  * 与令牌签发准入判定；不属于对外三分类（管理端 / portal 端 / 公开端）。
  * <p>
- * 安全约束 (D6): 本路径由 {@code hasRole('SERVICE')} 把关, 仅允许
+ * 安全约束 (D6): 本路径由 {@code PORTAL_SERVICE_TOKEN} (门户服务凭证) 把关, 仅允许
  * client_credentials 服务 token 访问; 返回值<b>只含角色与权限编码, 不含任何凭据</b>.
  * <p>
  * 标识: 路径参数为业务用户编码 user_code (token sub), 用户权威在认证中心 (V6.2 已无影子用户表)。
@@ -37,14 +37,12 @@ public class InternalRoleController {
 
     /**
      * 按业务用户编码返回角色/权限编码集合.
-     * <p>响应: {@code {userCode, roles: ["ROLE_ADMIN"], permissions: ["app:portal", ...]}}
+     * <p>响应: {@code {userCode, roles: ["ADMIN"], permissions: ["app:portal", ...]}}
+     * (业务角色编码原样返回, 不再拼 ROLE_ 前缀; 令牌类别由各端内省/签发统一判定)
      */
     @GetMapping("/user/{userCode}/roles")
     public Result<Map<String, Object>> roles(@PathVariable String userCode) {
-        Set<String> roles = new LinkedHashSet<>();
-        for (String code : permissionService.findRoleCodes(userCode)) {
-            roles.add(code.startsWith("ROLE_") ? code : "ROLE_" + code);
-        }
+        Set<String> roles = new LinkedHashSet<>(permissionService.findRoleCodes(userCode));
         List<String> permissions = permissionService.findPermissions(userCode)
                 .stream().sorted().toList();
 

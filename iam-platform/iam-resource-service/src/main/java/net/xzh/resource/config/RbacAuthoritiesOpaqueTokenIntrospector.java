@@ -25,11 +25,14 @@ import net.xzh.resource.service.PermissionService;
  * 而非「本地查不到用户」反推 (用户可能仅存在于 iam_identity, 资源中心未同步 D9):
  * <ul>
  *   <li><b>服务令牌</b> (client_credentials, 或 client_id ∈ {@code authserver.service-client-ids} 白名单):
- *       注入 {@code ROLE_SERVICE}, 供内部接口 {@code hasRole('SERVICE')} 鉴权, 禁止普通用户访问;</li>
- *   <li><b>用户令牌</b>: 依据 sub (业务用户编码 user_code) 解析本地业务 RBAC
+ *       注入 {@code PORTAL_SERVICE_TOKEN} (门户服务凭证), 供内部接口鉴权, 禁止普通用户访问;</li>
+ *   <li><b>门户应用客户端</b> (client_id ∈ {@code authserver.portal-client-ids} 白名单, 如 portal-app) 签发的
+ *       <b>用户令牌</b>: 在注入业务 RBAC 之外追加 {@code PORTAL_SERVICE_TOKEN},
+ *       作为 portal 域 (/api/public/**) 的门票, 门户信息不对任意客户端开放;</li>
+ *   <li><b>其它用户令牌</b>: 依据 sub (业务用户编码 user_code) 解析本地业务 RBAC
  *       (iam_authorization.sys_user_role → sys_role → sys_permission),
- *       注入 {@code ROLE_<角色编码>} 与权限编码 authorities, 供
- *       {@code @PreAuthorize("hasRole('ADMIN')")} 等方法级鉴权使用;
+ *       注入各业务角色编码与权限编码 authorities; 业务角色含 {@code ADMIN} 时额外注入
+ *       {@code ADMIN_SERVICE_TOKEN} (管理服务凭证) 供管理接口准入鉴权;
  *       (V6.2: 影子用户表 sys_user 已删除, 用户权威在认证中心 iam_identity.sys_user)</li>
  * </ul>
  */
@@ -37,8 +40,14 @@ import net.xzh.resource.service.PermissionService;
 @Component
 public class RbacAuthoritiesOpaqueTokenIntrospector implements OpaqueTokenIntrospector {
 
-    /** 服务账户标识: 由 grant_type=client_credentials 或 service-client-ids 白名单触发 */
-    private static final String SERVICE_ROLE = "ROLE_SERVICE";
+    /** 服务账户/门户应用标识: grant_type=client_credentials、service-client-ids 白名单或 portal-client-ids 白名单触发 */
+    private static final String PORTAL_SERVICE_TOKEN = "PORTAL_SERVICE_TOKEN";
+
+    /** 管理端业务角色编码 (sys_role.role_code), 命中则令牌类别为管理服务凭证 */
+    private static final String ADMIN_ROLE_CODE = "ADMIN";
+
+    /** 管理服务凭证标识: 用户令牌持有者具备管理端角色时注入 */
+    private static final String ADMIN_SERVICE_TOKEN = "ADMIN_SERVICE_TOKEN";
 
     /** 授权类型标识: client_credentials (RFC 6749 §4.4), 内省 attributes 由认证中心注入 */
     private static final String GRANT_CLIENT_CREDENTIALS = "client_credentials";
@@ -46,6 +55,7 @@ public class RbacAuthoritiesOpaqueTokenIntrospector implements OpaqueTokenIntros
     private final NimbusOpaqueTokenIntrospector delegate;
     private final PermissionService permissionService;
     private final Set<String> serviceClientIds;
+    private final Set<String> portalClientIds;
 
     public RbacAuthoritiesOpaqueTokenIntrospector(
             @Value("${spring.security.oauth2.resourceserver.opaquetoken.introspection-uri}") String introspectionUri,
@@ -56,6 +66,7 @@ public class RbacAuthoritiesOpaqueTokenIntrospector implements OpaqueTokenIntros
         this.delegate = new NimbusOpaqueTokenIntrospector(introspectionUri, clientId, clientSecret);
         this.permissionService = permissionService;
         this.serviceClientIds = authServerProperties.getServiceClientIds();
+        this.portalClientIds = authServerProperties.getPortalClientIds();
     }
 
     @Override
@@ -68,19 +79,29 @@ public class RbacAuthoritiesOpaqueTokenIntrospector implements OpaqueTokenIntros
 
         Set<GrantedAuthority> authorities = new LinkedHashSet<>(principal.getAuthorities());
         if (isServiceToken(principal)) {
-            // 服务令牌: client_credentials 或白名单内客户端 → ROLE_SERVICE (M2M)
-            authorities.add(new SimpleGrantedAuthority(SERVICE_ROLE));
-            log.debug("[Introspect] 服务令牌注入 ROLE_SERVICE, sub={}", userCode);
+            // 服务令牌: client_credentials 或白名单内客户端 → PORTAL_SERVICE_TOKEN (M2M)
+            authorities.add(new SimpleGrantedAuthority(PORTAL_SERVICE_TOKEN));
+            log.debug("[Introspect] 服务令牌注入 PORTAL_SERVICE_TOKEN, sub={}", userCode);
         } else {
             // 用户令牌: 依据 sub (user_code) 解析本地业务 RBAC (无影子用户表)
-            for (String role : permissionService.findRoleCodes(userCode)) {
-                authorities.add(new SimpleGrantedAuthority("ROLE_" + role));
+            // 令牌类别: 业务角色含 ADMIN → 管理服务凭证; 业务角色码原样注入 (不再拼 ROLE_ 前缀)
+            List<String> roleCodes = permissionService.findRoleCodes(userCode);
+            for (String role : roleCodes) {
+                authorities.add(new SimpleGrantedAuthority(role));
             }
-            for (String permission : permissionService.findPermissions(userCode)) {
-                authorities.add(new SimpleGrantedAuthority(permission));
-            }
+            if (roleCodes.contains(ADMIN_ROLE_CODE)) {
+                authorities.add(new SimpleGrantedAuthority(ADMIN_SERVICE_TOKEN));
+}
+                    if (isPortalClient(principal)) {
+                        // 门户应用客户端签发的用户令牌: 追加门户服务凭证 (portal 域门票),
+                        // 门户信息仅限门户客户端访问
+                        authorities.add(new SimpleGrantedAuthority(PORTAL_SERVICE_TOKEN));
+                    }
+                    for (String permission : permissionService.findPermissions(userCode)) {
+                        authorities.add(new SimpleGrantedAuthority(permission));
+                    }
             log.debug("[Introspect] 用户令牌注入 RBAC authorities, sub={}, roles={}",
-                    userCode, permissionService.findRoleCodes(userCode));
+                    userCode, roleCodes);
         }
 
         return new EnrichedPrincipal(principal, authorities);
@@ -98,6 +119,12 @@ public class RbacAuthoritiesOpaqueTokenIntrospector implements OpaqueTokenIntros
         }
         Object clientId = attributes.get("client_id");
         return clientId != null && serviceClientIds.contains(clientId.toString());
+    }
+
+    /** 判定是否为门户应用客户端签发 (client_id ∈ portal-client-ids 白名单) */
+    private boolean isPortalClient(OAuth2AuthenticatedPrincipal principal) {
+        Object clientId = principal.getAttributes().get("client_id");
+        return clientId != null && portalClientIds.contains(clientId.toString());
     }
 
     /** 保留原始属性, 覆写 authorities 的 principal 包装 */

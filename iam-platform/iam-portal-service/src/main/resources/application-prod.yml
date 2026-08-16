@@ -26,7 +26,6 @@ spring:
 
 auth-server:
   base-url: ${AUTH_SERVER_BASE_URL:http://auth.example.com}
-  clients-api: /api/public/clients
 
 portal:
   frontend-origin: ${PORTAL_FRONTEND_ORIGIN:http://portal.example.com}

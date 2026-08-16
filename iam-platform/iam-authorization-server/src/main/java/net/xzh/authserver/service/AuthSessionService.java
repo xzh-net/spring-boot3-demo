@@ -47,7 +47,7 @@ public class AuthSessionService {
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
             .withZone(ZoneId.systemDefault());
 
-    private static final String ROLE_ADMIN = "ROLE_ADMIN";
+    private static final String ADMIN_SERVICE_TOKEN = "ADMIN_SERVICE_TOKEN";
 
     private static <T extends OAuth2Token> T unwrap(
             OAuth2Authorization.Token<T> wrapper) {
@@ -101,7 +101,7 @@ public class AuthSessionService {
     /**
      * 管理端在线用户列表（通过 SessionRegistry 获取，持久化到 Redis）。
      * <p>
-     * 过滤条件：用户拥有 ROLE_ADMIN 权限。
+     * 过滤条件：用户具备 ADMIN_SERVICE_TOKEN（管理服务凭证）。
      */
     public List<Map<String, Object>> listAdminOnlineUsers() {
         return filterSessionUsers(true);
@@ -121,7 +121,7 @@ public class AuthSessionService {
                 }
                 boolean isAdmin = userDetails.getAuthorities().stream()
                         .map(GrantedAuthority::getAuthority)
-                        .anyMatch(ROLE_ADMIN::equals);
+                        .anyMatch(ADMIN_SERVICE_TOKEN::equals);
                 // 根据角色过滤
                 if (admin != isAdmin) {
                     continue;
@@ -237,7 +237,7 @@ public class AuthSessionService {
                 }
                 boolean isAdmin = userDetails.getAuthorities().stream()
                         .map(GrantedAuthority::getAuthority)
-                        .anyMatch(ROLE_ADMIN::equals);
+                        .anyMatch(ADMIN_SERVICE_TOKEN::equals);
                 // 角色不匹配则跳过
                 if (targetAdmin != isAdmin) {
                     continue;
@@ -525,7 +525,7 @@ public class AuthSessionService {
             // V6.2: principal name = 业务用户编码 user_code; 查询 user_code 确认是真实用户
             SysUser user = userMapper.selectOne(new QueryWrapper<SysUser>().eq("user_code", principalName));
             String authority = (user != null && "admin".equals(user.getUserLabel()))
-                    ? "ROLE_ADMIN" : "ROLE_USER";
+                    ? ADMIN_SERVICE_TOKEN : "ROLE_USER";
             UserDetails userDetails = User.withUsername(principalName)
                     .password("[PROTECTED]")
                     .authorities(new SimpleGrantedAuthority(authority))

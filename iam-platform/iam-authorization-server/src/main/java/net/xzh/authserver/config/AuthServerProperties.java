@@ -18,8 +18,8 @@ public class AuthServerProperties {
     /**
      * 允许访问管理 API ({@code /api/admin/**}) 的客户端 client_id 白名单.
      * <p>
-     * 管理类 API 仅接受白名单内客户端签发的令牌访问, 其余客户端即使持有 ROLE_ADMIN
-     * 也无法调用, 达到管理资源的客户端级隔离保护。
+     * 管理类 API 仅接受白名单内客户端签发的令牌访问, 其余客户端即使持有 ADMIN_SERVICE_TOKEN
+     * (管理服务凭证) 也无法调用, 达到管理资源的客户端级隔离保护。
      */
     private Set<String> adminClientIds = Set.of("admin-app");
 
@@ -32,7 +32,7 @@ public class AuthServerProperties {
 
     /**
      * 服务令牌端点: 认证中心自身的令牌端点, 以 resource-server 客户端
-     * client_credentials 换取 ROLE_SERVICE 令牌后调用资源中心内部接口。
+     * client_credentials 换取 PORTAL_SERVICE_TOKEN 门户服务凭证令牌后调用资源中心内部接口。
      */
     private String serviceTokenEndpoint = "http://localhost:9000/oauth2/token";
 

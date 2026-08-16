@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>统一认证中心 · 能力开放</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+            background: #f0f2f5; color: #1e293b; min-height: 100vh;
+        }
+        .navbar {
+            background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+            color: #fff; padding: 0 24px; height: 56px;
+            display: flex; align-items: center; gap: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            position: sticky; top: 0; z-index: 10; overflow-x: auto; flex-wrap: nowrap;
+        }
+        .navbar .brand { font-weight: 700; font-size: 16px; color: #ffffff; }
+        .navbar a { color: #dbeafe; text-decoration: none; padding: 8px 14px; border-radius: 6px; font-size: 14px; }
+        .navbar a:hover { background: rgba(255,255,255,0.15); color: #ffffff; }
+        .navbar a.active { background: rgba(255,255,255,0.22); color: #ffffff; }
+        .navbar .spacer { flex: 1; }
+        .navbar .logout { color: #dbeafe; font-size: 13px; }
+
+        .container { max-width: 1280px; margin: 24px auto; padding: 0 24px; }
+        .page-header {
+            display: flex; justify-content: space-between; align-items: flex-start;
+            margin-bottom: 20px; flex-wrap: wrap; gap: 12px;
+        }
+        .page-header h2 { font-size: 22px; color: #1e3a5f; }
+        .page-header .hint { font-size: 12px; color: #94a3b8; margin-top: 4px; max-width: 780px; line-height: 1.7; }
+        .btn {
+            padding: 8px 18px; border-radius: 6px; border: none; cursor: pointer;
+            font-size: 14px; font-weight: 500; transition: all 0.2s;
+        }
+        .btn-primary { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; }
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(37,99,235,0.35); }
+        .btn-sm { padding: 5px 12px; font-size: 12px; }
+        .btn-link { background: none; border: none; color: #2563eb; cursor: pointer; font-size: 13px; }
+        .btn-link:hover { text-decoration: underline; }
+        .btn-link.danger { color: #dc2626; }
+
+        .section-title {
+            font-size: 15px; font-weight: 600; color: #1e3a5f;
+            margin: 24px 0 10px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+        }
+        .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+        .toolbar select, .toolbar input {
+            padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 6px;
+            font-size: 13px; background: #fff; color: #1e293b;
+        }
+        .card {
+            background: #ffffff; border-radius: 10px; border: 1px solid #e2e8f0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.06); overflow: hidden;
+        }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 10px 12px; text-align: left; font-size: 12px; }
+        th { background: #fafafa; color: #475569; border-bottom: 1px solid #e2e8f0; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap; }
+        td { border-bottom: 1px solid #f0f0f0; color: #334155; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover { background: #f8fafc; }
+        td.mono { font-family: "SFMono-Regular", Consolas, monospace; font-size: 12px; }
+        .tag { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; background: rgba(37,99,235,0.08); color: #2563eb; border: 1px solid rgba(37,99,235,0.2); margin-right: 4px; }
+        .tag.green { background: rgba(34,197,94,0.08); color: #16a34a; border-color: rgba(34,197,94,0.2); }
+        .tag.orange { background: rgba(249,115,22,0.08); color: #ea580c; border-color: rgba(249,115,22,0.2); }
+        .tag.gray { background: rgba(148,163,184,0.08); color: #64748b; border-color: rgba(148,163,184,0.2); }
+        .tag.red { background: rgba(220,38,38,0.08); color: #dc2626; border-color: rgba(220,38,38,0.2); }
+
+        .empty { text-align: center; padding: 32px; color: #94a3b8; font-size: 14px; }
+        .note { margin-top: 16px; padding: 12px 16px; border-left: 3px solid #2563eb; border-radius: 4px; font-size: 13px; line-height: 1.8; }
+        .note.info { background: #eff6ff; color: #1e40af; border-color: #2563eb; }
+
+        .modal-bg {
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+            align-items: center; justify-content: center; z-index: 100;
+        }
+        .modal-bg.show { display: flex; }
+        .modal {
+            background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; width: 560px;
+            box-shadow: 0 16px 50px rgba(0,0,0,0.18); color: #1e293b;
+        }
+        .modal-header {
+            padding: 16px 24px; border-bottom: 1px solid #f0f0f0; display: flex;
+            justify-content: space-between; align-items: center;
+        }
+        .modal-header h3 { font-size: 16px; color: #1e3a5f; }
+        .close-btn { background: none; border: none; font-size: 22px; cursor: pointer; color: #64748b; }
+        .modal-body { padding: 20px 24px; }
+        .form-row { margin-bottom: 14px; }
+        .form-row label { display: block; font-size: 12px; color: #475569; margin-bottom: 5px; font-weight: 500; }
+        .form-row input, .form-row select {
+            width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px;
+            font-size: 13px; outline: none; transition: border-color 0.2s;
+            background: #ffffff; color: #1e293b;
+        }
+        .form-row input:focus, .form-row select:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.12); }
+        .form-row .hint { font-size: 11px; color: #64748b; margin-top: 4px; }
+        .form-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; padding-top: 16px; border-top: 1px solid #f0f0f0; }
+    </style>
+</head>
+<body>
+    <div class="navbar" id="navbar"></div>
+
+    <div class="container">
+        <div class="page-header">
+            <div>
+                <h2>能力开放</h2>
+                <div class="hint">开放能力登记 (iam_api_capability) + 开发者客户端订阅 (iam_capability_subscription)。
+                    <code>/api/capability/**</code> 能力端点准入 = 任意凭证 + 客户端已订阅该项能力 (登记制, 未登记能力默认拒绝)。</div>
+            </div>
+        </div>
+
+        <div class="section-title">
+            <span>能力登记</span>
+            <button class="btn btn-primary btn-sm" onclick="addCap()">＋ 新增能力</button>
+        </div>
+        <div class="card">
+            <table>
+                <thead>
+                    <tr>
+                        <th>能力编码</th>
+                        <th>名称</th>
+                        <th>方法</th>
+                        <th>路径模式</th>
+                        <th>所需 scope</th>
+                        <th>归属</th>
+                        <th>QPS</th>
+                        <th>状态</th>
+                        <th>备注</th>
+                        <th style="width: 170px">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="capTable"></tbody>
+            </table>
+            <div class="empty" id="capEmpty" style="display:none;">暂无能力登记</div>
+        </div>
+
+        <div class="section-title">
+            <span>订阅管理</span>
+            <button class="btn btn-primary btn-sm" onclick="addSub()">＋ 新增订阅</button>
+        </div>
+        <div class="toolbar">
+            <select id="fCapability" onchange="listSubs()">
+                <option value="">全部能力</option>
+            </select>
+            <input id="fClientId" placeholder="client_id..." style="width:180px;" onchange="listSubs()">
+            <button class="btn btn-sm" onclick="listSubs()">🔍 过滤</button>
+        </div>
+        <div class="card">
+            <table>
+                <thead>
+                    <tr>
+                        <th>client_id</th>
+                        <th>能力编码</th>
+                        <th>环境</th>
+                        <th>QPS</th>
+                        <th>每日配额</th>
+                        <th>每月配额</th>
+                        <th>到期时间</th>
+                        <th>状态</th>
+                        <th style="width: 130px">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="subTable"></tbody>
+            </table>
+            <div class="empty" id="subEmpty" style="display:none;">暂无订阅</div>
+        </div>
+
+        <div class="note info">
+            订阅准入：客户端须存在 <code>status=1</code> 且处于有效期内的订阅 (env=PROD); 取消订阅只置
+            <code>status=0</code> + <code>revoke_time</code>, 不物理删除。QPS / 配额本期仅登记断言, 实际限流计数另表 (二期)。
+        </div>
+    </div>
+
+    <!-- 能力登记弹窗 -->
+    <div class="modal-bg" id="capModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="capModalTitle">新增能力</h3>
+                <button class="close-btn" onclick="closeCapModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="capId">
+                <div class="form-row">
+                    <label>能力编码</label>
+                    <input type="text" id="cCode" placeholder="如 contact:query">
+                </div>
+                <div class="form-row">
+                    <label>名称</label>
+                    <input type="text" id="cName" placeholder="通讯录列表">
+                </div>
+                <div class="form-row">
+                    <label>方法</label>
+                    <select id="cMethod">
+                        <option value="GET">GET</option>
+                        <option value="POST">POST</option>
+                        <option value="PUT">PUT</option>
+                        <option value="DELETE">DELETE</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <label>路径模式</label>
+                    <input type="text" id="cPath" placeholder="/api/capability/contacts/{id}">
+                </div>
+                <div class="form-row">
+                    <label>所需 scope (逗号分隔, 空=不限制)</label>
+                    <input type="text" id="cScopes" placeholder="read">
+                </div>
+                <div class="form-row">
+                    <label>归属 (产品线/部门)</label>
+                    <input type="text" id="cOwner" placeholder="研发部">
+                </div>
+                <div class="form-row">
+                    <label>QPS 上限 (0=不限制)</label>
+                    <input type="number" id="cQps" value="0">
+                </div>
+                <div class="form-row">
+                    <label>备注</label>
+                    <input type="text" id="cRemark" placeholder="能力说明">
+                </div>
+                <div class="form-row">
+                    <label><input type="checkbox" id="cStatus" checked style="width:auto;margin-right:6px;">启用</label>
+                </div>
+                <div class="form-actions">
+                    <button class="btn" onclick="closeCapModal()">取消</button>
+                    <button class="btn btn-primary" onclick="saveCap()">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 订阅弹窗 -->
+    <div class="modal-bg" id="subModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="subModalTitle">新增订阅</h3>
+                <button class="close-btn" onclick="closeSubModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="subId">
+                <div class="form-row">
+                    <label>订阅方 client_id</label>
+                    <input type="text" id="sClient" placeholder="mobile-app">
+                </div>
+                <div class="form-row">
+                    <label>能力编码</label>
+                    <select id="sCapability"></select>
+                </div>
+                <div class="form-row">
+                    <label>QPS 上限 (0=不限制)</label>
+                    <input type="number" id="sQps" value="0">
+                </div>
+                <div class="form-row">
+                    <label>每日配额 (0=不限制)</label>
+                    <input type="number" id="sDaily" value="0">
+                </div>
+                <div class="form-row">
+                    <label>每月配额 (0=不限制)</label>
+                    <input type="number" id="sMonthly" value="0">
+                </div>
+                <div class="form-row">
+                    <label>到期时间 (留空=长期有效)</label>
+                    <input type="datetime-local" id="sExpire">
+                </div>
+                <div class="form-actions">
+                    <button class="btn" onclick="closeSubModal()">取消</button>
+                    <button class="btn btn-primary" onclick="saveSub()">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script src="/common.js"></script>
+<script>
+let CAPS = [];
+
+async function listCaps() {
+    let data;
+    try { data = await App.api("/api/admin/capabilities"); }
+    catch (e) { alert("加载能力失败: " + e.message); return; }
+    CAPS = data || [];
+    fillCapOptions();
+    const tbody = document.getElementById("capTable");
+    const empty = document.getElementById("capEmpty");
+    if (CAPS.length === 0) {
+        tbody.innerHTML = ""; empty.style.display = "block"; return;
+    }
+    empty.style.display = "none";
+    tbody.innerHTML = CAPS.map(c => `<tr>
+        <td class="mono">${App.esc(c.capabilityCode)}</td>
+        <td>${App.esc(c.capabilityName || '-')}</td>
+        <td><span class="tag">${App.esc(c.method)}</span></td>
+        <td class="mono" style="word-break:break-all;">${App.esc(c.pathPattern)}</td>
+        <td>${c.requiredScopes ? App.esc(c.requiredScopes) : '<span class="tag gray">不限</span>'}</td>
+        <td>${App.esc(c.owner || '-')}</td>
+        <td>${c.qpsLimit || 0}</td>
+        <td>${c.status === 1 ? '<span class="tag green">启用</span>' : '<span class="tag red">停用</span>'}</td>
+        <td>${App.esc(c.remark || '-')}</td>
+        <td>
+            <button class="btn-link" onclick='editCap(${JSON.stringify(JSON.stringify(c))})'>编辑</button>
+            <button class="btn-link" onclick='scopeSub("${App.esc(c.capabilityCode)}")'>订阅</button>
+            <button class="btn-link danger" onclick='delCap(${c.id})'>删除</button>
+        </td>
+    </tr>`).join("");
+}
+
+function fillCapOptions() {
+    const opts = CAPS.map(c => `<option value="${App.esc(c.capabilityCode)}">${App.esc(c.capabilityCode)}</option>`).join("");
+    document.getElementById("fCapability").innerHTML = '<option value="">全部能力</option>' + opts;
+    document.getElementById("sCapability").innerHTML = opts;
+}
+
+// ---- 能力登记 ----
+function addCap() {
+    document.getElementById("capModalTitle").textContent = "新增能力";
+    document.getElementById("capId").value = "";
+    ["cCode", "cName", "cPath", "cScopes", "cOwner", "cRemark"].forEach(id => document.getElementById(id).value = "");
+    document.getElementById("cMethod").value = "GET";
+    document.getElementById("cQps").value = "0";
+    document.getElementById("cStatus").checked = true;
+    document.getElementById("capModal").classList.add("show");
+}
+
+function editCap(cStr) {
+    const c = JSON.parse(cStr);
+    document.getElementById("capModalTitle").textContent = "编辑能力";
+    document.getElementById("capId").value = c.id;
+    document.getElementById("cCode").value = c.capabilityCode;
+    document.getElementById("cName").value = c.capabilityName || "";
+    document.getElementById("cMethod").value = c.method;
+    document.getElementById("cPath").value = c.pathPattern;
+    document.getElementById("cScopes").value = c.requiredScopes || "";
+    document.getElementById("cOwner").value = c.owner || "";
+    document.getElementById("cQps").value = c.qpsLimit || 0;
+    document.getElementById("cRemark").value = c.remark || "";
+    document.getElementById("cStatus").checked = c.status !== 0;
+    document.getElementById("capModal").classList.add("show");
+}
+
+function closeCapModal() { document.getElementById("capModal").classList.remove("show"); }
+
+async function saveCap() {
+    const id = document.getElementById("capId").value;
+    const body = {
+        capabilityCode: document.getElementById("cCode").value.trim(),
+        capabilityName: document.getElementById("cName").value.trim(),
+        method: document.getElementById("cMethod").value,
+        pathPattern: document.getElementById("cPath").value.trim(),
+        requiredScopes: document.getElementById("cScopes").value.trim(),
+        owner: document.getElementById("cOwner").value.trim(),
+        qpsLimit: parseInt(document.getElementById("cQps").value) || 0,
+        remark: document.getElementById("cRemark").value.trim(),
+        status: document.getElementById("cStatus").checked ? 1 : 0
+    };
+    try {
+        if (id) {
+            await App.api("/api/admin/capabilities/" + id, { method: "PUT", body });
+        } else {
+            await App.api("/api/admin/capabilities", { method: "POST", body });
+        }
+        closeCapModal(); listCaps();
+    } catch (e) { alert("保存失败: " + e.message); }
+}
+
+async function delCap(id) {
+    if (!confirm("确认删除该能力 ? (同时解除全部订阅)")) return;
+    try {
+        await App.api("/api/admin/capabilities/" + id, { method: "DELETE" });
+        listCaps(); listSubs();
+    } catch (e) { alert("删除失败: " + e.message); }
+}
+
+// ---- 订阅管理 ----
+async function listSubs() {
+    const capCode = document.getElementById("fCapability").value;
+    const clientId = document.getElementById("fClientId").value.trim();
+    let url = "/api/admin/capability-subscriptions";
+    const qs = [];
+    if (capCode) qs.push("capabilityCode=" + encodeURIComponent(capCode));
+    if (clientId) qs.push("clientId=" + encodeURIComponent(clientId));
+    if (qs.length) url += "?" + qs.join("&");
+    let data;
+    try { data = await App.api(url); }
+    catch (e) { alert("加载订阅失败: " + e.message); return; }
+    const tbody = document.getElementById("subTable");
+    const empty = document.getElementById("subEmpty");
+    if (!data || data.length === 0) {
+        tbody.innerHTML = ""; empty.style.display = "block"; return;
+    }
+    empty.style.display = "none";
+    tbody.innerHTML = data.map(s => `<tr>
+        <td class="mono">${App.esc(s.clientId)}</td>
+        <td class="mono">${App.esc(s.capabilityCode)}</td>
+        <td><span class="tag">${App.esc(s.env)}</span></td>
+        <td>${s.qpsLimit || 0}</td>
+        <td>${s.quotaDaily || 0}</td>
+        <td>${s.quotaMonthly || 0}</td>
+        <td>${s.expireTime ? App.fmtTime(s.expireTime) : '<span class="tag gray">长期</span>'}</td>
+        <td>${s.status === 1 ? '<span class="tag green">订阅中</span>' : '<span class="tag gray">已取消</span>'}</td>
+        <td>
+            ${s.status === 1 ? `<button class="btn-link" onclick='editSub(${JSON.stringify(JSON.stringify(s))})'>编辑</button>
+            <button class="btn-link danger" onclick='revokeSub(${s.id})'>取消</button>` : '-'}
+        </td>
+    </tr>`).join("");
+}
+
+function scopeSub(code) {
+    document.getElementById("fCapability").value = code;
+    listSubs();
+    document.getElementById("subTable").scrollIntoView({ behavior: "smooth" });
+}
+
+function addSub() {
+    document.getElementById("subModalTitle").textContent = "新增订阅";
+    document.getElementById("subId").value = "";
+    document.getElementById("sClient").value = "";
+    document.getElementById("sQps").value = "0";
+    document.getElementById("sDaily").value = "0";
+    document.getElementById("sMonthly").value = "0";
+    document.getElementById("sExpire").value = "";
+    document.getElementById("subModal").classList.add("show");
+}
+
+function editSub(sStr) {
+    const s = JSON.parse(sStr);
+    document.getElementById("subModalTitle").textContent = "编辑订阅";
+    document.getElementById("subId").value = s.id;
+    document.getElementById("sClient").value = s.clientId;
+    document.getElementById("sClient").disabled = true;
+    document.getElementById("sCapability").value = s.capabilityCode;
+    document.getElementById("sQps").value = s.qpsLimit || 0;
+    document.getElementById("sDaily").value = s.quotaDaily || 0;
+    document.getElementById("sMonthly").value = s.quotaMonthly || 0;
+    document.getElementById("sExpire").value = s.expireTime ? App.fmtTime(s.expireTime).replace(' ', 'T') : "";
+    document.getElementById("subModal").classList.add("show");
+}
+
+function closeSubModal() {
+    document.getElementById("subModal").classList.remove("show");
+    document.getElementById("sClient").disabled = false;
+}
+
+async function saveSub() {
+    const id = document.getElementById("subId").value;
+    const expire = document.getElementById("sExpire").value;
+    const body = {
+        clientId: document.getElementById("sClient").value.trim(),
+        capabilityCode: document.getElementById("sCapability").value,
+        qpsLimit: parseInt(document.getElementById("sQps").value) || 0,
+        quotaDaily: parseInt(document.getElementById("sDaily").value) || 0,
+        quotaMonthly: parseInt(document.getElementById("sMonthly").value) || 0,
+        expireTime: expire ? expire.replace('T', ' ') + ":00" : null
+    };
+    try {
+        if (id) {
+            await App.api("/api/admin/capability-subscriptions/" + id, { method: "PUT", body });
+        } else {
+            await App.api("/api/admin/capability-subscriptions", { method: "POST", body });
+        }
+        closeSubModal(); listSubs();
+    } catch (e) { alert("保存失败: " + e.message); }
+}
+
+async function revokeSub(id) {
+    if (!confirm("确认取消该订阅 ? (将立即拒绝该客户端访问对应能力)")) return;
+    try {
+        await App.api("/api/admin/capability-subscriptions/" + id, { method: "DELETE" });
+        listSubs();
+    } catch (e) { alert("取消失败: " + e.message); }
+}
+
+App.guard().then(function (me) {
+    App.renderNavbar('capability', me);
+    listCaps();
+    listSubs();
+});
+</script>
+</body>
+</html>

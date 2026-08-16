@@ -62,7 +62,7 @@ auth-server:
 # 资源服务地址 (客户端列表等公开接口已从认证中心迁移到 iam-resource-service:9010)
 resource-server:
   base-url: http://localhost:9010
-  clients-api: /api/public/clients
+  mine-clients-api: /api/public/clients/mine
 
 # iam-portal-web 前端地址 (用于 CORS)
 portal:

@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.xzh.authserver.entity.SysUser;
 import net.xzh.authserver.mapper.SysUserMapper;
+import net.xzh.authserver.remote.InternalUserDataClient;
 
 @Slf4j
 @Service
@@ -25,11 +26,13 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final AuthSessionService authSessionService;
     private final TenantService tenantService;
+    private final InternalUserDataClient internalUserDataClient;
 
     public List<SysUser> list() {
         List<SysUser> users = mapper.selectList(new QueryWrapper<SysUser>().orderByAsc("id"));
         for (SysUser user : users) {
-            user.setTenantIds(tenantService.listTenantsOfUser(user.getId()).stream().map(t -> t.getId()).toList());
+            user.setTenantCodes(tenantService.listTenantsOfUser(user.getUserCode())
+                    .stream().map(t -> t.getTenantCode()).toList());
         }
         return users;
     }
@@ -37,7 +40,8 @@ public class UserService {
     public SysUser get(Long id) {
         SysUser user = mapper.selectById(id);
         if (user != null) {
-            user.setTenantIds(tenantService.listTenantsOfUser(id).stream().map(t -> t.getId()).toList());
+            user.setTenantCodes(tenantService.listTenantsOfUser(user.getUserCode())
+                    .stream().map(t -> t.getTenantCode()).toList());
         }
         return user;
     }
@@ -67,13 +71,24 @@ public class UserService {
         if (user.getCredentialsNonExpired() == null) user.setCredentialsNonExpired(true);
         // 生成业务用户编码 (对外/下放引用, 内部主键不下放)
         if (user.getUserCode() == null || user.getUserCode().isBlank()) {
+            // 未填写则自动生成
             user.setUserCode(generateUserCode());
+        } else {
+            // 已填写则校验合法性, 避免与现有用户冲突 (sys_user.user_code 唯一索引)
+            String code = user.getUserCode().trim();
+            if (code.length() > 64) {
+                throw new IllegalArgumentException("用户编码过长 (最多 64 字符)");
+            }
+            if (mapper.selectCount(new QueryWrapper<SysUser>().eq("user_code", code)) > 0) {
+                throw new IllegalArgumentException("用户编码已存在: " + code);
+            }
+            user.setUserCode(code);
         }
         user.setCreateTime(LocalDateTime.now());
         user.setUpdateTime(LocalDateTime.now());
         mapper.insert(user);
         // 租户成员关系
-        tenantService.assignTenantsToUser(user.getId(), user.getTenantIds());
+        tenantService.assignTenantsToUser(user.getUserCode(), user.getTenantCodes());
         log.info("新增用户 username={}, userCode={}", user.getUsername(), user.getUserCode());
     }
 
@@ -120,10 +135,14 @@ public class UserService {
         if (user == null) throw new IllegalArgumentException("用户不存在: " + id);
 
         mapper.deleteById(id);
+        // 同库清理: 租户成员关系 (与用户删除同一事务)
+        tenantService.removeTenantsOfUser(user.getUserCode());
         log.info("删除用户 id={}", id);
 
         // 先强制下线所有会话 (事务外执行, 避免 Redis 异常导致删除回滚)
         kickOfflineSafely(user.getUserCode(), user.getUsername());
+        // 跨库清理: 资源中心角色绑定 + USER 主体应用授权 (user_code), 失败不影响本地删除
+        cleanupRemoteDataSafely(user.getUserCode());
     }
 
     @Transactional
@@ -167,6 +186,19 @@ public class UserService {
             log.info("强制下线 username={} (userCode={}), 会话数={}", username, userCode, kicked);
         } catch (Exception e) {
             log.warn("强制下线失败 (Redis), username={}, error={}", username, e.getMessage());
+        }
+    }
+
+    /**
+     * 跨库清理资源中心关联数据 (角色绑定 + USER 主体应用授权):
+     * 捕获远程调用异常, 不影响本地用户删除事务 (best-effort, 失败仅打日志)。
+     */
+    private void cleanupRemoteDataSafely(String userCode) {
+        try {
+            internalUserDataClient.deleteUserData(userCode);
+        } catch (Exception e) {
+            log.warn("清理资源中心用户关联失败 (不影响本地删除), userCode={}, error={}",
+                    userCode, e.getMessage());
         }
     }
 }

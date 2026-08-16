@@ -63,8 +63,8 @@ public class DataInitializer implements ApplicationRunner {
     /**
      * 确保 admin-app 客户端存在 (管理后台 OAuth2 Client).
      * <p>
-     * iam-admin-service (8085) 以授权码模式登录认证中心, 获取 ROLE_ADMIN 用户的
-     * token 后代理访问 /api/admin/** 与资源中心业务接口。
+     * iam-admin-service (8085) 以授权码模式登录认证中心, 获取管理端用户
+     * (持有 ADMIN_SERVICE_TOKEN) 的 token 后代理访问 /api/admin/** 与资源中心业务接口。
      * </p>
      */
     private void ensureAdminAppClient() {

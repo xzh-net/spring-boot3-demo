@@ -141,28 +141,28 @@ CREATE TABLE `iam_tenant`  (
 ) ENGINE = InnoDB AUTO_INCREMENT = 2 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '租户目录表 (身份层权威)' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
--- Table structure for iam_tenant_user (租户成员关系, 一人可属多租户)
+-- Table structure for iam_tenant_user (租户成员关系, 一人可属多租户, 下放引用用编码)
 -- ----------------------------
 CREATE TABLE `iam_tenant_user`  (
   `id` bigint(0) NOT NULL AUTO_INCREMENT COMMENT '关联ID',
-  `tenant_id` bigint(0) NOT NULL COMMENT '租户ID (关联 iam_tenant.id)',
-  `user_id` bigint(0) NOT NULL COMMENT '用户ID (关联 sys_user.id)',
+  `tenant_code` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '租户编码 (关联 iam_tenant.tenant_code)',
+  `user_code` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '业务用户编码 (关联 sys_user.user_code)',
   `tenant_username` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '租户内账号 (可空, 默认同全局用户名)',
   `status` tinyint(1) NOT NULL DEFAULT 1 COMMENT '该租户内状态: 1=正常, 0=停用',
   `create_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0) COMMENT '创建时间',
   `update_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0) ON UPDATE CURRENT_TIMESTAMP(0) COMMENT '更新时间',
   PRIMARY KEY (`id`) USING BTREE,
-  UNIQUE INDEX `uk_tenant_user`(`tenant_id`, `user_id`) USING BTREE,
-  INDEX `idx_user`(`user_id`) USING BTREE
+  UNIQUE INDEX `uk_tenant_user`(`tenant_code`, `user_code`) USING BTREE,
+  INDEX `idx_user_code`(`user_code`) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 3 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '租户-用户关系表' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of iam_tenant / iam_tenant_user
 -- ----------------------------
 INSERT INTO `iam_tenant` (id, tenant_code, tenant_name, status) VALUES (1, 'T001', '演示企业', 1);
-INSERT INTO `iam_tenant_user` (tenant_id, user_id, tenant_username, status) VALUES
-(1, 1, 'admin', 1),
-(1, 2, 'user', 1);
+INSERT INTO `iam_tenant_user` (tenant_code, user_code, tenant_username, status) VALUES
+('T001', 'u_1a2b3c4d5e6f708090a0b0c0d0e0f001', 'admin', 1),
+('T001', 'u_1a2b3c4d5e6f708090a0b0c0d0e0f002', 'user', 1);
 
 -- ----------------------------
 -- Table structure for iam_client_policy (客户端准入策略, 原 yaml client-identity-policy 表化)
@@ -185,5 +185,25 @@ CREATE TABLE `iam_client_policy`  (
 -- ----------------------------
 INSERT INTO `iam_client_policy` (id, client_id, allowed_roles, status, remark) VALUES
 (1, 'admin-app', 'ADMIN', 1, '管理后台 (原 yaml client-identity-policy: admin-app: [admin] 迁移)');
+
+-- ----------------------------
+-- Table structure for iam_external_identity (外部身份绑定表: 微信/企业微信/钉钉/支付宝/谷歌/GitHub)
+-- ----------------------------
+DROP TABLE IF EXISTS `iam_external_identity`;
+CREATE TABLE `iam_external_identity`  (
+  `id` bigint(0) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `user_code` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '本地业务用户编码 (关联 sys_user.user_code)',
+  `provider` varchar(30) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '第三方身份提供商: wechat=微信, wecom=企业微信, dingtalk=钉钉, alipay=支付宝, google=谷歌, github=GitHub',
+  `provider_open_id` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '第三方唯一标识 (openid/sub/登录标识)',
+  `union_id` varchar(200) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '第三方开放平台统一标识 (unionid, 微信系等多端通用; 无则空)',
+  `nickname` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '第三方昵称 (仅展示, 不覆盖本地昵称)',
+  `avatar` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '第三方头像 URL (仅展示, 不覆盖本地头像)',
+  `status` tinyint(1) NOT NULL DEFAULT 1 COMMENT '绑定状态: 1=已绑定有效, 0=已解绑',
+  `create_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0) COMMENT '首次绑定时间',
+  `update_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0) ON UPDATE CURRENT_TIMESTAMP(0) COMMENT '更新时间',
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE INDEX `uk_provider_open_id`(`provider`, `provider_open_id`) USING BTREE,
+  INDEX `idx_user_code`(`user_code`) USING BTREE
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '外部身份绑定表 (第三方身份 ↔ 本地用户)' ROW_FORMAT = Dynamic;
 
 SET FOREIGN_KEY_CHECKS = 1;

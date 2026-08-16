@@ -21,7 +21,7 @@ import net.xzh.authserver.vo.ClientVO;
  * 三域管理 API — 客户端域 (/api/admin/clients).
  * <p>
  * 认证中心「客户端管理」面向 oauth2_registered_client 的 REST 接口,
- * 经 Order(2) 安全链保护 (Bearer + ROLE_ADMIN)。
+ * 经 Order(2) 安全链保护 (Bearer + ADMIN_SERVICE_TOKEN 管理服务凭证)。
  * </p>
  */
 @RestController

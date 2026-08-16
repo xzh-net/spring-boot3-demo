@@ -343,14 +343,18 @@ async function edit(id) {
 
 async function save() {
     const id = document.getElementById("editId").value;
+    const clientSecret = document.getElementById("clientSecret").value;
+    const grants = GRANT_TYPES.filter(g => document.getElementById("gt_" + g.v).checked).map(g => g.v);
+    const methods = AUTH_METHODS.filter(m => document.getElementById("am_" + m.v).checked).map(m => m.v);
+    const redirectUris = document.getElementById("redirectUris").value.split(",").map(s => s.trim()).filter(Boolean);
     const body = {
         clientId: document.getElementById("clientId").value,
         clientName: document.getElementById("clientName").value,
-        clientSecret: document.getElementById("clientSecret").value,
-        authorizationGrantTypes: GRANT_TYPES.filter(g => document.getElementById("gt_" + g.v).checked).map(g => g.v),
-        clientAuthenticationMethods: AUTH_METHODS.filter(m => document.getElementById("am_" + m.v).checked).map(m => m.v),
+        clientSecret: clientSecret,
+        authorizationGrantTypes: grants,
+        clientAuthenticationMethods: methods,
         scopes: document.getElementById("scopes").value.split(",").map(s => s.trim()).filter(Boolean),
-        redirectUris: document.getElementById("redirectUris").value.split(",").map(s => s.trim()).filter(Boolean),
+        redirectUris: redirectUris,
         postLogoutRedirectUris: document.getElementById("postLogoutUris").value.split(",").map(s => s.trim()).filter(Boolean),
         requireProofKey: document.getElementById("requireProofKey").checked,
         requireAuthorizationConsent: document.getElementById("requireConsent").checked,
@@ -361,7 +365,13 @@ async function save() {
     };
 
     if (!body.clientId) { alert("client_id 必填"); return; }
-    if (body.authorizationGrantTypes.length === 0) { alert("至少选一个授权模式"); return; }
+    if (grants.length === 0) { alert("至少选一个授权模式"); return; }
+    if (grants.includes("authorization_code") && redirectUris.length === 0) {
+        alert("授权码模式必须填写至少一个 Redirect URI"); return;
+    }
+    if (clientSecret && methods.includes("none")) {
+        alert("Public 客户端 (认证方式=none) 不能设置 client_secret"); return;
+    }
 
     const url = id ? "/api/admin/clients/" + id : "/api/admin/clients";
     const method = id ? "PUT" : "POST";

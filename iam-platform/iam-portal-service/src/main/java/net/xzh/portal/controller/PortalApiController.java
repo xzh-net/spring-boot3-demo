@@ -2,8 +2,10 @@ package net.xzh.portal.controller;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import net.xzh.portal.client.AuthServerClient;
+import net.xzh.portal.service.AuthServerClient;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
+import org.springframework.security.oauth2.client.annotation.RegisteredOAuth2AuthorizedClient;
 import org.springframework.security.oauth2.core.oidc.user.OidcUser;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -19,7 +21,8 @@ import java.util.Map;
  * 为 iam-portal-web 前端 (8000) 提供 REST API:
  * <ul>
  *   <li>GET /api/user/me — 获取当前登录用户信息</li>
- *   <li>GET /api/clients — 获取可用客户端列表 (从认证中心获取)</li>
+ *   <li>GET /api/clients — 获取当前人员可见客户端列表 (携带用户 Token 调用资源中心
+ *       PublicClientController /api/public/clients/mine, 按应用授权过滤)</li>
  * </ul>
  */
 @Slf4j
@@ -54,20 +57,30 @@ public class PortalApiController {
     }
 
     /**
-     * 获取可用客户端列表.
+     * 获取当前人员可见客户端列表.
      * <p>
-     * 调用认证中心的公开接口 /api/public/clients 获取客户端列表，
-     * 用于门户页面展示 SSO 跳转卡片。
+     * 携带当前登录用户 (portal-app) 的 Access Token 调用资源中心
+     * PublicClientController {@code GET /api/public/clients/mine}, 返回该用户
+     * 按应用授权可见的应用/渠道卡片 (SSO 跳转目录)。
      */
     @GetMapping("/clients")
-    public Map<String, Object> listClients() {
+    public Map<String, Object> listClients(
+            @RegisteredOAuth2AuthorizedClient("portal-app-oidc") OAuth2AuthorizedClient authorizedClient) {
         Map<String, Object> result = new LinkedHashMap<>();
+        String accessToken = (authorizedClient != null && authorizedClient.getAccessToken() != null)
+                ? authorizedClient.getAccessToken().getTokenValue()
+                : null;
+        if (accessToken == null) {
+            result.put("success", false);
+            result.put("error", "未登录");
+            return result;
+        }
         try {
-            List<Map<String, Object>> clients = authServerClient.listPublicClients();
+            List<Map<String, Object>> clients = authServerClient.listMyClients(accessToken);
             result.put("success", true);
             result.put("clients", clients);
         } catch (Exception e) {
-            log.error("[PortalApi] 获取客户端列表失败", e);
+            log.error("[PortalApi] 获取当前人员可见客户端列表失败", e);
             result.put("success", false);
             result.put("error", e.getMessage());
         }

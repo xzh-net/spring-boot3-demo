@@ -59,7 +59,7 @@ mvn spring-boot:run -Dspring.profiles.active=prod  # 生产环境
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | `/api/user/me` | 获取当前登录用户信息（从 OidcUser 提取） |
-| GET | `/api/clients` | 获取可用客户端列表（代理调用认证中心 `/api/public/clients`） |
+| GET | `/api/clients` | 获取当前人员可见客户端列表（代理调用资源中心 `/api/public/clients/mine`） |
 | GET | `/api/auth/callback-success` | OAuth2 登录成功后的默认跳转页 |
 | GET | `/api/auth/logout` | 触发 OIDC RP-Initiated Logout |
 

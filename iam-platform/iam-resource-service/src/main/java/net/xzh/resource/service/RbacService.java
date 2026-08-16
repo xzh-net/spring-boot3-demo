@@ -158,4 +158,18 @@ public class RbacService {
     public List<Long> listRoleIdsOfUser(String userCode) {
         return userRoleMapper.selectRoleIdsByUserCode(userCode);
     }
+
+    /**
+     * 删除用户全部角色绑定 (认证中心删除 sys_user 时联动清理, 避免跨库孤儿数据).
+     *
+     * @return 删除条数
+     */
+    @Transactional
+    public int deleteUserRoleBindings(String userCode) {
+        int deleted = userRoleMapper.delete(new QueryWrapper<SysUserRole>().eq("user_code", userCode));
+        if (deleted > 0) {
+            log.info("删除用户角色绑定 userCode={}, count={}", userCode, deleted);
+        }
+        return deleted;
+    }
 }

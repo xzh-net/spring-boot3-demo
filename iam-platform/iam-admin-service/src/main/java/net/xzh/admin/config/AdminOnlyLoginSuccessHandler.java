@@ -16,9 +16,9 @@ import lombok.extern.slf4j.Slf4j;
  * <p>
  * 管理后台的"仅管理员可登录"准入已前移到认证中心：令牌签发准入策略
  * （{@code authserver.client-identity-policy.admin-app: [1]}）只允许管理端
- * (identity_type=1, ROLE_ADMIN) 用户在 admin-app 客户端换取令牌，非管理端在
+ * (identity_type=1, 持有 ADMIN_SERVICE_TOKEN) 用户在 admin-app 客户端换取令牌，非管理端在
  * 换 token 阶段即被拒绝（与密码错误一致的登录报错）。因此本服务到达此处理器
- * 的一定是管理端账号，此处仅负责登录成功跳转到 iam-admin-web 首页。
+ * 的一定是管理端账号，此处仅负责登录成功跳转到 iam-admin-web 租户管理页。
  * <p>
  * 原基于 roles 的准入判断与认证中心策略重复且不可达，已移除；登出流程见
  * {@link net.xzh.admin.controller.AuthLogoutController}。
@@ -37,6 +37,6 @@ public class AdminOnlyLoginSuccessHandler implements AuthenticationSuccessHandle
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response,
             Authentication authentication) throws IOException {
         log.debug("[login] 管理端账号 {} 登录成功", authentication.getName());
-        response.sendRedirect(adminWebUrl + "/");
+        response.sendRedirect(adminWebUrl + "/index.html");
     }
 }

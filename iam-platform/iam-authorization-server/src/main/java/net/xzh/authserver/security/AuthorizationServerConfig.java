@@ -119,7 +119,7 @@ import net.xzh.authserver.security.web.converter.PasswordGrantAuthenticationConv
  * 3 条 FilterChain 概览：
  * <ul>
  * <li><b>Order(1)</b> — OAuth2 认证链：OAuth2 端点 + 登录页（授权、令牌、内省、撤销、设备码、JWKS、OIDC、/login、/logout、/userinfo）</li>
- * <li><b>Order(2)</b> — 管理 REST API 链：/api/admin/**（Bearer + ROLE_ADMIN + 白名单客户端）</li>
+ * <li><b>Order(2)</b> — 管理 REST API 链：/api/admin/**（Bearer + ADMIN_SERVICE_TOKEN 管理服务凭证 + 白名单客户端）</li>
  * <li><b>Order(3)</b> — 设备验证链：/activate、/device-login（独立 SecurityContext Key）</li>
  * </ul>
  */
@@ -127,6 +127,12 @@ import net.xzh.authserver.security.web.converter.PasswordGrantAuthenticationConv
 @Configuration
 @EnableWebSecurity
 public class AuthorizationServerConfig {
+
+	/** 管理服务凭证类别标识 (用户令牌持有者具备管理端业务角色时签发), 管理 REST API 链以此裁决 */
+	private static final String ADMIN_SERVICE_TOKEN = "ADMIN_SERVICE_TOKEN";
+
+	/** 管理端业务角色编码 (逻辑引用资源中心 sys_role.role_code) */
+	private static final String ADMIN_ROLE_CODE = "ADMIN";
 
 	/** OAuth2 授权码登录态的 SecurityContext 在会话中的属性键 */
 	public static final String PORTAL_CONTEXT_KEY = "PORTAL_SECURITY_CONTEXT";
@@ -461,10 +467,10 @@ public class AuthorizationServerConfig {
 	/**
 	 * 认证中心管理 REST API 安全链。
 	 * <p>
-	 * 保护 {@code /api/admin/**} 四域管理接口（用户 / 客户端 / 会话 / 授权记录）。
-	 * 仅接受 {@code authserver.admin-client-ids} 白名单内客户端签发的令牌访问，
-	 * 且令牌主体需具备 {@code ROLE_ADMIN}，实现管理资源的客户端级隔离保护。
-	 */
+* 保护 {@code /api/admin/**} 四域管理接口（用户 / 客户端 / 会话 / 授权记录）。
+ * 仅接受 {@code authserver.admin-client-ids} 白名单内客户端签发的令牌访问，
+ * 且令牌主体需具备 {@code ADMIN_SERVICE_TOKEN}（管理服务凭证），实现管理资源的客户端级隔离保护。
+ */
 	@Bean
 	@Order(2)
 	public SecurityFilterChain adminApiSecurityFilterChain(HttpSecurity http,
@@ -472,7 +478,7 @@ public class AuthorizationServerConfig {
 		// 1. 配置请求匹配与授权规则
 		// 【目的】明确指定这条安全链只处理 /api/admin/** 管理接口
 		http.securityMatcher("/api/admin/**")
-				// 授权决策: 令牌需来自白名单客户端且具备 ROLE_ADMIN
+				// 授权决策: 令牌需来自白名单客户端且具备 ADMIN_SERVICE_TOKEN (管理服务凭证)
 				.authorizeHttpRequests(auth -> auth
 						.requestMatchers("/api/admin/**")
 						.access(adminAccessManager(authServerProperties.getAdminClientIds())))
@@ -550,17 +556,17 @@ public class AuthorizationServerConfig {
 	// 私有辅助方法
 	// ------------------------------------------------------------------
 
-	/**
-	 * 管理 API 访问决策：请求令牌需同时满足「客户端在白名单内」且「具备 ROLE_ADMIN」。
-	 */
-	private static AuthorizationManager<RequestAuthorizationContext> adminAccessManager(Set<String> adminClientIds) {
-		return (authentication, context) -> {
-			Authentication auth = authentication.get();
-			if (auth == null || !auth.isAuthenticated()) {
-				return new AuthorizationDecision(false);
-			}
-			boolean isAdmin = auth.getAuthorities().stream()
-					.anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
+/**
+ * 管理 API 访问决策：请求令牌需同时满足「客户端在白名单内」且「具备 ADMIN_SERVICE_TOKEN 管理服务凭证」。
+ */
+private static AuthorizationManager<RequestAuthorizationContext> adminAccessManager(Set<String> adminClientIds) {
+    return (authentication, context) -> {
+        Authentication auth = authentication.get();
+        if (auth == null || !auth.isAuthenticated()) {
+            return new AuthorizationDecision(false);
+        }
+        boolean isAdmin = auth.getAuthorities().stream()
+                .anyMatch(a -> ADMIN_SERVICE_TOKEN.equals(a.getAuthority()));
 			if (!isAdmin) {
 				return new AuthorizationDecision(false);
 			}

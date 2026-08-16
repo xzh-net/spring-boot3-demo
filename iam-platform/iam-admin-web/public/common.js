@@ -22,6 +22,13 @@ window.App = (() => {
         return String(t).replace('T', ' ').substring(0, 19);
     }
 
+    /** 登录名脱敏: 仅显示后 5 位, 前缀用 *** */
+    function maskUser(u) {
+        const name = (u && u.username) || (u && u.nickname) || '';
+        if (!name) return '';
+        return '***' + String(name).slice(-5);
+    }
+
     /**
      * fetch 封装: 同源 /api/** (Cookie 自动携带)。
      * - 非 GET 且 body 为对象时自动 JSON 序列化
@@ -54,9 +61,9 @@ window.App = (() => {
     }
 
     /**
-     * 登录守卫: 校验当前会话 (ROLE_ADMIN)。
+     * 登录守卫: 校验当前会话 (ADMIN_SERVICE_TOKEN 管理服务凭证)。
      * - 未登录 → 跳转 /login
-     * - 已登录但非管理端 (ROLE_USER) → 走 /logout (清除本地 + SSO 会话), 由服务端准入把关
+     * - 已登录但非管理端 (仅 ROLE_USER/USER) → 走 /logout (清除本地 + SSO 会话), 由服务端准入把关
      *   正常情况下不会发生: admin-service 登录成功处理器已拒绝非管理端建立会话。
      * 通过则返回 /api/current-user 数据。
      */
@@ -72,14 +79,14 @@ window.App = (() => {
                 location.href = LOGIN_URL;
                 return null;
             }
-            // 仅允许管理端 (identity_type=1, id_token roles 含 ROLE_ADMIN) 进入后台
+            // 仅允许管理端进入后台: 令牌类别 ADMIN_SERVICE_TOKEN (管理服务凭证) 为唯一裁决;
+            // 兼容旧令牌/旧会话 (ROLE_ADMIN)
             const roles = Array.isArray(me.roles) ? me.roles : [];
-            let isAdmin = roles.includes('ROLE_ADMIN');
-            if (roles.length === 0) {
-                // 兼容旧会话/roles 缺失时回退到 authorities 判断
-                const authorities = me.authorities || [];
-                isAdmin = authorities.includes('ROLE_ADMIN') || authorities.includes('SCOPE_admin');
-            }
+            const authorities = Array.isArray(me.authorities) ? me.authorities : [];
+            let isAdmin = roles.includes('ADMIN_SERVICE_TOKEN')
+                || authorities.includes('ADMIN_SERVICE_TOKEN')
+                || roles.includes('ROLE_ADMIN')
+                || authorities.includes('ROLE_ADMIN');
             if (!isAdmin) {
                 location.href = '/logout';
                 return null;
@@ -93,14 +100,16 @@ window.App = (() => {
 
     const NAV_ITEMS = [
         ['tenant', '/tenant.html', '租户管理'],
-        ['index', '/index.html', '首页'],
         ['user', '/user.html', '用户管理'],
         ['role', '/role.html', '角色管理'],
         ['permission', '/permission.html', '权限管理'],
         ['client', '/client.html', '客户端管理'],
+        ['application', '/application.html', '应用管理'],
         ['policy', '/policy.html', '准入策略'],
-        ['authorization', '/authorization.html', '授权管理'],
-        ['online', '/online.html', '在线用户']
+        ['endpointPolicy', '/endpoint_policy.html', '准入管理'],
+        ['capability', '/capability.html', '能力开放'],
+        ['online', '/online.html', '在线用户'],
+        ['authorization', '/authorization.html', '授权管理']
     ];
 
     /**
@@ -112,7 +121,7 @@ window.App = (() => {
         if (!el) return;
         el.classList.add('navbar');
         const userLabel = (user && (user.username || user.nickname))
-            ? `<span style="color:#dbeafe;font-size:13px;white-space:nowrap;margin-right:14px;" title="${esc(user.email || '')}">👤 ${esc(user.nickname || user.username)}</span>`
+            ? `<span style="color:#dbeafe;font-size:13px;white-space:nowrap;margin-right:14px;" title="${esc(user.email || '')}">👤 ${esc(maskUser(user))}</span>`
             : '';
         el.innerHTML =
             `<div class="brand">🚀 统一认证中心</div>` +
@@ -132,5 +141,5 @@ window.App = (() => {
         }
     }
 
-    return { LOGIN_URL, esc, fmtTime, api, guard, renderNavbar };
+    return { LOGIN_URL, esc, fmtTime, maskUser, api, guard, renderNavbar };
 })();

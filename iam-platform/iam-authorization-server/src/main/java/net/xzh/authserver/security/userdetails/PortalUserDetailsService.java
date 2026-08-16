@@ -3,7 +3,6 @@ package net.xzh.authserver.security.userdetails;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.User;
@@ -25,8 +24,9 @@ import net.xzh.authserver.remote.RemoteRoleService;
  * <p>
  * V6.2 定版：用户凭据收归 {@code iam_identity.sys_user}（本地库查询 + BCrypt 校验，登录零远程凭据调用）。
  * principal name 采用业务用户编码 {@code user_code}（即令牌 sub），业务 RBAC 角色由资源中心
- * {@link RemoteRoleService} (D6) 按 user_code 供给，替换历史 user_label 的粗粒度映射；
- * 资源中心不可达时降级按 user_label 映射（ROLE_ADMIN/ROLE_USER），保证管理端在 RBAC 服务中断时仍可登录
+ * {@link RemoteRoleService} (D6) 按 user_code 供给 (角色编码原样, 不拼 ROLE_ 前缀), 替换历史
+ * user_label 的粗粒度映射; 资源中心不可达时降级按 user_label 映射（ADMIN_SERVICE_TOKEN/ROLE_USER），
+ * 保证管理端在 RBAC 服务中断时仍可登录
  * （令牌签发准入仍在 {@code ClientUserPolicyService} 按 fail-closed 把关）。
  * <p>
  * 历史命名 PortalUserDetailsService (bean: portalUserDetailsService) 保留不变。
@@ -48,14 +48,21 @@ public final class PortalUserDetailsService implements UserDetailsService {
         this.remoteRoleService = remoteRoleService;
     }
 
+/** 管理端业务角色编码 (逻辑引用资源中心 sys_role.role_code) */
+    private static final String ADMIN_ROLE_CODE = "ADMIN";
+
+    /** 管理服务凭证类别标识: 用户令牌持有者具备管理端角色时发给令牌的 authority */
+    private static final String ADMIN_SERVICE_TOKEN = "ADMIN_SERVICE_TOKEN";
+
     /**
-     * 根据用户名加载用户详情（本地库 iam_identity.sys_user）。
+     * 按用户名加载用户详情（本地库 iam_identity.sys_user）。
      * <ol>
      *   <li>校验用户名非空，为空时直接抛出 {@link UsernameNotFoundException}；</li>
      *   <li>按用户名精确查询，未命中时抛出 {@link UsernameNotFoundException}；</li>
      *   <li>以业务用户编码 user_code 作为 principal name（令牌 sub），业务 RBAC 角色经
-     *       {@link RemoteRoleService} 按 user_code 获取（角色权威在资源中心）；</li>
-     *   <li>资源中心不可达时降级按 user_label 映射 ROLE_ADMIN/ROLE_USER，避免管理端被锁死；</li>
+     *       {@link RemoteRoleService} 按 user_code 获取（角色权威在资源中心，角色编码原样返回）；
+     *       业务角色含 {@code ADMIN} 时额外注入 {@code ADMIN_SERVICE_TOKEN}（管理服务凭证）作为令牌类别；</li>
+     *   <li>资源中心不可达时降级按 user_label 映射 ADMIN_SERVICE_TOKEN/ROLE_USER，避免管理端被锁死；</li>
      *   <li>构建并返回 Spring Security 的 {@link UserDetails} 实体，包含启用状态、账户过期、凭证过期、锁定等完整属性。</li>
      * </ol>
      *
@@ -108,18 +115,23 @@ public final class PortalUserDetailsService implements UserDetailsService {
     private UserDetails buildUserDetails(SysUser user) {
         String userCode = user.getUserCode();
 
-        // 业务 RBAC 角色: 资源中心 D6 按 user_code 供给; 不可达时降级按 user_label 粗粒度映射
+        // 业务 RBAC 角色: 资源中心 D6 按 user_code 供给 (角色编码原样, 不拼 ROLE_ 前缀);
+        // 令牌类别: 业务角色含管理端角色 → 注入 ADMIN_SERVICE_TOKEN (管理服务凭证)
         List<SimpleGrantedAuthority> authorities;
         try {
             Set<String> roles = remoteRoleService.getUserRoles(userCode);
-            authorities = roles.stream()
-                    .map(SimpleGrantedAuthority::new)
-                    .collect(Collectors.toList());
+            authorities = new java.util.ArrayList<>();
+            for (String role : roles) {
+                authorities.add(new SimpleGrantedAuthority(role));
+            }
+            if (roles.contains(ADMIN_ROLE_CODE)) {
+                authorities.add(new SimpleGrantedAuthority(ADMIN_SERVICE_TOKEN));
+            }
             log.debug("用户 {} (user_code={}) RBAC 角色: {}", user.getUsername(), userCode, roles);
         } catch (Exception e) {
             boolean admin = "admin".equals(user.getUserLabel());
             authorities = Collections.singletonList(
-                    new SimpleGrantedAuthority(admin ? "ROLE_ADMIN" : "ROLE_USER"));
+                    new SimpleGrantedAuthority(admin ? ADMIN_SERVICE_TOKEN : "ROLE_USER"));
             log.warn("RBAC 角色解析失败 userCode={}, 降级按 user_label 映射: {}", userCode, e.getMessage());
         }
 

@@ -17,7 +17,7 @@
 | `iam-admin-web` | 8001 | 纯 HTML 管理台（用户/客户端/授权/在线/监控），由 admin-service 代理后端 |
 
 访问 `http://localhost:8001` → 任一管理页触发登录 → 跳转认证中心登录页（`admin / 123456`）→ 回跳管理台。
-页面调用的 `GET /api/admin/**` 等管理 API 由认证中心 Order(2) 安全链保护（Bearer + `ROLE_ADMIN`）。
+页面调用的 `GET /api/admin/**` 等管理 API 由认证中心 Order(2) 安全链保护（Bearer + `ADMIN_SERVICE_TOKEN`）。
 
 > 认证中心的 `/admin/**` 页面、`AdminUserDetailsService`、`templates/admin/*` 已随迁移删除。
 
@@ -36,7 +36,7 @@ User (用户)
 
 ### 管理 API
 
-三域管理 REST API 经 `/api/admin/**` 暴露（Order(2) 安全链：Bearer + `ROLE_ADMIN`），由管理后台 / 运维脚本调用：
+三域管理 REST API 经 `/api/admin/**` 暴露（Order(2) 安全链：Bearer + `ADMIN_SERVICE_TOKEN`），由管理后台 / 运维脚本调用：
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
@@ -141,7 +141,7 @@ net.xzh.authserver
 
 > 原 Order(2) 资源服务器链 (/api/** Bearer 认证) 已随业务接口迁移到独立项目
 > [iam-resource-service](../iam-resource-service/README.md) (:9010)。
-> 认证中心保留的管理 API 位于 Order(2) 链：`/api/admin/**`（Bearer + `ROLE_ADMIN`）。
+> 认证中心保留的管理 API 位于 Order(2) 链：`/api/admin/**`（Bearer + `ADMIN_SERVICE_TOKEN`）。
 > 认证相关的 /userinfo 仍由本中心提供（Bearer 校验由 UserInfoController 自省实现）。
 > Order(3) 原管理后台表单链已随管理台迁移删除；Order(4) 预留。
 > 门户已拆分为独立项目 (iam-portal-web + iam-portal-service)，不再需要 Order(6) 兜底链。
@@ -208,8 +208,8 @@ net.xzh.authserver
 
 | 账号 | 密码 | 角色 | 用途 |
 |------|------|------|------|
-| `admin` | `123456` | ROLE_ADMIN | 管理后台 |
-| `user` | `123456` | ROLE_USER | 演示项目登录 |
+| `admin` | `123456` | ADMIN（业务角色，令牌注入 `ADMIN_SERVICE_TOKEN`） | 管理后台 |
+| `user` | `123456` | USER（业务角色，默认 `ROLE_USER`） | 演示项目登录 |
 
 ## 默认客户端
 

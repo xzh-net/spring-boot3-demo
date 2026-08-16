@@ -20,7 +20,7 @@ import net.xzh.authserver.vo.SsoSessionVO;
  * 三域管理 API — 会话域 (/api/admin/sessions).
  * <p>
  * 统一在线用户 / 会话层级视图 (User → SSO Session → Client Session) 与强制下线,
- * 经 Order(2) 安全链保护 (Bearer + ROLE_ADMIN)。逻辑复用 {@link AuthSessionService}。
+ * 经 Order(2) 安全链保护 (Bearer + ADMIN_SERVICE_TOKEN 管理服务凭证)。逻辑复用 {@link AuthSessionService}。
  * </p>
  */
 @Slf4j

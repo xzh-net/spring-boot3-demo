@@ -46,7 +46,7 @@ public class SysUser {
 
     private LocalDateTime updateTime;
 
-    /** 非表字段: 创建/编辑时选中的租户 ID 列表 (写 iam_tenant_user) */
+    /** 非表字段: 创建/编辑时选中的租户编码列表 (写 iam_tenant_user.tenant_code) */
     @TableField(exist = false)
-    private List<Long> tenantIds;
+    private List<String> tenantCodes;
 }

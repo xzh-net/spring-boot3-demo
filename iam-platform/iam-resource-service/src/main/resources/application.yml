@@ -50,9 +50,11 @@ authserver:
   base-url: http://localhost:9000
   client-id: resource-server
   client-secret: 123456
-  # 服务令牌白名单 (M2M): 该列表内 client_id 签发的令牌视为服务间调用 (注入 ROLE_SERVICE),
+  # 服务令牌白名单 (M2M): 该列表内 client_id 签发的令牌视为服务间调用 (注入 PORTAL_SERVICE_TOKEN),
   # 供 /api/internal/** 鉴权; 未来对外 API 服务平台接入时在此追加
   service-client-ids: [resource-server]
+  # 门户客户端白名单: 仅列表内客户端签发的令牌可访问 portal 域 (/api/public/**), 门户信息不对任意客户端开放
+  portal-client-ids: [portal-app]
 
 logging:
   level:

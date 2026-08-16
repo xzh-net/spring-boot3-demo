@@ -19,7 +19,7 @@ import net.xzh.resource.service.RbacService;
 
 /**
  * 权限管理 API（资源中心管理端能力域）.
- * <p>仅面向管理后台（iam-admin-service），路径由 /api/admin/** 规则保护: Bearer + hasRole('ADMIN').
+ * <p>仅面向管理后台（iam-admin-service），路径由?/api/admin/** 规则保护: Bearer + ADMIN_SERVICE_TOKEN 管理服务凭证.
  */
 @Slf4j
 @RestController

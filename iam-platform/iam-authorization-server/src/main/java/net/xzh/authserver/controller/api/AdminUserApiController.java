@@ -23,7 +23,7 @@ import net.xzh.authserver.vo.SsoSessionVO;
  * 三域管理 API — 用户域 (/api/admin/users).
  * <p>
  * 认证中心「用户管理」面向 iam_identity.sys_user 的 REST 接口,
- * 经 Order(2) 安全链保护 (Bearer + ROLE_ADMIN), 供 admin-service / 管理前端调用。
+ * 经 Order(2) 安全链保护 (Bearer + ADMIN_SERVICE_TOKEN 管理服务凭证), 供 admin-service / 管理前端调用。
  * </p>
  */
 @RestController

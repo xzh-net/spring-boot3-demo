@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>统一认证中心 · 接口准入管理</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+            background: #f0f2f5; color: #1e293b; min-height: 100vh;
+        }
+        .navbar {
+            background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+            color: #fff; padding: 0 24px; height: 56px;
+            display: flex; align-items: center; gap: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            position: sticky; top: 0; z-index: 10; overflow-x: auto; flex-wrap: nowrap;
+        }
+        .navbar .brand { font-weight: 700; font-size: 16px; color: #ffffff; }
+        .navbar a { color: #dbeafe; text-decoration: none; padding: 8px 14px; border-radius: 6px; font-size: 14px; }
+        .navbar a:hover { background: rgba(255,255,255,0.15); color: #ffffff; }
+        .navbar a.active { background: rgba(255,255,255,0.22); color: #ffffff; }
+        .navbar .spacer { flex: 1; }
+        .navbar .logout { color: #dbeafe; font-size: 13px; }
+
+        .container { max-width: 1280px; margin: 24px auto; padding: 0 24px; }
+        .page-header {
+            display: flex; justify-content: space-between; align-items: flex-start;
+            margin-bottom: 20px; flex-wrap: wrap; gap: 12px;
+        }
+        .page-header h2 { font-size: 22px; color: #1e3a5f; }
+        .page-header .hint { font-size: 12px; color: #94a3b8; margin-top: 4px; max-width: 760px; line-height: 1.7; }
+        .btn {
+            padding: 8px 18px; border-radius: 6px; border: none; cursor: pointer;
+            font-size: 14px; font-weight: 500; transition: all 0.2s;
+        }
+        .btn-primary { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; }
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(37,99,235,0.35); }
+        .btn-sm { padding: 5px 12px; font-size: 12px; }
+        .btn-link { background: none; border: none; color: #2563eb; cursor: pointer; font-size: 13px; }
+        .btn-link:hover { text-decoration: underline; }
+        .btn-link.danger { color: #dc2626; }
+
+        .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+        .toolbar select, .toolbar input {
+            padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 6px;
+            font-size: 13px; background: #fff; color: #1e293b;
+        }
+        .toolbar .count { font-size: 12px; color: #64748b; }
+
+        .card {
+            background: #ffffff; border-radius: 10px; border: 1px solid #e2e8f0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.06); overflow: hidden;
+        }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 10px 12px; text-align: left; font-size: 12px; }
+        th { background: #fafafa; color: #475569; border-bottom: 1px solid #e2e8f0; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap; }
+        td { border-bottom: 1px solid #f0f0f0; color: #334155; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover { background: #f8fafc; }
+        td.mono { font-family: "SFMono-Regular", Consolas, monospace; font-size: 12px; }
+        .tag { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; background: rgba(37,99,235,0.08); color: #2563eb; border: 1px solid rgba(37,99,235,0.2); margin-right: 4px; }
+        .tag.green { background: rgba(34,197,94,0.08); color: #16a34a; border-color: rgba(34,197,94,0.2); }
+        .tag.orange { background: rgba(249,115,22,0.08); color: #ea580c; border-color: rgba(249,115,22,0.2); }
+        .tag.gray { background: rgba(148,163,184,0.08); color: #64748b; border-color: rgba(148,163,184,0.2); }
+        .tag.red { background: rgba(220,38,38,0.08); color: #dc2626; border-color: rgba(220,38,38,0.2); }
+
+        .empty { text-align: center; padding: 40px; color: #94a3b8; font-size: 14px; }
+        .note { margin-top: 16px; padding: 12px 16px; border-left: 3px solid #2563eb; border-radius: 4px; font-size: 13px; line-height: 1.8; }
+        .note.info { background: #eff6ff; color: #1e40af; border-color: #2563eb; }
+
+        .modal-bg {
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+            align-items: center; justify-content: center; z-index: 100;
+        }
+        .modal-bg.show { display: flex; }
+        .modal {
+            background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; width: 560px;
+            box-shadow: 0 16px 50px rgba(0,0,0,0.18); color: #1e293b;
+        }
+        .modal-header {
+            padding: 16px 24px; border-bottom: 1px solid #f0f0f0; display: flex;
+            justify-content: space-between; align-items: center;
+        }
+        .modal-header h3 { font-size: 16px; color: #1e3a5f; }
+        .close-btn { background: none; border: none; font-size: 22px; cursor: pointer; color: #64748b; }
+        .modal-body { padding: 20px 24px; }
+        .form-row { margin-bottom: 14px; }
+        .form-row label { display: block; font-size: 12px; color: #475569; margin-bottom: 5px; font-weight: 500; }
+        .form-row input, .form-row select, .form-row textarea {
+            width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px;
+            font-size: 13px; outline: none; transition: border-color 0.2s;
+            background: #ffffff; color: #1e293b;
+        }
+        .form-row input:focus, .form-row select:focus, .form-row textarea:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.12); }
+        .form-row textarea { min-height: 54px; resize: vertical; font-family: inherit; }
+        .form-row .hint { font-size: 11px; color: #64748b; margin-top: 4px; }
+        .form-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; padding-top: 16px; border-top: 1px solid #f0f0f0; }
+    </style>
+</head>
+<body>
+    <div class="navbar" id="navbar"></div>
+
+    <div class="container">
+        <div class="page-header">
+            <div>
+                <h2>接口准入管理</h2>
+                <div class="hint">资源中心全部 API 准入点一览 (启动时按 controller 分包扫描请求映射自动播种 <code>coded</code> 默认规则);
+                    管理端可覆盖为 <code>override</code> 或重置回扫描默认; 未登记路径按默认拒绝 (deny-by-default)。</div>
+            </div>
+            <div>
+                <button class="btn" onclick="rescan()" style="padding:8px 18px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;color:#1e293b;cursor:pointer;font-size:14px;font-weight:500;">🔄 重新扫描</button>
+                <button class="btn btn-primary" onclick="list()">刷新</button>
+            </div>
+        </div>
+
+        <div class="toolbar">
+            <select id="fDomain" onchange="list()">
+                <option value="">全部能力域</option>
+                <option value="admin">admin · 管理端</option>
+                <option value="portal">portal · 门户</option>
+                <option value="capability">capability · 开放能力</option>
+                <option value="internal">internal · 服务间内部</option>
+                <option value="other">other · 其他</option>
+            </select>
+            <select id="fSource" onchange="list()">
+                <option value="">全部来源</option>
+                <option value="coded">coded · 扫描默认</option>
+                <option value="override">override · 管理端覆盖</option>
+            </select>
+            <input id="fKeyword" placeholder="路径关键字..." style="width:220px;">
+            <button class="btn btn-sm" onclick="list()">🔍 过滤</button>
+            <span class="count" id="countTip"></span>
+        </div>
+
+        <div class="card">
+            <table>
+                <thead>
+                    <tr>
+                        <th>能力域</th>
+                        <th>方法</th>
+                        <th>路径</th>
+                        <th>准入要求</th>
+                        <th>来源</th>
+                        <th>状态</th>
+                        <th>备注</th>
+                        <th style="width: 130px">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="policyTable"></tbody>
+            </table>
+            <div class="empty" id="emptyTip" style="display:none;">暂无准入点 (可点击「重新扫描」播种)</div>
+        </div>
+
+        <div class="note info">
+            准入裁决：请求按 <code>method + path</code> 匹配启用规则 → <code>PERMIT_ALL</code>=放行 /
+            <code>AUTHENTICATED</code>=任意凭证 / <code>ADMIN_SERVICE_TOKEN</code>、<code>PORTAL_SERVICE_TOKEN</code>=需对应令牌类别 /
+            <code>CAPABILITY</code>=开放能力引擎（任意凭证 + 客户端订阅校验）；<code>internal</code> 域叠加
+            client_id 服务白名单、<code>portal</code> 域叠加门户客户端白名单；命中停用策略或未命中任何策略均拒绝。
+        </div>
+    </div>
+
+    <div class="modal-bg" id="modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>覆盖准入策略</h3>
+                <button class="close-btn" onclick="closeModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editId">
+                <div class="form-row">
+                    <label>端点</label>
+                    <input type="text" id="editEndpoint" disabled>
+                </div>
+                <div class="form-row">
+                    <label>准入要求</label>
+                    <select id="fAuthority">
+                        <option value="AUTHENTICATED">AUTHENTICATED · 任意凭证</option>
+                        <option value="PERMIT_ALL">PERMIT_ALL · 放行</option>
+                        <option value="ADMIN_SERVICE_TOKEN">ADMIN_SERVICE_TOKEN · 管理服务凭证</option>
+                        <option value="PORTAL_SERVICE_TOKEN">PORTAL_SERVICE_TOKEN · 门户服务凭证</option>
+                        <option value="CAPABILITY">CAPABILITY · 按能力订阅校验</option>
+                    </select>
+                    <div class="hint">覆盖后来源将标记为 override</div>
+                </div>
+                <div class="form-row">
+                    <label>备注</label>
+                    <textarea id="fRemark" placeholder="策略说明"></textarea>
+                </div>
+                <div class="form-row">
+                    <label><input type="checkbox" id="fStatus" checked style="width:auto;margin-right:6px;">启用</label>
+                </div>
+                <div class="form-actions">
+                    <button class="btn" onclick="closeModal()">取消</button>
+                    <button class="btn btn-primary" onclick="save()">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script src="/common.js"></script>
+<script>
+let DATA = [];
+
+const DOMAIN_LABEL = {
+    admin: '<span class="tag">管理端</span>',
+    portal: '<span class="tag green">portal 门户</span>',
+    capability: '<span class="tag orange">开放能力</span>',
+    internal: '<span class="tag gray">服务间内部</span>',
+    other: '<span class="tag gray">其他</span>'
+};
+
+function domainBadge(d) { return DOMAIN_LABEL[d] || App.esc(d || '-'); }
+function methodTag(m) { return m === 'ANY' ? '<span class="tag gray">ANY</span>' : '<span class="tag">' + App.esc(m) + '</span>'; }
+function authorityText(a) {
+    if (a === 'PERMIT_ALL') return '<span class="tag green">PERMIT_ALL</span>';
+    if (a === 'AUTHENTICATED') return '<span class="tag">AUTHENTICATED</span>';
+    if (a === 'CAPABILITY') return '<span class="tag orange">CAPABILITY</span>';
+    return '<span class="tag">' + App.esc(a) + '</span>';
+}
+
+async function list() {
+    let data;
+    try { data = await App.api("/api/admin/endpoint-policies"); }
+    catch (e) { alert("加载失败: " + e.message); return; }
+    DATA = data || [];
+
+    const domain = document.getElementById("fDomain").value;
+    const source = document.getElementById("fSource").value;
+    const keyword = document.getElementById("fKeyword").value.trim();
+
+    const rows = DATA.filter(p =>
+        (!domain || p.domain === domain) &&
+        (!source || p.source === source) &&
+        (!keyword || (p.path || '').toLowerCase().includes(keyword.toLowerCase()))
+    );
+
+    document.getElementById("countTip").textContent = "共 " + rows.length + " / " + DATA.length + " 个准入点";
+    const tbody = document.getElementById("policyTable");
+    const empty = document.getElementById("emptyTip");
+    if (rows.length === 0) {
+        tbody.innerHTML = ""; empty.style.display = "block"; return;
+    }
+    empty.style.display = "none";
+    tbody.innerHTML = rows.map(p => {
+        const overridden = p.source === 'override';
+        const enabled = p.status === 1;
+        const statusTag = !enabled ? '<span class="tag red">禁用</span>' : (overridden ? '<span class="tag orange">覆盖</span>' : '<span class="tag green">启用</span>');
+        return `<tr>
+            <td>${domainBadge(p.domain)}</td>
+            <td>${methodTag(p.method)}</td>
+            <td class="mono" style="word-break:break-all;">${App.esc(p.path)}</td>
+            <td>${authorityText(p.requiredAuthority)}</td>
+            <td>${overridden ? '<span class="tag orange">override</span>' : '<span class="tag gray">coded</span>'}</td>
+            <td>${statusTag}</td>
+            <td>${App.esc(p.remark || '-')}</td>
+            <td>
+                <button class="btn-link" onclick='edit(${JSON.stringify(JSON.stringify(p))})'>编辑</button>
+                <button class="btn-link danger" onclick='reset(${p.id})'>重置默认</button>
+            </td>
+        </tr>`;
+    }).join("");
+}
+
+function edit(pStr) {
+    const p = JSON.parse(pStr);
+    document.getElementById("editId").value = p.id;
+    document.getElementById("editEndpoint").value = p.method + "  " + p.path;
+    document.getElementById("fAuthority").value = p.requiredAuthority;
+    document.getElementById("fRemark").value = p.remark || "";
+    document.getElementById("fStatus").checked = p.status !== 0;
+    document.getElementById("modal").classList.add("show");
+}
+
+function closeModal() { document.getElementById("modal").classList.remove("show"); }
+
+async function save() {
+    const id = document.getElementById("editId").value;
+    const body = {
+        requiredAuthority: document.getElementById("fAuthority").value,
+        remark: document.getElementById("fRemark").value.trim(),
+        status: document.getElementById("fStatus").checked ? 1 : 0
+    };
+    try {
+        await App.api("/api/admin/endpoint-policies/" + id, { method: "PUT", body });
+        closeModal(); list();
+    } catch (e) { alert("保存失败: " + e.message); }
+}
+
+async function reset(id) {
+    if (!confirm("确认重置为扫描默认规则 ?")) return;
+    try {
+        await App.api("/api/admin/endpoint-policies/" + id, { method: "DELETE" });
+        list();
+    } catch (e) { alert("重置失败: " + e.message); }
+}
+
+async function rescan() {
+    if (!confirm("确认重新扫描并补种缺失准入点 ? (已存在规则不受影响)")) return;
+    try {
+        const data = await App.api("/api/admin/endpoint-policies/rescan", { method: "POST" });
+        alert("重扫完成, 新增 " + data.inserted + " 个准入点");
+        list();
+    } catch (e) { alert("重扫失败: " + e.message); }
+}
+
+App.guard().then(function (me) {
+    App.renderNavbar('endpointPolicy', me);
+    list();
+});
+</script>
+</body>
+</html>

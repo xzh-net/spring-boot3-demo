@@ -162,7 +162,7 @@ async function renderHome(req, res) {
         return layout('统一认证门户', content, false);
     }
 
-    // 已登录, 加载客户端列表
+    // 已登录, 加载当前人员可见客户端列表
     let clientsHtml = '<div class="loading">正在加载应用列表...</div>';
     try {
         const clientsResp = await proxyToPortalServer('/api/clients', req);
@@ -170,17 +170,24 @@ async function renderHome(req, res) {
             const data = JSON.parse(clientsResp.body);
             if (data.success && data.clients && data.clients.length > 0) {
                 clientsHtml = '<div class="client-grid">' + data.clients.map(c => {
-                    const icon = c.type === 'device' ? '📺' : '📋';
-                    const link = c.ssoUrl || c.homepage || '#';
+                    const typeEmoji = { WEB: '🖥️', MOBILE: '📱', H5: '📲', MINI: '📦', DEVICE: '📺' };
+                    const iconHtml = c.icon
+                        ? `<img src="${esc(c.icon)}" style="width:36px;height:36px;border-radius:8px;object-fit:contain;margin-bottom:12px;" alt="">`
+                        : `<div class="icon">${typeEmoji[c.type] || '📋'}</div>`;
+                    const link = c.ssoUrl || '#';
+                    const metaParts = [];
+                    if (c.channelName) metaParts.push(`渠道: ${esc(c.channelName)}`);
+                    if (c.isDefault === 1) metaParts.push('默认');
+                    if (c.clientId) metaParts.push(`client_id: ${esc(c.clientId)}`);
                     return `<a href="${esc(link)}" class="client-card">
-                        <div class="icon">${icon}</div>
-                        <h3>${esc(c.name || c.clientName || c.clientId)}</h3>
-                        <p>${esc(c.description || (c.type === 'device' ? '设备码授权应用' : 'Web应用 (SSO)'))}</p>
-                        <div class="meta">client_id: ${esc(c.clientId)} · ${esc(c.type || 'web')}</div>
+                        ${iconHtml}
+                        <h3>${esc(c.name || c.appCode || '未命名应用')}</h3>
+                        <p>${esc(c.description || '')}</p>
+                        <div class="meta">${metaParts.join(' · ') || esc(c.type || 'web')}</div>
                     </a>`;
                 }).join('') + '</div>';
             } else {
-                clientsHtml = '<div class="empty">暂无可用的客户端应用</div>';
+                clientsHtml = '<div class="empty">暂无可见应用 (请联系管理员进行应用授权)</div>';
             }
         }
     } catch (e) {

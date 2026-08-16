@@ -20,7 +20,7 @@ import net.xzh.authserver.service.TenantService;
  * 三域管理 API — 租户域 (/api/admin/tenants).
  * <p>
  * 认证中心「租户管理」面向 iam_identity.iam_tenant 的 REST 接口,
- * 经 Order(2) 安全链保护 (Bearer + ROLE_ADMIN), 供 admin-service / 管理前端调用。
+ * 经 Order(2) 安全链保护 (Bearer + ADMIN_SERVICE_TOKEN 管理服务凭证), 供 admin-service / 管理前端调用。
  */
 @RestController
 @RequestMapping("/api/admin/tenants")

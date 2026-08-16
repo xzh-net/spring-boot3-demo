@@ -31,6 +31,17 @@
         .btn-link { background: none; border: none; color: #2563eb; cursor: pointer; font-size: 13px; }
         .btn-link:hover { text-decoration: underline; }
         .btn-link.danger { color: #dc2626; }
+        .btn-icon { background: none; border: none; cursor: pointer; font-size: 13px; padding: 4px 6px; border-radius: 4px; color: #64748b; transition: all 0.15s; position: relative; vertical-align: middle; }
+        .btn-icon:hover { background: #f1f5f9; color: #2563eb; }
+        .btn-icon .copy-tooltip {
+            visibility: hidden; opacity: 0; position: absolute; bottom: 130%; right: 0; transform: translateX(0);
+            background: #1e293b; color: #f8fafc; padding: 6px 10px; border-radius: 6px; font-size: 11px;
+            pointer-events: none; transition: opacity 0.2s; z-index: 200;
+            font-family: "Cascadia Code", Consolas, monospace; white-space: nowrap; max-width: 400px;
+            overflow: hidden; text-overflow: ellipsis;
+        }
+        .btn-icon:hover .copy-tooltip { visibility: visible; opacity: 1; }
+        .copy-copied { color: #16a34a !important; }
 
         .card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); overflow: hidden; }
         table { width: 100%; border-collapse: collapse; }
@@ -89,7 +100,7 @@
             <table>
                 <thead>
                     <tr>
-                        <th>ID</th><th>用户名</th><th>标签</th><th>租户</th><th>昵称</th><th>邮箱</th><th>手机号</th><th>状态</th><th>创建时间</th>
+                        <th>ID</th><th>用户名</th><th>用户编码</th><th>标签</th><th>租户</th><th>昵称</th><th>邮箱</th><th>手机号</th><th>状态</th><th>创建时间</th>
                         <th style="width: 260px">操作</th>
                     </tr>
                 </thead>
@@ -107,6 +118,7 @@
             <div class="modal-body">
                 <input type="hidden" id="editId">
                 <div class="form-row"><label>用户名</label><input type="text" id="username"></div>
+                <div class="form-row"><label>用户编码 (user_code)</label><input type="text" id="userCode" placeholder="留空自动生成 u_xxx (角色/应用授权以该编码绑定)"></div>
                 <div class="form-row"><label>密码</label><input type="password" id="password" placeholder="新增必填, 编辑可留空"></div>
                 <div class="form-row"><label>昵称</label><input type="text" id="nickname"></div>
                 <div class="form-row"><label>邮箱</label><input type="email" id="email"></div>
@@ -157,33 +169,55 @@ function identityTag(v) {
     return `<span class="tag gray">客户端</span>`;
 }
 
-let tenantMap = {};   // tenantId -> tenant
+/** 复制图标 (inline SVG, 与在线用户 Token 复制图标保持一致) */
+const COPY_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+
+/** 复制用户编码到剪贴板 (交互与在线用户 Token 复制一致) */
+function copyCode(btn) {
+    const code = btn.getAttribute("data-code");
+    if (!code) return;
+    navigator.clipboard.writeText(code).then(function () {
+        const tip = btn.querySelector(".copy-tooltip");
+        if (tip) {
+            const orig = tip.getAttribute("data-full") || tip.textContent;
+            tip.textContent = "✅ 已复制";
+            tip.style.background = "#16a34a";
+            setTimeout(function () { tip.textContent = orig; tip.style.background = ""; }, 1500);
+        }
+        btn.classList.add("copy-copied");
+        setTimeout(function () { btn.classList.remove("copy-copied"); }, 1500);
+    }).catch(function () {
+        alert("复制失败, 请手动复制");
+    });
+}
+
+let tenantMap = {};   // tenantCode -> tenant
 
 async function loadTenants() {
     tenantMap = {};
     try {
         const tenants = await App.api('/api/admin/tenants') || [];
-        tenants.forEach(t => tenantMap[t.id] = t);
+        tenants.forEach(t => tenantMap[t.tenantCode] = t);
     } catch (e) {
         console.warn('加载租户失败: ' + e.message);
     }
     const box = document.getElementById('tenantCheckboxes');
-    const ids = Object.keys(tenantMap);
-    box.innerHTML = ids.length === 0
+    const codes = Object.keys(tenantMap);
+    box.innerHTML = codes.length === 0
         ? '<span style="color:#94a3b8;">暂无租户, 请先到「租户管理」创建</span>'
-        : ids.map(id => {
-            const t = tenantMap[id];
-            return `<label style="display:flex;align-items:center;gap:6px;white-space:nowrap;"><input type="checkbox" value="${id}" ${ids.length === 1 ? 'checked' : ''}> ${App.esc(t.tenantName)} <span style="color:#94a3b8;">(${App.esc(t.tenantCode)})</span></label>`;
+        : codes.map(code => {
+            const t = tenantMap[code];
+            return `<label style="display:flex;align-items:center;gap:6px;white-space:nowrap;"><input type="checkbox" value="${App.esc(code)}" ${codes.length === 1 ? 'checked' : ''}> ${App.esc(t.tenantName)} <span style="color:#94a3b8;">(${App.esc(t.tenantCode)})</span></label>`;
         }).join('');
 }
 
-function selectedTenantIds() {
-    return Array.from(document.querySelectorAll('#tenantCheckboxes input:checked')).map(i => Number(i.value));
+function selectedTenantCodes() {
+    return Array.from(document.querySelectorAll('#tenantCheckboxes input:checked')).map(i => i.value);
 }
 
-function setTenantSelection(ids) {
-    const sel = new Set(ids || []);
-    document.querySelectorAll('#tenantCheckboxes input').forEach(i => i.checked = sel.has(Number(i.value)));
+function setTenantSelection(codes) {
+    const sel = new Set(codes || []);
+    document.querySelectorAll('#tenantCheckboxes input').forEach(i => i.checked = sel.has(i.value));
 }
 
 async function listUsers() {
@@ -195,10 +229,14 @@ async function listUsers() {
         const enabledTag = u.enabled
             ? `<span class="tag green">启用</span>`
             : `<span class="tag red">禁用</span>`;
-        const tenantNames = (u.tenantIds || []).map(id => tenantMap[id] ? App.esc(tenantMap[id].tenantName) : '#' + id).join(', ') || '-';
+        const tenantNames = (u.tenantCodes || []).map(code => tenantMap[code] ? App.esc(tenantMap[code].tenantName) : '#' + code).join(', ') || '-';
         return `<tr>
             <td>${u.id}</td>
             <td style="font-family:monospace;">${u.username}</td>
+            <td style="font-family:monospace;color:#475569;white-space:nowrap;">
+                <span title="${u.userCode ? App.esc(u.userCode) : ''}" style="cursor:help;">${u.userCode ? App.maskUser({ username: u.userCode }) : "-"}</span>
+                ${u.userCode ? `<button class="btn-icon" data-code="${App.esc(u.userCode)}" onclick="copyCode(this)" title="复制用户编码">${COPY_ICON}<span class="copy-tooltip" data-full="${App.esc(u.userCode)}">${u.userCode.length > 40 ? u.userCode.substring(0, 20) + "..." + u.userCode.substring(u.userCode.length - 16) : App.esc(u.userCode)}</span></button>` : ''}
+            </td>
             <td>${identityTag(u.userLabel)}</td>
             <td style="font-size:12px;color:#475569;">${tenantNames}</td>
             <td>${u.nickname || "-"}</td>
@@ -223,6 +261,10 @@ function openModal() {
     document.getElementById("modalTitle").textContent = "新增用户";
     document.getElementById("editId").value = "";
     ["username","password","nickname","email","phone"].forEach(k => document.getElementById(k).value = "");
+    document.getElementById("userCode").value = "";
+    document.getElementById("userCode").disabled = false;
+    document.getElementById("username").disabled = false;
+    document.getElementById("password").placeholder = "新增必填, 编辑可留空";
     document.querySelector('input[name="userLabel"][value="client"]').checked = true;
     loadTenants();
     document.getElementById("modal").classList.add("show");
@@ -237,6 +279,9 @@ async function edit(id) {
     document.getElementById("editId").value = id;
     document.getElementById("username").value = data.username;
     document.getElementById("username").disabled = true;
+    document.getElementById("userCode").value = data.userCode || "";
+    document.getElementById("userCode").disabled = true;
+    document.getElementById("userCode").title = "用户编码是角色/应用授权绑定的业务键, 创建后不可修改";
     document.getElementById("password").value = "";
     document.getElementById("password").placeholder = "编辑时不修改密码";
     document.getElementById("nickname").value = data.nickname || "";
@@ -244,7 +289,7 @@ async function edit(id) {
     document.getElementById("phone").value = data.phone || "";
     const lbl = data.userLabel === "admin" ? "admin" : "client";
     document.querySelector('input[name="userLabel"][value="' + lbl + '"]').checked = true;
-    loadTenants().then(() => setTenantSelection(data.tenantIds || []));
+    loadTenants().then(() => setTenantSelection(data.tenantCodes || []));
     document.getElementById("modal").classList.add("show");
 }
 
@@ -253,12 +298,13 @@ async function save() {
     const username = document.getElementById("username").value;
     const body = {
         username,
+        userCode: document.getElementById("userCode").value,
         password: document.getElementById("password").value,
         nickname: document.getElementById("nickname").value,
         email: document.getElementById("email").value,
         phone: document.getElementById("phone").value,
         userLabel: document.querySelector('input[name="userLabel"]:checked').value,
-        tenantIds: selectedTenantIds()
+        tenantCodes: selectedTenantCodes()
     };
     if (!username) { alert("用户名必填"); return; }
 

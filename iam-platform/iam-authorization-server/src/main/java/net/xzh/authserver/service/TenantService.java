@@ -66,29 +66,44 @@ public class TenantService {
         Tenant existing = tenantMapper.selectById(id);
         if (existing == null) throw new IllegalArgumentException("租户不存在: " + id);
         tenantMapper.deleteById(id);
-        tenantUserMapper.delete(new QueryWrapper<TenantUser>().eq("tenant_id", id));
+        tenantUserMapper.delete(new QueryWrapper<TenantUser>().eq("tenant_code", existing.getTenantCode()));
         log.info("删除租户 id={}, tenantCode={}", id, existing.getTenantCode());
     }
 
-    public List<Tenant> listTenantsOfUser(Long userId) {
-        return tenantUserMapper.selectTenantsOfUser(userId);
+    public List<Tenant> listTenantsOfUser(String userCode) {
+        return tenantUserMapper.selectTenantsOfUser(userCode);
     }
 
     /**
-     * 覆盖式保存用户-租户绑定 (整体替换).
+     * 删除用户全部租户成员关系 (删除 sys_user 时联动, 同库清理, 按 user_code).
      */
     @Transactional
-    public void assignTenantsToUser(Long userId, List<Long> tenantIds) {
-        tenantUserMapper.delete(new QueryWrapper<TenantUser>().eq("user_id", userId));
-        if (tenantIds == null) return;
-        for (Long tenantId : tenantIds) {
-            if (tenantId == null) continue;
+    public void removeTenantsOfUser(String userCode) {
+        tenantUserMapper.delete(new QueryWrapper<TenantUser>().eq("user_code", userCode));
+        log.info("删除用户租户绑定 userCode={}", userCode);
+    }
+
+    /**
+     * 覆盖式保存用户-租户绑定 (整体替换, 按业务编码).
+     */
+    @Transactional
+    public void assignTenantsToUser(String userCode, List<String> tenantCodes) {
+        tenantUserMapper.delete(new QueryWrapper<TenantUser>().eq("user_code", userCode));
+        if (tenantCodes == null) return;
+        for (String tenantCode : tenantCodes) {
+            if (!StringUtils.hasText(tenantCode)) continue;
+            Tenant tenant = tenantMapper.selectOne(
+                    new QueryWrapper<Tenant>().eq("tenant_code", tenantCode.trim()));
+            if (tenant == null) {
+                log.warn("跳过不存在的租户编码: {}", tenantCode);
+                continue;
+            }
             TenantUser tu = new TenantUser();
-            tu.setTenantId(tenantId);
-            tu.setUserId(userId);
+            tu.setTenantCode(tenant.getTenantCode());
+            tu.setUserCode(userCode);
             tu.setStatus(true);
             tenantUserMapper.insert(tu);
         }
-        log.info("为用户 userId={} 绑定租户 tenantIds={}", userId, tenantIds);
+        log.info("为用户 user_code={} 绑定租户 tenantCodes={}", userCode, tenantCodes);
     }
 }

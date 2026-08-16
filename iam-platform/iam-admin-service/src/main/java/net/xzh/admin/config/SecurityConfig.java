@@ -12,13 +12,13 @@ import org.springframework.security.web.authentication.LoginUrlAuthenticationEnt
  * 管理后台服务安全配置.
  * <p>
  * 采用 OAuth2 Client (授权码模式) 登录认证中心。本服务不持有业务库,
- * 只作为 BFF 透传 /api/** 请求, ROLE_ADMIN 权限校验由对端 (认证中心/资源中心)
+ * 只作为 BFF 透传 /api/** 请求, 管理服务凭证 (ADMIN_SERVICE_TOKEN) 权限校验由对端 (认证中心/资源中心)
  * 在 introspection 时完成, 因此本服务只要求已登录。
  * <p>
- * 登录完成后经 {@link AdminOnlyLoginSuccessHandler} 独立准入: 非管理端 (无 ROLE_ADMIN)
+ * 登录完成后经 {@link AdminOnlyLoginSuccessHandler} 独立准入: 非管理端 (无 ADMIN_SERVICE_TOKEN)
  * 直接拒绝并走认证中心 RP 登出清 SSO, 不建立后台会话。
  * <p>
- * 管理端登录成功重定向到 iam-admin-web (8001) 首页; 登出走认证中心 RP-Initiated Logout。
+ * 管理端登录成功重定向到 iam-admin-web (8001) 租户管理页; 登出走认证中心 RP-Initiated Logout。
  */
 @Configuration
 @EnableWebSecurity

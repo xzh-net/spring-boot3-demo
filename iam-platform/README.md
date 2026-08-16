@@ -88,8 +88,8 @@ Node.js 演示项目均零依赖，仅需 Node.js；Java 演示项目需要 Mave
 
 | 账号 | 密码 | 角色 | 用途 |
 |------|------|------|------|
-| `admin` | `123456` | ROLE_ADMIN | 管理后台 |
-| `user` | `123456` | ROLE_USER | 演示项目登录 |
+| `admin` | `123456` | ADMIN（业务角色，令牌注入 `ADMIN_SERVICE_TOKEN`） | 管理后台 |
+| `user` | `123456` | USER（业务角色，默认 `ROLE_USER`） | 演示项目登录 |
 
 ## 默认客户端
 
@@ -107,7 +107,7 @@ Node.js 演示项目均零依赖，仅需 Node.js；Java 演示项目需要 Mave
 ## 核心特性
 
 - **V6 数据分库**：认证中心身份库 `iam_identity`（用户/客户端/授权记录）与 资源中心授权库 `iam_authorization`（RBAC/业务）分离；客户端目录经认证中心 `GET /api/directory/clients` 下发，资源中心不再直读客户端表
-- **三域管理 API**：认证中心 `/api/admin/**`（用户/客户端/会话/授权记录四域，Bearer + `ROLE_ADMIN`）
+- **三域管理 API**：认证中心 `/api/admin/**`（用户/客户端/会话/授权记录四域，Bearer + `ADMIN_SERVICE_TOKEN`）
 - **OAuth2 / OIDC 完整协议**：授权码、密码、客户端模式、设备码、刷新令牌
 - **PKCE 支持**：Public Client 强制启用，Confidential Client (portal-app) 也启用
 - **双向 SSO**：门户 ↔ 客户端互认登录态，`prompt=none` 静默授权

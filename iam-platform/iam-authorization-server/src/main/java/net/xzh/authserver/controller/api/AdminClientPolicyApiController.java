@@ -29,7 +29,7 @@ import net.xzh.authserver.vo.ClientPolicyVO;
  * 三域管理 API — 客户端准入策略域 (/api/admin/policies).
  * <p>
  * 令牌签发准入配置 (原 yaml client-identity-policy) 的表化维护接口,
- * 经 Order(2) 安全链保护 (Bearer + ROLE_ADMIN)。
+ * 经 Order(2) 安全链保护 (Bearer + ADMIN_SERVICE_TOKEN 管理服务凭证)。
  * </p>
  */
 @RestController

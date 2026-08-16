@@ -22,10 +22,10 @@ import java.time.Duration;
  * 接收管理后台页面 (iam-admin-web 8001) 转发的 /api/** 请求,
  * 附加当前登录用户 (admin-app) 的 Bearer Token 后转发到:
  * <ul>
- *  <li>认证中心 (9000): /api/admin/users|clients|sessions|records|directory</li>
- *  <li>资源中心 (9010): /api/admin/roles|permissions</li>
+ *  <li>认证中心 (9000): /api/admin/users|clients|sessions|records|directory|tenants</li>
+ *  <li>资源中心 (9010): /api/admin/roles|permissions|user-roles|applications</li>
  * </ul>
- * ROLE_ADMIN 权限由对端 introspection 校验。
+ * 管理服务凭证 (ADMIN_SERVICE_TOKEN) 权限由对端 introspection 校验。
  */
 @Slf4j
 @RestController
@@ -99,7 +99,11 @@ public class ApiProxyController {
     private String resolveBase(String uri) {
         if (uri.startsWith("/api/admin/roles")
                 || uri.startsWith("/api/admin/permissions")
-                || uri.startsWith("/api/admin/user-roles")) {
+                || uri.startsWith("/api/admin/user-roles")
+                || uri.startsWith("/api/admin/applications")
+                || uri.startsWith("/api/admin/endpoint-policies")
+                || uri.startsWith("/api/admin/capabilities")
+                || uri.startsWith("/api/admin/capability-subscriptions")) {
             return resourceServiceBaseUrl;
         }
         return authCenterBaseUrl;

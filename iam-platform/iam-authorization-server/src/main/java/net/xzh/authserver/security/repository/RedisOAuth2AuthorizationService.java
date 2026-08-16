@@ -732,8 +732,8 @@ public final class RedisOAuth2AuthorizationService implements OAuth2Authorizatio
             if (value instanceof Map m) {
                 Object name = m.get("name");
                 // 从序列化的 Authentication 中恢复真实 authorities.
-                // 不能固定 ROLE_USER: 否则 admin 用户 (ROLE_ADMIN) 的 authorization
-                // 从 Redis 恢复后 principal 权限被降级, 导致 id_token/刷新令牌的 roles 变成 ROLE_USER.
+                // 不能固定 ROLE_USER: 否则 admin 用户 (持有 ADMIN_SERVICE_TOKEN) 的 authorization
+                // 从 Redis 恢复后 principal 权限被降级, 导致 id_token/刷新令牌的 roles 变化.
                 List<SimpleGrantedAuthority> authorities = extractAuthorities(m.get("authorities"));
                 if (authorities.isEmpty()) {
                     authorities = List.of(new SimpleGrantedAuthority("ROLE_USER"));
@@ -758,7 +758,7 @@ public final class RedisOAuth2AuthorizationService implements OAuth2Authorizatio
     }
 
     /**
-     * 从 Jackson 反序列化的 authorities 数组 (如 [{authority:ROLE_ADMIN}]) 恢复权限集合.
+     * 从 Jackson 反序列化的 authorities 数组 (如 [{authority:ADMIN_SERVICE_TOKEN}]) 恢复权限集合.
      */
     private List<SimpleGrantedAuthority> extractAuthorities(Object raw) {
         List<SimpleGrantedAuthority> result = new ArrayList<>();
