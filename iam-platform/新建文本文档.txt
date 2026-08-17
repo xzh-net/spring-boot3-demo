@@ -1,3 +1,0 @@
-powershell -ExecutionPolicy Bypass -File .\start-all.ps1
-# 或跳过每次预编译
-powershell -ExecutionPolicy Bypass -File .\start-all.ps1 -SkipMvnBuild
