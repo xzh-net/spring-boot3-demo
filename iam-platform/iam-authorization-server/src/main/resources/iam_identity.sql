@@ -91,6 +91,7 @@ INSERT INTO `oauth2_registered_client` VALUES ('4', 'web-app', '2026-08-11 20:00
 INSERT INTO `oauth2_registered_client` VALUES ('5', 'device-app', '2026-08-11 20:00:08', NULL, NULL, '设备码客户端', 'none', 'refresh_token,urn:ietf:params:oauth:grant-type:device_code', NULL, NULL, 'openid,profile,email,read', '{"requireProofKey":false,"requireAuthorizationConsent":true}', '{"accessTokenFormat":"REFERENCE","accessTokenTimeToLive":"PT1H","reuseRefreshTokens":false}');
 INSERT INTO `oauth2_registered_client` VALUES ('6', 'mobile-app', '2026-08-11 20:00:08', NULL, NULL, '移动应用客户端(PKCE)', 'none', 'authorization_code,refresh_token', 'com.example.mobileapp://oauth2/redirect,http://localhost:8083/callback', 'http://localhost:8083/logout', 'openid,profile,email,read,write', '{"requireProofKey":true,"requireAuthorizationConsent":true}', '{"accessTokenFormat":"REFERENCE","accessTokenTimeToLive":"PT2H","reuseRefreshTokens":false,"idTokenSignatureAlgorithm":"RS256"}');
 INSERT INTO `oauth2_registered_client` VALUES ('7', 'service-app', '2026-08-11 20:00:08', '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e', NULL, '服务间调用客户端', 'client_secret_basic', 'client_credentials', NULL, NULL, 'read,write', '{"requireProofKey":false,"requireAuthorizationConsent":true}', '{"accessTokenFormat":"REFERENCE","accessTokenTimeToLive":"PT30M","reuseRefreshTokens":false}');
+INSERT INTO `oauth2_registered_client` VALUES ('8', 'admin-m2m', '2026-08-16 00:00:00', '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e', NULL, '管理 M2M 服务凭证 (认证中心以机器身份执行管理写)', 'client_secret_basic', 'client_credentials', NULL, NULL, 'read,write', '{"requireProofKey":false,"requireAuthorizationConsent":true}', '{"accessTokenFormat":"REFERENCE","accessTokenTimeToLive":"PT30M","reuseRefreshTokens":false}');
 
 -- ----------------------------
 -- Table structure for sys_user (凭据主库)
@@ -165,26 +166,27 @@ INSERT INTO `iam_tenant_user` (tenant_code, user_code, tenant_username, status) 
 ('T001', 'u_1a2b3c4d5e6f708090a0b0c0d0e0f002', 'user', 1);
 
 -- ----------------------------
--- Table structure for iam_client_policy (客户端准入策略, 原 yaml client-identity-policy 表化)
+-- Table structure for iam_client_policy (客户端登录边界策略, 隔离管理端/门户端交叉登录)
 -- ----------------------------
 DROP TABLE IF EXISTS `iam_client_policy`;
 CREATE TABLE `iam_client_policy`  (
   `id` bigint(0) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
   `client_id` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '客户端ID (关联 oauth2_registered_client.client_id)',
-  `allowed_roles` varchar(1000) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '允许访问该客户端的角色编码列表 (逗号分隔, 如 ADMIN; 空或*表示不限制)',
+  `allowed_roles` varchar(1000) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '允许登录该客户端的角色编码列表 (逗号分隔, 如 ADMIN; 空或*表示不限制)',
   `status` tinyint(1) NOT NULL DEFAULT 1 COMMENT '是否启用: 1=启用, 0=停用(默认放行)',
   `remark` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '备注',
   `create_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0) COMMENT '创建时间',
   `update_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0) ON UPDATE CURRENT_TIMESTAMP(0) COMMENT '更新时间',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_client_id`(`client_id`) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 2 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '客户端准入策略表 (令牌签发准入, 原 yaml 配置)' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 2 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '客户端登录边界策略表 (管理端/门户端同库用户的交叉登录隔离)' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
--- Records of iam_client_policy (管理后台 admin-app 仅允许 ADMIN 角色)
+-- Records of iam_client_policy (admin-app 仅允许 ADMIN; portal-app 仅允许 USER)
 -- ----------------------------
 INSERT INTO `iam_client_policy` (id, client_id, allowed_roles, status, remark) VALUES
-(1, 'admin-app', 'ADMIN', 1, '管理后台 (原 yaml client-identity-policy: admin-app: [admin] 迁移)');
+(1, 'admin-app', 'ADMIN', 1, '管理后台: 仅允许 ADMIN 角色登录'),
+(2, 'portal-app', 'USER', 1, '门户前端: 仅允许 USER 角色登录');
 
 -- ----------------------------
 -- Table structure for iam_external_identity (外部身份绑定表: 微信/企业微信/钉钉/支付宝/谷歌/GitHub)

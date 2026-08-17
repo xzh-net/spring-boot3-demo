@@ -17,11 +17,13 @@ import net.xzh.authserver.config.AuthServerProperties;
 /**
  * 资源中心远程用户数据清理 (删除 sys_user 时联动).
  * <p>
- * 认证中心删除用户后, 调用资源中心内部接口
- * {@code DELETE /api/internal/user/{userCode}/data}, 清理该用户 (user_code)
+ * 认证中心删除用户后, 调用资源中心管理端能力
+ * {@code DELETE /api/admin/users/{userCode}/data}, 清理该用户 (user_code)
  * 在资源中心的跨库孤儿数据: {@code sys_user_role} 角色绑定 +
  * {@code iam_app_authorization} USER 主体应用授权。
- * 401 时与服务令牌失效自愈, 与 {@link RemoteRoleService} 策略一致。
+ * 该调用以<b>管理 M2M 服务凭证</b> (admin-m2m 客户端 client_credentials, 经
+ * {@link ServiceTokenProvider#getAdminToken()}) 发起, 资源中心内省时注入
+ * ADMIN_SERVICE_TOKEN (管理服务凭证); 401 时与服务凭证失效自愈。
  * </p>
  */
 @Slf4j
@@ -51,13 +53,13 @@ public class InternalUserDataClient {
      */
     public void deleteUserData(String userCode) {
         String url = properties.getResourceServiceBaseUrl()
-                + "/api/internal/user/" + encode(userCode) + "/data";
+                + "/api/admin/users/" + encode(userCode) + "/data";
         try {
-            HttpResponse<String> resp = sendDelete(url, serviceTokenProvider.getToken());
+            HttpResponse<String> resp = sendDelete(url, serviceTokenProvider.getAdminToken());
             if (resp.statusCode() == 401) {
-                log.warn("[UserData] 清理接口返回 HTTP 401, 判定 service token 已失效, 强制刷新后重试一次. userCode={}", userCode);
-                serviceTokenProvider.invalidate();
-                resp = sendDelete(url, serviceTokenProvider.getToken());
+                log.warn("[UserData] 清理接口返回 HTTP 401, 判定管理 M2M 凭证已失效, 强制刷新后重试一次. userCode={}", userCode);
+                serviceTokenProvider.invalidateAdminToken();
+                resp = sendDelete(url, serviceTokenProvider.getAdminToken());
             }
             if (resp.statusCode() != 200) {
                 throw new IllegalStateException("清理用户关联接口返回 HTTP " + resp.statusCode());

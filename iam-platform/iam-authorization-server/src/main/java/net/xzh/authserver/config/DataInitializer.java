@@ -2,6 +2,8 @@ package net.xzh.authserver.config;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.xzh.authserver.entity.ClientPolicy;
+import net.xzh.authserver.mapper.ClientPolicyMapper;
 import net.xzh.authserver.security.repository.JdbcRegisteredClientRepository;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -17,6 +19,8 @@ import java.time.Duration;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+
 /**
  * 数据初始化器.
  * <p>
@@ -30,6 +34,7 @@ public class DataInitializer implements ApplicationRunner {
 
     private final JdbcRegisteredClientRepository clientRepository;
     private final PasswordEncoder passwordEncoder;
+    private final ClientPolicyMapper clientPolicyMapper;
 
     /**
      * portal-app 客户端密钥.
@@ -58,6 +63,48 @@ public class DataInitializer implements ApplicationRunner {
         ensurePortalAppClient();
         ensureResourceServerClient();
         ensureAdminAppClient();
+        ensureAdminM2mClient();
+        ensureClientPolicies();
+    }
+
+    /**
+     * 确保 admin-m2m 客户端存在 (管理 M2M 服务凭证).
+     * <p>
+     * 认证中心删除用户等管理操作时, 以该客户端 client_credentials 换取服务令牌
+     * 调用资源中心管理端能力 (/api/admin/**), 资源中心按 client_id 白名单内省注入
+     * ADMIN_SERVICE_TOKEN (管理服务凭证)。
+     * </p>
+     */
+    private void ensureAdminM2mClient() {
+        try {
+            RegisteredClient existing = clientRepository.findByClientId("admin-m2m");
+            if (existing != null) {
+                return;
+            }
+            String secretHash = passwordEncoder.encode("123456");
+            RegisteredClient client = RegisteredClient.withId("8")
+                    .clientId("admin-m2m")
+                    .clientSecret(secretHash)
+                    .clientName("管理 M2M 服务凭证")
+                    .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
+                    .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS)
+                    .scope("read")
+                    .scope("write")
+                    .clientSettings(ClientSettings.builder()
+                            .requireProofKey(false)
+                            .requireAuthorizationConsent(false)
+                            .build())
+                    .tokenSettings(TokenSettings.builder()
+                            .accessTokenFormat(org.springframework.security.oauth2.server.authorization.settings.OAuth2TokenFormat.REFERENCE)
+                            .accessTokenTimeToLive(Duration.ofMinutes(30))
+                            .reuseRefreshTokens(false)
+                            .build())
+                    .build();
+            clientRepository.save(client);
+            log.info("[DataInit] admin-m2m 客户端已创建 (管理 M2M 服务凭证)");
+        } catch (Exception e) {
+            log.error("[DataInit] 创建 admin-m2m 客户端失败", e);
+        }
     }
 
     /**
@@ -101,6 +148,40 @@ public class DataInitializer implements ApplicationRunner {
             log.info("[DataInit] admin-app 客户端已创建 (管理后台授权码登录)");
         } catch (Exception e) {
             log.error("[DataInit] 创建 admin-app 客户端失败", e);
+        }
+    }
+
+    /**
+     * 确保客户端登录边界策略存在 (无策略行时默认放行, 因此必须兜底补种)。
+     * 管理端用户与门户端用户同库统一管理, 为避免交叉登录:
+     * <ul>
+     *   <li>{@code admin-app} → 仅允许 {@code ADMIN} (管理端角色, 隔离门户端用户);</li>
+     *   <li>{@code portal-app} → 仅允许 {@code USER} (门户端角色, 隔离管理端用户);</li>
+     * </ul>
+     * 仅当策略行缺失时插入; 管理端已手动配置的行不覆盖。
+     */
+    private void ensureClientPolicies() {
+        ensureClientPolicy("admin-app", "ADMIN", "管理后台: 管理端与门户端用户同库管理, 此客户端仅允许 ADMIN 角色登录, 隔离门户端用户交叉登录");
+        ensureClientPolicy("portal-app", "USER", "门户前端: 管理端与门户端用户同库管理, 此客户端仅允许 USER 角色登录, 隔离管理端用户交叉登录");
+    }
+
+    private void ensureClientPolicy(String clientId, String allowedRoles, String remark) {
+        try {
+            Long count = clientPolicyMapper.selectCount(
+                    new QueryWrapper<ClientPolicy>().eq("client_id", clientId));
+            if (count != null && count > 0) {
+                log.info("[DataInit] {} 准入策略已存在, 跳过", clientId);
+                return;
+            }
+            ClientPolicy policy = new ClientPolicy();
+            policy.setClientId(clientId);
+            policy.setAllowedRoles(allowedRoles);
+            policy.setStatus(Boolean.TRUE);
+            policy.setRemark(remark);
+            clientPolicyMapper.insert(policy);
+            log.info("[DataInit] {} 准入策略已补种: 仅允许 {}", clientId, allowedRoles);
+        } catch (Exception e) {
+            log.error("[DataInit] 补种 {} 准入策略失败", clientId, e);
         }
     }
 

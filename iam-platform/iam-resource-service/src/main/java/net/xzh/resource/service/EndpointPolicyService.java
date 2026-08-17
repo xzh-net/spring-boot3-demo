@@ -25,6 +25,10 @@ import java.util.Set;
  * <p>
  * 职责: 启动扫描播种 (coded) / 管理端覆盖 (override) / 内存快照匹配裁决。
  * 快照仅载入启用行, 准入路由器按 method + Ant 路径匹配; 未命中即默认拒绝 (deny-by-default)。
+ * <p>
+ * 特殊域: internal 域为<b>硬规则</b> (仅认证中心 M2M 可调, 见
+ * {@link net.xzh.resource.config.EndpointAdmissionManager}), 不进入本规则表; 扫描会跳过
+ * internal 域播种并将该域残留行 (含历史/override) 一并清理。
  * </p>
  */
 @Slf4j
@@ -51,6 +55,7 @@ public class EndpointPolicyService {
     /**
      * 启动扫描播种: 按 RequestMapping 遍历全部控制器端点, 依据 controller 分包推导默认准入规则,
      * 缺失则补种 (source=coded)。已存在的行 (含 override) 不覆盖。完成后刷新内存快照。
+     * internal 域跳过播种 (硬规则域, 见类注); 该域残留行整域清理。
      *
      * @return 本次新增条数
      */
@@ -63,8 +68,16 @@ public class EndpointPolicyService {
             HandlerMethod handler = entry.getValue();
 
             try {
-                String domain = resolveDomain(handler.getBeanType().getPackageName());
-                String defaultAuthority = defaultAuthorityOf(domain);
+                String packageName = handler.getBeanType().getPackageName();
+                String domain = resolveDomain(packageName);
+
+                // internal 域为硬规则 (仅认证中心 M2M 可调, 见 EndpointAdmissionManager),
+                // 不进入规则表, 也不参与扫码播种 / 管理端 override
+                if (IamEndpointPolicy.DOMAIN_INTERNAL.equals(domain)) {
+                    continue;
+                }
+
+                String defaultAuthority = defaultAuthorityOf(packageName, domain);
 
                 Set<String> patterns = extractPatterns(info);
                 Set<RequestMethod> methods = info.getMethodsCondition().getMethods();
@@ -91,18 +104,30 @@ public class EndpointPolicyService {
                             policyMapper.insert(policy);
                             inserted++;
                         } else if (IamEndpointPolicy.SOURCE_CODED.equals(existing.getSource())
-                                && !defaultAuthority.equals(existing.getRequiredAuthority())) {
+                                && (!defaultAuthority.equals(existing.getRequiredAuthority())
+                                || !domain.equals(existing.getDomain()))) {
                             // coded 默认随代码版本自动对齐 (管理端 override 一律不动)
                             existing.setDomain(domain);
                             existing.setRequiredAuthority(defaultAuthority);
                             policyMapper.updateById(existing);
-                            log.info("[EndpointPolicy] 对齐 coded 默认: {} {} -> {}", method, pattern, defaultAuthority);
+                            log.info("[EndpointPolicy] 对齐 coded 默认: {} {} -> {}/{}", method, pattern, domain, defaultAuthority);
                         }
                     }
                 }
             } catch (Exception e) {
                 log.warn("[EndpointPolicy] 跳过端点 {}: {}", handler, e.getMessage());
             }
+        }
+
+        // internal 域为硬规则 (仅认证中心 M2M 可调): 整域清理, 不渲染进规则表 (含历史/override 残留)
+        int internalRemoved = 0;
+        for (IamEndpointPolicy p : policyMapper.selectList(
+                new QueryWrapper<IamEndpointPolicy>().eq("domain", IamEndpointPolicy.DOMAIN_INTERNAL))) {
+            policyMapper.deleteById(p.getId());
+            internalRemoved++;
+        }
+        if (internalRemoved > 0) {
+            log.info("[EndpointPolicy] 清理 internal 硬规则域残留行 {} 条 (不参与规则表)", internalRemoved);
         }
 
         // 清理失效 coded 行: 端点已从代码移除 (如废弃接口删除) 时, 旧扫描播种的行不再对应任何
@@ -157,21 +182,36 @@ public class EndpointPolicyService {
             case "portal" -> IamEndpointPolicy.DOMAIN_PORTAL;
             case "capability" -> IamEndpointPolicy.DOMAIN_CAPABILITY;
             case "internal" -> IamEndpointPolicy.DOMAIN_INTERNAL;
-            case "permitall" -> IamEndpointPolicy.DOMAIN_PERMITALL;
+            // 放行示例包 (controller/permitall) 不再单列能力域, 归 other (其他),
+            // 但其默认准入要求仍为 PERMIT_ALL, 见 defaultAuthorityOf。
             default -> IamEndpointPolicy.DOMAIN_OTHER;
         };
     }
 
     /** 各能力域默认准入规则 (扫描播种默认值) */
-    private String defaultAuthorityOf(String domain) {
+    private String defaultAuthorityOf(String packageName, String domain) {
+        if ("permitall".equals(controllerLeaf(packageName))) {
+            return IamEndpointPolicy.AUTH_PERMIT_ALL;
+        }
         return switch (domain) {
             case IamEndpointPolicy.DOMAIN_ADMIN -> IamEndpointPolicy.AUTH_ADMIN_SERVICE_TOKEN;
             case IamEndpointPolicy.DOMAIN_INTERNAL -> IamEndpointPolicy.AUTH_PORTAL_SERVICE_TOKEN;
             case IamEndpointPolicy.DOMAIN_PORTAL -> IamEndpointPolicy.AUTH_PORTAL_SERVICE_TOKEN;
             case IamEndpointPolicy.DOMAIN_CAPABILITY -> IamEndpointPolicy.AUTH_CAPABILITY;
-            case IamEndpointPolicy.DOMAIN_PERMITALL -> IamEndpointPolicy.AUTH_PERMIT_ALL;
             default -> IamEndpointPolicy.AUTH_AUTHENTICATED;
         };
+    }
+
+    /** 取 controller 分包首段 (net.xzh.resource.controller.admin.Xxx → admin) */
+    private String controllerLeaf(String packageName) {
+        String marker = ".controller.";
+        int idx = packageName.indexOf(marker);
+        if (idx < 0) {
+            return "";
+        }
+        String segment = packageName.substring(idx + marker.length());
+        int dot = segment.indexOf('.');
+        return dot < 0 ? segment : segment.substring(0, dot);
     }
 
     /** 基础设施路径 (错误页/健康检查) 不纳入准入点管理 */

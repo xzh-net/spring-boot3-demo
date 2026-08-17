@@ -45,4 +45,17 @@ public class AuthServerProperties {
      * 获取服务令牌使用的客户端密钥 (须与 oauth2_registered_client 中一致)。
      */
     private String serviceTokenClientSecret = "123456";
+
+    /**
+     * 管理 M2M 凭证使用的客户端 ID (client_credentials, 默认 admin-m2m)。
+     * 以该客户端在 service-token-endpoint 换取服务令牌, 资源中心按 client_id 白名单
+     * 内省注入 ADMIN_SERVICE_TOKEN (管理服务凭证), 供管理端能力调用
+     * (如删除用户联动清理, {@code DELETE /api/admin/users/{userCode}/data})。
+     */
+    private String adminServiceTokenClientId = "admin-m2m";
+
+    /**
+     * 获取管理 M2M 凭证使用的客户端密钥 (须与 oauth2_registered_client 中一致)。
+     */
+    private String adminServiceTokenClientSecret = "123456";
 }

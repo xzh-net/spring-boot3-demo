@@ -20,8 +20,11 @@ import net.xzh.authserver.mapper.ClientPolicyMapper;
 import net.xzh.authserver.remote.RemoteRoleService;
 
 /**
- * 客户端准入策略 (令牌签发准入): client_id → 允许的角色集合.
+ * 客户端登录边界策略 (登录边界隔离): client_id → 允许登录的角色集合.
  * <p>
+ * 管理端用户与门户端用户统一在 {@code iam_identity.sys_user} 中一并管理, 为隔离两类
+ * 人群交叉登录 (管理账号误入门户端 / 门户账号误入管理端), 以本表控制"允许谁以该客户端
+ * 身份登录"。该策略在令牌签发/授权码发放前先行校验, 不通过即拒绝登录。
  * 策略配置自 yaml (client-identity-policy) 迁移至表 {@code iam_client_policy}
  * (改造清单: 系统准入配置从 yaml 转换成表), 角色权威在资源中心 RBAC:
  * <ul>

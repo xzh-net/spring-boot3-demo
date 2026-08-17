@@ -12,7 +12,7 @@ USE iam_authorization;
 -- ============ 1. iam_endpoint_policy ============
 CREATE TABLE IF NOT EXISTS `iam_endpoint_policy` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '策略ID',
-  `domain` varchar(20) NOT NULL COMMENT '能力域: admin=管理端/portal=门户/capability=开放能力/internal=服务间内部/permitall=放行(公开)/other=其他',
+  `domain` varchar(20) NOT NULL COMMENT '能力域: admin=管理端/portal=门户/capability=开放能力/internal=服务间内部/other=其他',
   `method` varchar(10) NOT NULL COMMENT 'HTTP 方法: GET/POST/PUT/DELETE (ANY=全部)',
   `path` varchar(255) NOT NULL COMMENT '路径模式 (Spring 注册模式, 如 /api/admin/permissions/{id})',
   `required_authority` varchar(100) NOT NULL DEFAULT 'AUTHENTICATED' COMMENT '准入要求: PERMIT_ALL/AUTHENTICATED/ADMIN_SERVICE_TOKEN 管理服务凭证/PORTAL_SERVICE_TOKEN 门户服务凭证/CAPABILITY=按开放能力订阅校验',

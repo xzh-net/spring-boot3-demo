@@ -19,12 +19,11 @@ import java.time.LocalDateTime;
 @TableName("iam_endpoint_policy")
 public class IamEndpointPolicy {
 
-    /** 能力域: admin=管理端/portal=门户/capability=开放能力/internal=服务间内部/permitall=放行(公开)/other=其他 */
+    /** 能力域: admin=管理端/portal=门户/capability=开放能力/internal=服务间内部/other=其他 */
     public static final String DOMAIN_ADMIN = "admin";
     public static final String DOMAIN_PORTAL = "portal";
     public static final String DOMAIN_CAPABILITY = "capability";
     public static final String DOMAIN_INTERNAL = "internal";
-    public static final String DOMAIN_PERMITALL = "permitall";
     public static final String DOMAIN_OTHER = "other";
 
     /** 准入要求常量 (令牌类别: ADMIN_SERVICE_TOKEN=管理服务凭证 / PORTAL_SERVICE_TOKEN=门户服务凭证) */

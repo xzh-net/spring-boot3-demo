@@ -98,7 +98,7 @@
         <div class="page-header">
             <div>
                 <h2>客户端准入策略</h2>
-                <div class="hint">令牌签发准入 · 配置各客户端允许访问的角色集合 (原 yaml client-identity-policy 已迁移至该表)</div>
+                <div class="hint">登录边界隔离 · 管理端用户与门户端用户同库统一管理, 通过客户端角色策略防止交叉登录</div>
             </div>
             <div>
                 <button class="btn btn-primary" onclick="add()">＋ 新增策略</button>
@@ -124,9 +124,12 @@
         </div>
 
         <div class="note info">
-            准入规则：表中无该客户端策略行 → 默认放行；allowed_roles 为空或 <code>*</code> → 放行全部；
-            否则用户业务 RBAC 角色（资源中心 <code>sys_user_role</code>，经 D6 内部接口获取）与允许集合有交集才放行。
-            角色解析失败且配置了策略时按拒绝处理（fail-closed）。
+            背景：认证中心将管理端用户与门户端用户统一在 <code>iam_identity.sys_user</code> 中一并管理，
+            为避免两类人群交叉登录（管理账号误入门户端、门户账号误入管理端），为每个客户端限定
+            允许登录的用户角色集合，形成登录边界隔离。<br>
+            规则：表中无该客户端策略行 → 默认放行；<code>allowed_roles</code> 为空或 <code>*</code> → 放行全部；
+            否则仅当用户业务 RBAC 角色（资源中心 <code>sys_user_role</code>，经 D6 内部接口获取）与允许集合有交集时放行。
+            角色解析失败且配置了策略时按拒绝处理（fail-closed），不因 RBAC 服务异常而误放行。
         </div>
     </div>
 
@@ -146,7 +149,7 @@
                 <div class="form-row">
                     <label>允许角色编码 (逗号分隔, 空或 * 表示不限制)</label>
                     <input type="text" id="fAllowedRoles" placeholder="ADMIN">
-                    <div class="hint">示例: ADMIN / OPERATOR / USER ; 留空或填 * 表示该客户端不限制登录用户</div>
+                    <div class="hint">示例: ADMIN / USER ; 限定该客户端允许登录的用户角色 (用于管理端/门户端交叉登录隔离)</div>
                 </div>
                 <div class="form-row">
                     <label>备注</label>

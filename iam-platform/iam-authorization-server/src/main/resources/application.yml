@@ -5,7 +5,7 @@ server:
 
 spring:
   profiles:
-    active: local
+    active: dev
 
   application:
     name: iam-authorization-server
@@ -82,13 +82,17 @@ authserver:
   # 允许访问管理 API (/api/admin/**) 的客户端 client_id 白名单
   admin-client-ids:
     - admin-app
-  # ===== 令牌签发准入 (改造清单: 准入配置 yaml → iam_client_policy 表) =====
-  # 策略行: 管理端用户可经 /api/admin/policies 维护 (admin-app 默认仅允许 ADMIN 角色)
+  # ===== 客户端登录边界策略 (管理端/门户端同库用户的交叉登录隔离, 原 yaml client-identity-policy) =====
+  # 角色行: 管理端用户经 /api/admin/policies 维护 (admin-app 默认仅允许 ADMIN 角色, 隔离门户端交叉登录)
   # 用户业务角色权威在资源中心 iam_authorization (sys_user_role), 认证中心以 D6 内部接口获取
   resource-service-base-url: http://localhost:9010
   service-token-endpoint: http://localhost:9000/oauth2/token
   service-token-client-id: resource-server
   service-token-client-secret: 123456
+  # 管理 M2M 服务凭证 (client_credentials, admin-m2m): 认证中心以机器身份调用资源中心管理端
+  # 能力时签发服务令牌, 资源中心按 client_id 白名单内省注入 ADMIN_SERVICE_TOKEN
+  admin-service-token-client-id: admin-m2m
+  admin-service-token-client-secret: 123456
 
 logging:
   level:

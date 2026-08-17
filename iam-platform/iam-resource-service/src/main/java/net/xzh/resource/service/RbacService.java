@@ -19,6 +19,7 @@ import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 角色/权限管理服务 (iam_authorization RBAC).
@@ -29,6 +30,10 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 public class RbacService {
+
+    /** 内置角色编码: 认证中心/资源中心硬编码引用 (RbacAuthoritiesOpaqueTokenIntrospector 依据 ADMIN/USER 判定令牌类别),
+     *  禁止编辑元数据与删除, 但允许维护权限绑定。 */
+    private static final Set<String> BUILTIN_ROLE_CODES = Set.of("ADMIN", "USER");
 
     private final SysRoleMapper roleMapper;
     private final SysPermissionMapper permissionMapper;
@@ -73,8 +78,15 @@ public class RbacService {
     public void updateRole(Long id, SysRole role) {
         SysRole existing = roleMapper.selectById(id);
         if (existing == null) throw new IllegalArgumentException("角色不存在: " + id);
-        if (StringUtils.hasText(role.getName())) existing.setName(role.getName());
-        if (role.getRemark() != null) existing.setRemark(role.getRemark());
+        boolean builtin = BUILTIN_ROLE_CODES.contains(existing.getCode());
+        if (builtin && !metadataUnchanged(existing, role)) {
+            throw new IllegalArgumentException("内置角色 " + existing.getCode()
+                    + " 不允许修改编码/名称/备注 (仅允许分配权限)");
+        }
+        if (!builtin) {
+            if (StringUtils.hasText(role.getName())) existing.setName(role.getName());
+            if (role.getRemark() != null) existing.setRemark(role.getRemark());
+        }
         existing.setUpdateTime(LocalDateTime.now());
         roleMapper.updateById(existing);
 
@@ -91,10 +103,29 @@ public class RbacService {
         log.info("更新角色 id={}, code={}", id, existing.getCode());
     }
 
+    /** 内置角色校验: 编码/名称/备注均未改变 (空白视为等同 null, 前端分配权限仅回传当前值) */
+    private boolean metadataUnchanged(SysRole existing, SysRole role) {
+        boolean codeChanged = StringUtils.hasText(role.getCode())
+                && !role.getCode().equals(existing.getCode());
+        boolean nameChanged = StringUtils.hasText(role.getName())
+                && !norm(role.getName()).equals(norm(existing.getName()));
+        boolean remarkChanged = role.getRemark() != null
+                && !norm(role.getRemark()).equals(norm(existing.getRemark()));
+        return !codeChanged && !nameChanged && !remarkChanged;
+    }
+
+    private static String norm(String v) {
+        return v == null ? "" : v.trim();
+    }
+
     @Transactional
     public void deleteRole(Long id) {
         SysRole role = roleMapper.selectById(id);
         if (role == null) throw new IllegalArgumentException("角色不存在: " + id);
+        if (BUILTIN_ROLE_CODES.contains(role.getCode())) {
+            throw new IllegalArgumentException("内置角色 " + role.getCode()
+                    + " 不允许删除 (其编码被认证中心/资源中心硬编码引用)");
+        }
         roleMapper.deleteById(id);
         rolePermissionMapper.delete(new QueryWrapper<SysRolePermission>().eq("role_id", id));
         userRoleMapper.delete(new QueryWrapper<SysUserRole>().eq("role_id", id));

@@ -8,7 +8,7 @@
 -- 说明: 用户身份权威在认证中心 iam_identity.sys_user; 资源中心以业务用户编码
 --       user_code (token sub) 直接关联 sys_user_role → sys_role, 不再维护影子用户表。
 --       应用域 3 表承载门户工作台的应用目录 (方案 A: 渠道挂 sso_client_id, 密钥零落库)。
--- 基线: oauth2_server 单体库 (RBAC 部分结构保持一致) + 应用数据模型设计 V1.5
+-- 基线: oauth2_server 单体库 (RBAC 部分结构保持一致) + 数据模型设计 V2.0
 -- ============================================================
 
 CREATE DATABASE IF NOT EXISTS iam_authorization
@@ -62,8 +62,8 @@ CREATE TABLE `sys_role`  (
 -- ----------------------------
 -- Records of sys_role
 -- ----------------------------
-INSERT INTO `sys_role` VALUES (1, 'ADMIN', '管理员', '拥有全部应用访问权限', '2026-08-13 09:57:52', '2026-08-13 09:57:52');
-INSERT INTO `sys_role` VALUES (2, 'USER', '普通用户', '仅可访问门户与 OA', '2026-08-13 09:57:52', '2026-08-13 09:57:52');
+INSERT INTO `sys_role` VALUES (1, 'ADMIN', '管理端', '拥有管理后端服务访问权限', '2026-08-13 09:57:52', '2026-08-13 09:57:52');
+INSERT INTO `sys_role` VALUES (2, 'USER', '用户端', '拥有前端服务访问权限', '2026-08-13 09:57:52', '2026-08-13 09:57:52');
 
 -- ----------------------------
 -- Table structure for sys_role_permission
@@ -230,7 +230,7 @@ INSERT INTO `iam_app_authorization` VALUES
 DROP TABLE IF EXISTS `iam_endpoint_policy`;
 CREATE TABLE `iam_endpoint_policy`  (
   `id` bigint(0) NOT NULL AUTO_INCREMENT COMMENT '策略ID',
-  `domain` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '能力域: admin=管理端/portal=门户/capability=开放能力/internal=服务间内部/permitall=放行(公开)/other=其他',
+  `domain` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '能力域: admin=管理端/portal=门户/capability=开放能力/internal=服务间内部/other=其他',
   `method` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT 'HTTP 方法: GET/POST/PUT/DELETE (ANY=全部)',
   `path` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '路径模式 (Spring 注册模式, 如 /api/admin/permissions/{id})',
   `required_authority` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL DEFAULT 'AUTHENTICATED' COMMENT '准入要求: PERMIT_ALL=放行/AUTHENTICATED=任意凭证/ADMIN_SERVICE_TOKEN=管理服务凭证/PORTAL_SERVICE_TOKEN=门户服务凭证/CAPABILITY=按开放能力订阅校验',

@@ -5,7 +5,7 @@ server:
 
 spring:
   profiles:
-    active: local
+    active: dev
 
   application:
     name: iam-resource-service
@@ -50,11 +50,14 @@ authserver:
   base-url: http://localhost:9000
   client-id: resource-server
   client-secret: 123456
-  # 服务令牌白名单 (M2M): 该列表内 client_id 签发的令牌视为服务间调用 (注入 PORTAL_SERVICE_TOKEN),
-  # 供 /api/internal/** 鉴权; 未来对外 API 服务平台接入时在此追加
+  # 服务令牌判定兜底 (M2M): 该列表内 client_id 且无 grant_type 属性的令牌视为服务间调用 (注入 PORTAL_SERVICE_TOKEN);
+  # 与 internal 域解耦——internal 为硬规则 (仅 resource-server 可调, 见 EndpointAdmissionManager) 不受本配置影响
   service-client-ids: [resource-server]
   # 门户客户端白名单: 仅列表内客户端签发的令牌可访问 portal 域 (/api/public/**), 门户信息不对任意客户端开放
   portal-client-ids: [portal-app]
+  # 管理 M2M 凭证白名单: 列表内客户端签发的服务令牌视为「管理 M2M」(认证中心以机器身份执行管理写),
+  # 内省注入 ADMIN_SERVICE_TOKEN (管理服务凭证), 供 /api/admin/** 管理写鉴权
+  admin-m2m-client-ids: [admin-m2m]
 
 logging:
   level:

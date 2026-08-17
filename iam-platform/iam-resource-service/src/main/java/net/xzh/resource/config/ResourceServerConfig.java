@@ -17,11 +17,12 @@ import org.springframework.security.web.SecurityFilterChain;
  * 接口准入由 {@link EndpointAdmissionManager} 表驱动 (iam_endpoint_policy):
  * 启动扫描播种每个端点的默认规则并按域分类, 管理端可覆盖; 未登记路径默认拒绝。能力域划分:
  * <ul>
- *   <li>{@code controller/admin}      — 管理端能力, {@code ADMIN_SERVICE_TOKEN} 管理服务凭证;</li>
+ *   <li>{@code controller/admin}      — 管理端能力, {@code ADMIN_SERVICE_TOKEN} 管理服务凭证
+ *       (管理员令牌或管理 M2M 服务令牌, 如认证中心删除用户联动清理);</li>
  *   <li>{@code controller/portal}     — portal 端能力, {@code PORTAL_SERVICE_TOKEN} 门户服务凭证 + portal 客户端白名单;</li>
  *   <li>{@code controller/capability} — 开放能力 (/api/capability/**), 任意凭证 + 能力订阅校验;</li>
- *   <li>{@code controller/internal}   — 服务间内部能力, {@code PORTAL_SERVICE_TOKEN} 门户服务凭证 + client_id 白名单双保险;</li>
- *   <li>{@code controller/permitall}  — 放行域 (/api/permitall/**), 无认证要求.</li>
+ *   <li>{@code controller/internal}   — 服务间内部只读内省, {@code PORTAL_SERVICE_TOKEN} 门户服务凭证 + client_id 白名单双保险;</li>
+ *   <li>{@code controller/permitall}  — 不需要权限的接口示例, 归 other 域, {@code PERMIT_ALL} 放行.</li>
  * </ul>
  */
 @Configuration

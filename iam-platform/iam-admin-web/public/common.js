@@ -61,10 +61,8 @@ window.App = (() => {
     }
 
     /**
-     * 登录守卫: 校验当前会话 (ADMIN_SERVICE_TOKEN 管理服务凭证)。
+     * 登录守卫: 仅校验已登录会话。
      * - 未登录 → 跳转 /login
-     * - 已登录但非管理端 (仅 ROLE_USER/USER) → 走 /logout (清除本地 + SSO 会话), 由服务端准入把关
-     *   正常情况下不会发生: admin-service 登录成功处理器已拒绝非管理端建立会话。
      * 通过则返回 /api/current-user 数据。
      */
     async function guard() {
@@ -77,18 +75,6 @@ window.App = (() => {
             const me = await res.json();
             if (!me || me.authenticated !== true) {
                 location.href = LOGIN_URL;
-                return null;
-            }
-            // 仅允许管理端进入后台: 令牌类别 ADMIN_SERVICE_TOKEN (管理服务凭证) 为唯一裁决;
-            // 兼容旧令牌/旧会话 (ROLE_ADMIN)
-            const roles = Array.isArray(me.roles) ? me.roles : [];
-            const authorities = Array.isArray(me.authorities) ? me.authorities : [];
-            let isAdmin = roles.includes('ADMIN_SERVICE_TOKEN')
-                || authorities.includes('ADMIN_SERVICE_TOKEN')
-                || roles.includes('ROLE_ADMIN')
-                || authorities.includes('ROLE_ADMIN');
-            if (!isAdmin) {
-                location.href = '/logout';
                 return null;
             }
             return me;

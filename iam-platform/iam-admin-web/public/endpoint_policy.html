@@ -120,9 +120,9 @@
             <select id="fDomain" onchange="list()">
                 <option value="">全部能力域</option>
                 <option value="admin">admin · 管理端</option>
-                <option value="portal">portal · 门户</option>
+                <option value="portal">portal · 用户端</option>
                 <option value="capability">capability · 开放能力</option>
-                <option value="internal">internal · 服务间内部</option>
+                <option value="internal">internal · 服务间能力</option>
                 <option value="other">other · 其他</option>
             </select>
             <select id="fSource" onchange="list()">
@@ -179,8 +179,8 @@
                     <select id="fAuthority">
                         <option value="AUTHENTICATED">AUTHENTICATED · 任意凭证</option>
                         <option value="PERMIT_ALL">PERMIT_ALL · 放行</option>
-                        <option value="ADMIN_SERVICE_TOKEN">ADMIN_SERVICE_TOKEN · 管理服务凭证</option>
-                        <option value="PORTAL_SERVICE_TOKEN">PORTAL_SERVICE_TOKEN · 门户服务凭证</option>
+                        <option value="ADMIN_SERVICE_TOKEN">ADMIN_SERVICE_TOKEN · 管理端凭证</option>
+                        <option value="PORTAL_SERVICE_TOKEN">PORTAL_SERVICE_TOKEN · 用户端凭证</option>
                         <option value="CAPABILITY">CAPABILITY · 按能力订阅校验</option>
                     </select>
                     <div class="hint">覆盖后来源将标记为 override</div>
