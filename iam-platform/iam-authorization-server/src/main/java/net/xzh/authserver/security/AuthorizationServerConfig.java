@@ -303,12 +303,12 @@ public class AuthorizationServerConfig {
 		return userCode;
 	}
 
-	/** 全局 TokenSettings: 固定 Opaque 格式, 不允许客户端覆盖 */
+	/** 全局 TokenSettings: 固定 Opaque 格式, 不允许客户端覆盖; refresh TTL 默认 12h (设计 §8) */
 	@Bean
 	public TokenSettings tokenSettings() {
 		return TokenSettings.builder().accessTokenFormat(OAuth2TokenFormat.REFERENCE)
 				.accessTokenTimeToLive(Duration.ofHours(2)).authorizationCodeTimeToLive(Duration.ofMinutes(5))
-				.reuseRefreshTokens(true).build();
+				.refreshTokenTimeToLive(Duration.ofHours(12)).reuseRefreshTokens(true).build();
 	}
 
 	// ------------------------------------------------------------------

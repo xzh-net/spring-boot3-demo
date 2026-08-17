@@ -95,6 +95,9 @@ public class ClientService {
         if (StringUtils.hasText(vo.getAuthorizationCodeTimeToLive())) {
             ts.authorizationCodeTimeToLive(Duration.parse(vo.getAuthorizationCodeTimeToLive()));
         }
+        if (StringUtils.hasText(vo.getRefreshTokenTimeToLive())) {
+            ts.refreshTokenTimeToLive(Duration.parse(vo.getRefreshTokenTimeToLive()));
+        }
         ts.reuseRefreshTokens(vo.isReuseRefreshTokens());
         builder.tokenSettings(ts.build());
 
@@ -166,6 +169,9 @@ public class ClientService {
         }
         if (StringUtils.hasText(vo.getAuthorizationCodeTimeToLive())) {
             ts.authorizationCodeTimeToLive(Duration.parse(vo.getAuthorizationCodeTimeToLive()));
+        }
+        if (StringUtils.hasText(vo.getRefreshTokenTimeToLive())) {
+            ts.refreshTokenTimeToLive(Duration.parse(vo.getRefreshTokenTimeToLive()));
         }
         ts.reuseRefreshTokens(vo.isReuseRefreshTokens());
         builder.tokenSettings(ts.build());
@@ -275,6 +281,7 @@ public class ClientService {
                 vo.setAccessTokenFormat((String) ts.getOrDefault("accessTokenFormat", "REFERENCE"));
                 vo.setAccessTokenTimeToLive((String) ts.getOrDefault("accessTokenTimeToLive", "PT2H"));
                 vo.setAuthorizationCodeTimeToLive((String) ts.getOrDefault("authorizationCodeTimeToLive", "PT5M"));
+                vo.setRefreshTokenTimeToLive((String) ts.getOrDefault("refreshTokenTimeToLive", "PT12H"));
                 vo.setReuseRefreshTokens((Boolean) ts.getOrDefault("reuseRefreshTokens", true));
             } catch (Exception ignored) {}
         }

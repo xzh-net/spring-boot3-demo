@@ -244,6 +244,8 @@ public class JdbcRegisteredClientRepository implements RegisteredClientRepositor
         tsMap.put("reuseRefreshTokens", readBoolSetting(rawTs, "settings.token.reuse-refresh-tokens"));
         Duration acttl = readDurationSetting(rawTs, "settings.token.authorization-code-time-to-live");
         if (acttl != null) tsMap.put("authorizationCodeTimeToLive", acttl.toString());
+        Duration rttl = readDurationSetting(rawTs, "settings.token.refresh-token-time-to-live");
+        if (rttl != null) tsMap.put("refreshTokenTimeToLive", rttl.toString());
         entity.setTokenSettings(toJson(tsMap));
         return entity;
     }
@@ -313,6 +315,9 @@ public class JdbcRegisteredClientRepository implements RegisteredClientRepositor
             }
             if (map.containsKey("authorizationCodeTimeToLive")) {
                 builder.authorizationCodeTimeToLive(Duration.parse((String) map.get("authorizationCodeTimeToLive")));
+            }
+            if (map.containsKey("refreshTokenTimeToLive")) {
+                builder.refreshTokenTimeToLive(Duration.parse((String) map.get("refreshTokenTimeToLive")));
             }
             return builder.build();
         } catch (Exception e) {

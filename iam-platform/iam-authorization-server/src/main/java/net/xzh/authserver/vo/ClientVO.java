@@ -26,4 +26,5 @@ public class ClientVO {
     private String accessTokenTimeToLive;
     private boolean reuseRefreshTokens;
     private String authorizationCodeTimeToLive;
+    private String refreshTokenTimeToLive;
 }
