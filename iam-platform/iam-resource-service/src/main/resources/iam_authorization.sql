@@ -216,11 +216,12 @@ CREATE TABLE `iam_app_authorization`  (
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '应用授权表' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
--- Records of iam_app_authorization (demo: 管理员角色授权 OA 全渠道; 研发部授权 CRM, 主体按编码)
+-- Records of iam_app_authorization (demo: 管理员/用户角色授权 OA 全渠道; 研发部授权 CRM, 主体按编码)
 -- ----------------------------
 INSERT INTO `iam_app_authorization` VALUES
 (1, 'T001', 2, 0, 'ROLE', 'ADMIN', 1, '2026-08-15 10:00:00', NULL, '2026-08-15 10:00:00', '2026-08-15 10:00:00'),
-(2, 'T001', 3, 0, 'ORG',  'RND', 1, '2026-08-15 10:00:00', NULL, '2026-08-15 10:00:00', '2026-08-15 10:00:00');
+(2, 'T001', 3, 0, 'ORG',  'RND', 1, '2026-08-15 10:00:00', NULL, '2026-08-15 10:00:00', '2026-08-15 10:00:00'),
+(3, 'T001', 2, 0, 'ROLE', 'USER', 1, '2026-08-17 20:36:16', NULL, '2026-08-17 20:36:16', '2026-08-17 20:36:16');
 
 -- ----------------------------
 -- Table structure for iam_endpoint_policy (资源接口准入策略: 启动扫描播种 + 管理端覆盖)

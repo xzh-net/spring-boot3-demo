@@ -471,9 +471,9 @@ function openAppModal(id) {
             document.getElementById('fAppCode').value = a.appCode || '';
             document.getElementById('fAppName').value = a.appName || '';
             document.getElementById('fAppDesc').value = a.description || '';
-            document.getElementById('fAppSort').value = a.sort || 0;
-            document.getElementById('fAppVisible').value = a.visible || 1;
-            document.getElementById('fAppStatus').value = a.status || 1;
+            document.getElementById('fAppSort').value = a.sort ?? 0;
+            document.getElementById('fAppVisible').value = a.visible ?? 1;
+            document.getElementById('fAppStatus').value = a.status ?? 1;
         }
     }
     document.getElementById('appModal').classList.add('show');
@@ -567,7 +567,7 @@ function openChannelModal(id) {
             document.getElementById('fSecretStatus').value = c.secretStatus || 0;
             document.getElementById('fChannelSort').value = c.sort || 0;
             document.getElementById('fIsDefault').value = c.isDefault || 0;
-            document.getElementById('fChannelStatus').value = c.status || 1;
+            document.getElementById('fChannelStatus').value = c.status ?? 1;
         }
     }
     document.getElementById('channelModal').classList.add('show');
