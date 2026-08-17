@@ -3,9 +3,9 @@
 --       开放能力登记 + 开发者客户端订阅 (scheme B: /api/capability/** 命名空间与 endpoint_policy 分流, 两表互不读对方主表)。
 --       令牌类别命名: 管理令牌 MANAGEMENT_TOKEN / 服务令牌 SERVICE_TOKEN (v6.5.x 由 ROLE_ADMIN/ROLE_SERVICE 更名,
 --       后续版本统一不再产生 ROLE_ 前缀的令牌类别 authority; V6.6 起更名为 ADMIN_SERVICE_TOKEN / PORTAL_SERVICE_TOKEN)。
--- 实际建表/种子由 CapabilitySchemaInitializer + EndpointPolicyScanInitializer (ApplicationRunner) 幂等执行,
--- 本脚本仅供参考/审计。新库 (iam_authorization.sql V6.5) 已含三表与 demo, 无需执行;
--- 存量库只需执行一次下述四段即可 (后续由初始化器保证幂等)。
+-- 建表/种子以本脚本与 iam_authorization.sql 为准 (初始化器已拆除);
+-- 新库 (iam_authorization.sql V6.5) 已含三表与 demo 种子, 无需执行; 存量库执行一次下述四段即可。
+-- 注: iam_endpoint_policy 的 coded 准入行仍由 EndpointPolicyScanInitializer 启动扫描播种。
 
 USE iam_authorization;
 

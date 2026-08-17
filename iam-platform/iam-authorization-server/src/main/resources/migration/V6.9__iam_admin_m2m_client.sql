@@ -4,8 +4,7 @@
 --       调用资源中心管理端能力 (/api/admin/**), 资源中心按 client_id 白名单
 --       内省注入 ADMIN_SERVICE_TOKEN (管理服务凭证)。
 -- 归属: iam_identity 库 / iam-authorization-server
--- 备注: 运行时由 DataInitializer.ensureAdminM2mClient() 兜底创建 (幂等);
---       本脚本供存量库手动执行 / 审计参考。
+-- 备注: 以 iam_identity.sql (base) 为唯一来源; 本脚本供存量库手动执行。
 -- ============================================================
 
 USE iam_identity;

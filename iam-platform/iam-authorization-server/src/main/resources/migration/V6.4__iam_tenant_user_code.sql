@@ -1,7 +1,7 @@
 -- V6.4 迁移 - 认证中心 iam_tenant_user 下放引用编码化
 -- 背景: 租户成员关系离开认证库引用时需用业务编码, 不再引用内部自增主键
 --       (与 sys_user.user_code / iam_tenant.tenant_code 的编码化原则一致)。
--- 实际迁移由 TenantUserMigrationInitializer (ApplicationRunner) 幂等执行, 本脚本仅供参考/审计。
+-- 本脚本为存量库升级的唯一执行途径 (升级时手动执行);
 -- 新库 (iam_identity.sql V6.4) 直接为编码结构, 无需执行。
 
 USE iam_identity;

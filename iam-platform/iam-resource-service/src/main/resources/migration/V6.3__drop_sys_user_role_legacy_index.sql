@@ -6,7 +6,7 @@
 --       (它建在 role_id 上), 故需手动清理, 以 uk_user_code_role(user_code, role_id)
 --       复合唯一索引为准。
 -- 归属: iam_authorization 库 / iam-resource-service
--- 执行: 手动执行 (应用启动时 ShadowUserMigrationInitializer 也会幂等自愈)
+-- 执行: 手动执行 (迁移初始化器已拆除, 本脚本为唯一执行途径)
 -- ============================================================
 
 USE iam_authorization;

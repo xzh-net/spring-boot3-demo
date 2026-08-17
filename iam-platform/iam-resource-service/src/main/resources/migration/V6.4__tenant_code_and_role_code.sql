@@ -3,7 +3,7 @@
 --   * iam_application / iam_org / iam_app_authorization 的 tenant_id 改为 tenant_code;
 --   * iam_app_authorization 的 ROLE 主体由 sys_role.id 统一为 sys_role.code,
 --     ORG 主体由 iam_org.id 统一为 iam_org.org_code (与 USER=user_code 编码寻址一致)。
--- 实际迁移由 CrossDbCodeMigrationInitializer (ApplicationRunner) 幂等执行, 本脚本仅供参考/审计。
+-- 本脚本为存量库升级的唯一执行途径 (由 DBA/升级账号手动执行, 可跨库 JOIN iam_identity 回填);
 -- 新库 (iam_authorization.sql V6.4) 直接为编码结构, 无需执行。
 
 USE iam_authorization;

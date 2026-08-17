@@ -223,7 +223,7 @@ net.xzh.authserver
 | `service-app` | 客户端模式 | client_secret_basic | 服务间调用 (M2M) |
 | `resource-server` | 客户端模式 | client_secret_basic | 资源中心 introspection / 目录 API |
 
-客户端配置详见 [iam_identity.sql](./src/main/resources/iam_identity.sql)（运行时由 `DataInitializer` 兜底创建），对接方式见各演示项目 README。
+客户端配置详见 [iam_identity.sql](./src/main/resources/iam_identity.sql)（唯一来源；新增/变更客户端走管理端 `/api/admin/clients`，不再有代码兜底初始化器），对接方式见各演示项目 README。
 
 ## 相关文档
 
