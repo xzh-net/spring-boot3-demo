@@ -256,6 +256,7 @@ async function save() {
     };
     try {
         await App.api("/api/admin/policies", { method: "POST", body });
+        alert('✅ 准入策略已保存');
         closeModal(); list();
     } catch (e) {
         alert("保存失败: " + e.message);
@@ -266,7 +267,7 @@ async function del(clientId) {
     if (!confirm(`确认清除客户端 "${clientId}" 的准入策略 ? (恢复默认放行)`)) return;
     try {
         await App.api("/api/admin/policies/" + encodeURIComponent(clientId), { method: "DELETE" });
-        list();
+        alert('✅ 准入策略已清除'); list();
     } catch (e) { alert("删除失败: " + e.message); }
 }
 

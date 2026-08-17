@@ -377,6 +377,7 @@ async function save() {
     const method = id ? "PUT" : "POST";
     try {
         await App.api(url, { method, body });
+        alert(id ? '✅ 客户端已更新' : '✅ 客户端已创建');
         closeModal(); list();
     } catch (e) {
         alert("保存失败: " + e.message);
@@ -387,6 +388,7 @@ async function del(id, clientId) {
     if (!confirm(`确认删除客户端 "${clientId}" ?`)) return;
     try {
         await App.api("/api/admin/clients/" + id, { method: "DELETE" });
+        alert('✅ 客户端已删除');
         list();
     } catch (e) { alert("删除失败: " + e.message); }
 }

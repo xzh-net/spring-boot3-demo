@@ -285,6 +285,7 @@ async function save() {
     };
     try {
         await App.api("/api/admin/endpoint-policies/" + id, { method: "PUT", body });
+        alert('✅ 准入规则已更新');
         closeModal(); list();
     } catch (e) { alert("保存失败: " + e.message); }
 }
@@ -293,7 +294,7 @@ async function reset(id) {
     if (!confirm("确认重置为扫描默认规则 ?")) return;
     try {
         await App.api("/api/admin/endpoint-policies/" + id, { method: "DELETE" });
-        list();
+        alert('✅ 已重置为扫描默认规则'); list();
     } catch (e) { alert("重置失败: " + e.message); }
 }
 

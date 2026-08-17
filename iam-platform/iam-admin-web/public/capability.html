@@ -361,6 +361,7 @@ async function saveCap() {
         } else {
             await App.api("/api/admin/capabilities", { method: "POST", body });
         }
+        alert(id ? '✅ 能力已更新' : '✅ 能力已创建');
         closeCapModal(); listCaps();
     } catch (e) { alert("保存失败: " + e.message); }
 }
@@ -369,7 +370,7 @@ async function delCap(id) {
     if (!confirm("确认删除该能力 ? (同时解除全部订阅)")) return;
     try {
         await App.api("/api/admin/capabilities/" + id, { method: "DELETE" });
-        listCaps(); listSubs();
+        alert('✅ 能力已删除'); listCaps(); listSubs();
     } catch (e) { alert("删除失败: " + e.message); }
 }
 
@@ -460,6 +461,7 @@ async function saveSub() {
         } else {
             await App.api("/api/admin/capability-subscriptions", { method: "POST", body });
         }
+        alert(id ? '✅ 订阅已更新' : '✅ 订阅已创建');
         closeSubModal(); listSubs();
     } catch (e) { alert("保存失败: " + e.message); }
 }
@@ -468,7 +470,7 @@ async function revokeSub(id) {
     if (!confirm("确认取消该订阅 ? (将立即拒绝该客户端访问对应能力)")) return;
     try {
         await App.api("/api/admin/capability-subscriptions/" + id, { method: "DELETE" });
-        listSubs();
+        alert('✅ 订阅已取消'); listSubs();
     } catch (e) { alert("取消失败: " + e.message); }
 }
 

@@ -240,7 +240,7 @@ async function save() {
         } else {
             await App.api("/api/admin/tenants", { method: "POST", body });
         }
-        closeModal(); list();
+        alert(id ? '✅ 租户已更新' : '✅ 租户已创建'); closeModal(); list();
     } catch (e) { alert("保存失败: " + e.message); }
 }
 
@@ -248,7 +248,7 @@ async function del(id, name) {
     if (!confirm(`确认删除租户 "${name}" ? 该租户下所有用户绑定将一并解除`)) return;
     try {
         await App.api("/api/admin/tenants/" + id, { method: "DELETE" });
-        list();
+        alert('✅ 租户已删除'); list();
     } catch (e) { alert("删除失败: " + e.message); }
 }
 

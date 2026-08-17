@@ -499,6 +499,7 @@ async function saveApp() {
         } else {
             await App.api('/api/admin/applications', { method: 'POST', body });
         }
+        alert(id ? '✅ 应用已更新' : '✅ 应用已创建');
         closeModal('appModal'); loadApps();
     } catch (e) { alert('保存失败: ' + e.message); }
 }
@@ -508,7 +509,7 @@ async function delApp(id) {
     if (!confirm(`确认删除应用 "${a ? a.appName : id}" ?\n将同时删除其全部渠道与授权`)) return;
     try {
         await App.api('/api/admin/applications/' + id, { method: 'DELETE' });
-        loadApps();
+        alert('✅ 应用已删除'); loadApps();
     } catch (e) { alert('删除失败: ' + e.message); }
 }
 
@@ -593,6 +594,7 @@ async function saveChannel() {
         } else {
             await App.api(base, { method: 'POST', body });
         }
+        alert(id ? '✅ 渠道已更新' : '✅ 渠道已创建');
         closeModal('channelModal'); loadChannels();
     } catch (e) { alert('保存失败: ' + e.message); }
 }
@@ -601,7 +603,7 @@ async function delChannel(id) {
     if (!confirm('确认删除该渠道 ?\n将同时解除该渠道的授权')) return;
     try {
         await App.api('/api/admin/applications/' + currentAppId + '/channels/' + id, { method: 'DELETE' });
-        loadChannels();
+        alert('✅ 渠道已删除'); loadChannels();
     } catch (e) { alert('删除失败: ' + e.message); }
 }
 
@@ -679,6 +681,7 @@ async function saveAuthz() {
     };
     try {
         await App.api('/api/admin/applications/authorizations', { method: 'POST', body });
+        alert('✅ 授权已创建');
         closeModal('authzModal'); loadAuthz();
     } catch (e) { alert('保存失败: ' + e.message); }
 }
@@ -687,7 +690,7 @@ async function delAuthz(id) {
     if (!confirm('确认删除该授权 ?')) return;
     try {
         await App.api('/api/admin/applications/authorizations/' + id, { method: 'DELETE' });
-        loadAuthz();
+        alert('✅ 授权已删除'); loadAuthz();
     } catch (e) { alert('删除失败: ' + e.message); }
 }
 

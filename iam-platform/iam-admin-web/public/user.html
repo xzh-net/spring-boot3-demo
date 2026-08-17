@@ -100,7 +100,7 @@
             <table>
                 <thead>
                     <tr>
-                        <th>ID</th><th>用户名</th><th>用户编码</th><th>标签</th><th>租户</th><th>昵称</th><th>邮箱</th><th>手机号</th><th>状态</th><th>创建时间</th>
+                        <th>ID</th><th>用户名</th><th>用户编码</th><th>标签</th><th>租户</th><th>状态</th><th>创建时间</th>
                         <th style="width: 260px">操作</th>
                     </tr>
                 </thead>
@@ -239,9 +239,6 @@ async function listUsers() {
             </td>
             <td>${identityTag(u.userLabel)}</td>
             <td style="font-size:12px;color:#475569;">${tenantNames}</td>
-            <td>${u.nickname || "-"}</td>
-            <td>${u.email || "-"}</td>
-            <td>${u.phone || "-"}</td>
             <td>${enabledTag}</td>
             <td style="font-size:12px;color:#94a3b8;">${(u.createTime || "").replace("T", " ")}</td>
             <td>
@@ -318,6 +315,7 @@ async function save() {
     }
     try {
         await App.api(url, { method, body });
+        alert(id ? '✅ 用户已更新' : '✅ 用户已创建');
         closeModal(); listUsers();
     } catch (e) {
         alert("保存失败: " + e.message);
@@ -328,6 +326,7 @@ async function del(id, username) {
     if (!confirm(`确认删除用户 "${username}" ?\n(将自动强制下线所有会话)`)) return;
     try {
         await App.api("/api/admin/users/" + id, { method: "DELETE" });
+        alert('✅ 用户已删除');
         listUsers();
     } catch (e) { alert("删除失败: " + e.message); }
 }
@@ -337,6 +336,7 @@ async function enable(id, enabled, username) {
     if (!confirm(`确认${action}用户 "${username}" ?`)) return;
     try {
         await App.api("/api/admin/users/" + id + "/enable?enabled=" + enabled, { method: "PUT" });
+        alert('✅ 用户已' + action);
         listUsers();
     } catch (e) { alert("操作失败: " + e.message); }
 }
