@@ -21,7 +21,7 @@ sequenceDiagram
     Client->>+MCPServer: 1. 建立连接 (stdio/HTTP)
     MCPServer-->>-Client: 2. 初始化握手，确认协议版本
     Client->>+MCPServer: 3. 请求可用工具列表 (tools/list)
-    MCPServer-->>-Client: 4. 返回工具列表 (如 get_weather)
+    MCPServer-->>-Client: 4. 返回工具列表 (如 getWeather)
 
     Note over User,LLM: 阶段2：用户交互与意图理解
     User->>Client: 5. "大连今天天气怎么样？"
@@ -40,18 +40,42 @@ sequenceDiagram
 
 ## 项目介绍
 
-实现了基于流式 HTTP（STREAMABLE）协议的 MCP 服务端，支持实时通知（资源、工具、提示词变更通知）。通过  `LoggingFilter` 过滤器，专门用于调试网关代理后的请求头参数异常情况，仅对 `/mcp/*` 路径生效。
+基于 Spring AI 实现的 MCP Server，使用 Streamable HTTP 协议，提供天气查询工具服务。
 
-### 客户端工具安装
+### 技术栈
+
+- Spring Boot 4.0.4
+- Spring AI 2.0.1
+- MCP Streamable HTTP 协议
+
+### 构建与启动
 
 ```bash
-npx @mcpjam/inspector@latest
+mvn spring-boot:run
 ```
 
-### 获取消息端点（Streamable HTTP）
+服务启动后监听 `http://localhost:8080`，MCP 端点为 `/mcp`。
+
+### 测试
+
+#### 方式一：MCP Inspector（推荐）
 
 ```bash
-curl -i -X POST http://172.17.17.165:8080/mcp \
+npx @modelcontextprotocol/inspector
+```
+
+启动后在界面中选择 **Streamable HTTP** 传输方式，输入 URL `http://localhost:8080/mcp`，点击 Connect 即可连接测试。
+
+![MCP Inspector 测试截图](doc/assets/mcp_test_inspector.png)
+
+#### 方式二：curl 命令行调试
+
+注意：curl 默认不显示响应头，必须加 `-i` 参数才能看到 `Mcp-Session-Id`。
+
+**第 1 步：初始化连接，获取 Mcp-Session-Id**
+
+```bash
+curl -i -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: text/event-stream, application/json" \
   -d '{
@@ -69,23 +93,15 @@ curl -i -X POST http://172.17.17.165:8080/mcp \
   }'
 ```
 
-输出以下内容表示调用成功，记录下 `Mcp-Session-Id` 的值
+响应头中会返回 `Mcp-Session-Id: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`，记录该值用于后续请求。
 
-```lua
-HTTP/1.1 200 
-Mcp-Session-Id: f65b9dc7-7628-4204-a4e9-face3ed14249
-Content-Type: application/json
-Transfer-Encoding: chunked
-Date: Thu, 16 Apr 2026 03:47:52 GMT
-```
-
-### 列出所有可用工具
+**第 2 步：列出所有可用工具**
 
 ```bash
-curl -X POST http://172.17.17.165:8080/mcp \
+curl -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: text/event-stream, application/json" \
-  -H "Mcp-Session-Id: f65b9dc7-7628-4204-a4e9-face3ed14249" \
+  -H "Mcp-Session-Id: 上一步获取的SessionId" \
   -d '{
     "jsonrpc": "2.0",
     "id": 2,
@@ -93,13 +109,13 @@ curl -X POST http://172.17.17.165:8080/mcp \
   }'
 ```
 
-### 调用工具
+**第 3 步：调用 getWeather 工具**
 
 ```bash
-curl -X POST http://172.17.17.165:8080/mcp \
+curl -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: text/event-stream, application/json" \
-  -H "Mcp-Session-Id: f65b9dc7-7628-4204-a4e9-face3ed14249" \
+  -H "Mcp-Session-Id: 上一步获取的SessionId" \
   -d '{
     "jsonrpc": "2.0",
     "id": 3,
@@ -112,3 +128,9 @@ curl -X POST http://172.17.17.165:8080/mcp \
     }
   }'
 ```
+
+#### 方式三：test.http 文件
+
+1. 安装 VS Code 插件 [REST Client](https://marketplace.visualstudio.com/items?itemName=humao.rest-client)
+2. 打开 `test.http`，点击请求上方的 **Send Request**
+3. 执行第 1 步（initialize）后，响应头中的 `Mcp-Session-Id` 会通过 `{{initialize.response.headers.Mcp-Session-Id}}` 自动传递给后续请求，无需手动粘贴

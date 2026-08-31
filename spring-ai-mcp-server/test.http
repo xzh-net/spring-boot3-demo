@@ -1,0 +1,62 @@
+### 使用说明
+### 1. 安装 VS Code 插件 REST Client: https://marketplace.visualstudio.com/items?itemName=humao.rest-client
+### 2. 点击每个请求上方的 Send Request 执行
+### 3. 第 1 步执行后，Mcp-Session-Id 会自动传递给后续请求（通过 {{initialize.response.headers.Mcp-Session-Id}}）
+
+@host = http://localhost:8080
+@endpoint = {{host}}/mcp
+
+###
+# 第 1 步：初始化连接，获取 Mcp-Session-Id
+# @name initialize
+POST {{endpoint}}
+Content-Type: application/json
+Accept: text/event-stream, application/json
+
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "initialize",
+  "params": {
+    "protocolVersion": "2025-11-25",
+    "capabilities": {},
+    "clientInfo": {
+      "name": "test-client",
+      "version": "1.0.0"
+    }
+  }
+}
+
+###
+# 第 2 步：获取工具列表（Session-Id 自动从第 1 步获取）
+# @name listTools
+POST {{endpoint}}
+Content-Type: application/json
+Accept: text/event-stream, application/json
+Mcp-Session-Id: {{initialize.response.headers.Mcp-Session-Id}}
+
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "tools/list"
+}
+
+###
+# 第 3 步：调用 getWeather 工具（Session-Id 自动从第 1 步获取）
+# @name callWeather
+POST {{endpoint}}
+Content-Type: application/json
+Accept: text/event-stream, application/json
+Mcp-Session-Id: {{initialize.response.headers.Mcp-Session-Id}}
+
+{
+  "jsonrpc": "2.0",
+  "id": 3,
+  "method": "tools/call",
+  "params": {
+    "name": "getWeather",
+    "arguments": {
+      "cityName": "大连"
+    }
+  }
+}

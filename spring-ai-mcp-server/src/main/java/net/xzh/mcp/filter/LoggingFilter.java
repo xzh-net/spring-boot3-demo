@@ -21,10 +21,10 @@ public class LoggingFilter implements Filter {
 	public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
 			throws IOException, ServletException {
 		HttpServletRequest req = (HttpServletRequest) request;
-		log.info("Filter - {} {}", req.getMethod(), req.getRequestURI());
+		log.debug("Filter - {} {}", req.getMethod(), req.getRequestURI());
 		Enumeration<String> headerNames = req.getHeaderNames();
 		Collections.list(headerNames)
-				.forEach(headerName -> log.info("Header: {} = {}", headerName, req.getHeader(headerName)));
+				.forEach(headerName -> log.debug("Header: {} = {}", headerName, req.getHeader(headerName)));
 		chain.doFilter(request, response);
 	}
 }
