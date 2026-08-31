@@ -1,4 +1,4 @@
-# 构建 MCP 服务端与客户端
+# 构建 MCP 服务与客户端配置
 
 ## MCP 是什么？
 
@@ -134,3 +134,54 @@ curl -X POST http://localhost:8080/mcp \
 1. 安装 VS Code 插件 [REST Client](https://marketplace.visualstudio.com/items?itemName=humao.rest-client)
 2. 打开 `test.http`，点击请求上方的 **Send Request**
 3. 执行第 1 步（initialize）后，响应头中的 `Mcp-Session-Id` 会通过 `{{initialize.response.headers.Mcp-Session-Id}}` 自动传递给后续请求，无需手动粘贴
+
+## 客户端配置
+
+### OpenCode
+
+支持两种配置方式：全局配置和项目配置。
+
+#### 全局配置（推荐）
+
+全局配置对所有项目生效。编辑 `~/.config/opencode/opencode.json`：
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "my-mcp-server": {
+      "type": "remote",
+      "url": "http://localhost:8080/mcp",
+      "enabled": true
+    }
+  }
+}
+```
+
+> Windows 路径：`C:\Users\<用户名>\.config\opencode\opencode.json`
+
+#### 项目配置
+
+仅对当前项目生效。在项目根目录创建 `opencode.json`：
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "my-mcp-server": {
+      "type": "remote",
+      "url": "http://localhost:8080/mcp",
+      "enabled": true
+    }
+  }
+}
+```
+
+项目配置会覆盖全局配置中的同名 MCP 服务器。
+
+#### 验证配置
+
+```bash
+# 列出所有已配置的 MCP 服务器及连接状态
+opencode mcp list
+```
