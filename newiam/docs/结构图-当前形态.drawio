@@ -1,0 +1,99 @@
+<mxfile host="app.diagrams.net" version="24.7.8">
+  <diagram id="iam-current-v6" name="IAM当前架构">
+    <mxGraphModel dx="1800" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1820" pageHeight="1080" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="iam-platform 当前架构与请求路线全景（V6 双库双服务形态）" style="text;html=1;align=center;verticalAlign=middle;fontSize=18;fontStyle=1;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="500" y="8" width="820" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" value="Opaque 令牌 + Redis 会话 · iam_identity / iam_authorization 双库分治 · 内外流量直连（无网关）" style="text;html=1;align=center;verticalAlign=middle;fontSize=11;fontColor=#888888;" vertex="1" parent="1">
+          <mxGeometry x="500" y="34" width="820" height="18" as="geometry" />
+        </mxCell>
+        <mxCell id="u_c" value="C端用户（浏览器）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;shadow=1;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="80" y="58" width="200" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="u_a" value="运营管理员（浏览器）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;shadow=1;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="620" y="58" width="200" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="u_d" value="&lt;b&gt;第三方接入方 example demos&lt;/b&gt;&lt;br&gt;web-app:8081 · device-app:8082 · mobile-app:8083" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;shadow=1;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1480" y="45" width="300" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="pweb" value="iam-portal-web&lt;br&gt;静态站 :8000" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e6f0fb;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="80" y="160" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="pbff" value="&lt;b&gt;&lt;font color='#1f4e79'&gt;iam-portal-service（门户BFF）:8080&lt;/font&gt;&lt;/b&gt;&lt;br&gt;OAuth2 Client(portal-app) · 手动 PKCE&lt;br&gt;独立会话 PORTAL_SERVER_SESSION&lt;br&gt;登出 → OIDC RP-Initiated Logout" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;shadow=1;fontSize=11;align=left;spacingLeft=10;spacing=2;" vertex="1" parent="1">
+          <mxGeometry x="300" y="140" width="340" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="aweb" value="iam-admin-web&lt;br&gt;静态页 :8001" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e6f0fb;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="760" y="160" width="170" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="abff" value="&lt;b&gt;&lt;font color='#1f4e79'&gt;iam-admin-service（管理BFF）:8085&lt;/font&gt;&lt;/b&gt;&lt;br&gt;OAuth2 Client(admin-app)&lt;br&gt;ApiProxyController /** 通用透传代理&lt;br&gt;无库 · 权限完全依赖对端 introspection" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;shadow=1;fontSize=11;align=left;spacingLeft=10;spacing=2;" vertex="1" parent="1">
+          <mxGeometry x="960" y="140" width="340" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="ghost" value="✕ API 网关缺位 —— 内外部流量未分流（开放平台接入的前置缺口）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#999999;dashed=1;fontSize=10;fontColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="1000" y="262" width="380" height="26" as="geometry" />
+        </mxCell>
+        <mxCell id="authC" value="iam-authorization-server 认证中心 :9000 ｜ 控制面（协议运行时 + 管理API 同进程）" style="swimlane;html=1;childLayout=none;horizontal=1;startSize=36;resizeParent=0;collapsible=0;rounded=1;shadow=1;fillColor=#b9ddb4;strokeColor=#5f9e5a;swimlaneFillColor=#f4faf2;fontSize=13;fontStyle=1;fontColor=#1e5c1e;swimlaneLine=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="300" width="580" height="540" as="geometry" />
+        </mxCell>
+        <mxCell id="proto" value="&lt;b&gt;&lt;font color='#2d6a2d'&gt;协议面｜OIDC/OAuth2 端点&lt;/font&gt;&lt;/b&gt;&lt;br&gt;/oauth2/authorize · token · introspect · revoke · jwks · device_authorization · /userinfo&lt;br&gt;/login · /consent · /logout(RP-Initiated) · /activate(设备码) · /.well-known" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontSize=11;align=left;spacingLeft=8;spacing=2;" vertex="1" parent="authC">
+          <mxGeometry x="20" y="42" width="540" height="78" as="geometry" />
+        </mxCell>
+        <mxCell id="login" value="&lt;b&gt;&lt;font color='#2d6a2d'&gt;登录与签发准入&lt;/font&gt;&lt;/b&gt;&lt;br&gt;PortalUserDetailsService：本地 sys_user BCrypt 校验（零远程凭据）&lt;br&gt;ClientUserPolicyService：读 iam_client_policy，fail-closed 准入&lt;br&gt;RemoteRoleService：M2M 拉角色（30s进程缓存），失败降级 user_label&lt;b&gt;&lt;font color='#B85450'&gt;【猜测】&lt;/font&gt;&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontSize=11;align=left;spacingLeft=8;spacing=2;" vertex="1" parent="authC">
+          <mxGeometry x="20" y="136" width="540" height="112" as="geometry" />
+        </mxCell>
+        <mxCell id="adminapi" value="&lt;b&gt;&lt;font color='#2d6a2d'&gt;管理API面｜/api/admin/**&lt;/font&gt;&lt;/b&gt;&lt;br&gt;users · clients · sessions · records · tenants · policies&lt;br&gt;Order(2)链：本地 Redis 自省 + ADMIN_SERVICE_TOKEN + 客户端白名单 [admin-app]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontSize=11;align=left;spacingLeft=8;spacing=2;" vertex="1" parent="authC">
+          <mxGeometry x="20" y="264" width="540" height="96" as="geometry" />
+        </mxCell>
+        <mxCell id="redisd" value="Redis&lt;br&gt;令牌/授权码/会话&lt;br&gt;oauth2:auth:* · oauth2:session&lt;br&gt;撤销即删 key" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="authC">
+          <mxGeometry x="40" y="384" width="230" height="116" as="geometry" />
+        </mxCell>
+        <mxCell id="idb" value="&lt;b&gt;MySQL iam_identity&lt;/b&gt;&lt;br&gt;sys_user · oauth2_registered_client · consent&lt;br&gt;authorization_record · iam_tenant · iam_tenant_user&lt;br&gt;iam_client_policy&lt;b&gt;&lt;font color='#B85450'&gt;【策略表错位】&lt;/font&gt;&lt;/b&gt;" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;" vertex="1" parent="authC">
+          <mxGeometry x="310" y="380" width="250" height="124" as="geometry" />
+        </mxCell>
+        <mxCell id="resC" value="iam-resource-service 资源中心 :9010 ｜ 数据面（权限中心 + 资产域 + 开放能力种子混装）" style="swimlane;html=1;childLayout=none;horizontal=1;startSize=36;resizeParent=0;collapsible=0;rounded=1;shadow=1;fillColor=#ffdd99;strokeColor=#d79b00;swimlaneFillColor=#fffaf0;fontSize=13;fontStyle=1;fontColor=#7a4a00;swimlaneLine=1;" vertex="1" parent="1">
+          <mxGeometry x="800" y="300" width="640" height="570" as="geometry" />
+        </mxCell>
+        <mxCell id="intro" value="&lt;b&gt;&lt;font color='#9a5b00'&gt;令牌校验｜资源服务器&lt;/font&gt;&lt;/b&gt;&lt;br&gt;NimbusOpaqueTokenIntrospector → 9000 /oauth2/introspect（Basic resource-server）&lt;br&gt;RbacAuthoritiesOpaqueTokenIntrospector 二次增强：按 grant_type/client_id 定类别，按 sub 回查本地 RBAC 注入角色" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontSize=11;align=left;spacingLeft=8;spacing=2;" vertex="1" parent="resC">
+          <mxGeometry x="20" y="42" width="600" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="admit" value="&lt;b&gt;&lt;font color='#9a5b00'&gt;EndpointAdmissionManager 表驱动准入&lt;/font&gt;&lt;/b&gt;：deny-by-default（iam_endpoint_policy）· /api/internal/** 硬规则仅 resource-server 可调" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontSize=11;align=left;spacingLeft=8;spacing=2;" vertex="1" parent="resC">
+          <mxGeometry x="20" y="138" width="600" height="54" as="geometry" />
+        </mxCell>
+        <mxCell id="doms" value="&lt;b&gt;&lt;font color='#9a5b00'&gt;四个能力域（异质职责混装）&lt;/font&gt;&lt;/b&gt;&lt;br&gt;admin：roles · permissions · user-roles · applications · endpoint-policies · capabilities · subscriptions · data-clean&lt;br&gt;portal：/api/public/clients/mine（应用卡片可见性判定）&lt;br&gt;capability：/api/capability/contacts&lt;b&gt;&lt;font color='#B85450'&gt;【开放平台种子寄居于此】&lt;/font&gt;&lt;/b&gt;&lt;br&gt;internal：GET /api/internal/user/{code}/roles（仅供认证中心登录期调用）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;fontSize=11;align=left;spacingLeft=8;spacing=2;" vertex="1" parent="resC">
+          <mxGeometry x="20" y="208" width="600" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="rbacd" value="&lt;b&gt;MySQL iam_authorization&lt;/b&gt;&lt;br&gt;sys_role · sys_permission · sys_user_role · sys_role_permission&lt;br&gt;iam_application · channel · org · app_authorization&lt;br&gt;iam_endpoint_policy · iam_api_capability · iam_capability_subscription" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=10;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;" vertex="1" parent="resC">
+          <mxGeometry x="60" y="390" width="540" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="legend" value="&lt;b&gt;调用关系链&lt;/b&gt;　实线＝同步调用　虚线＝辅助/内部读写&lt;font color='#B85450'&gt;红虚线＝边界债&lt;/font&gt;&lt;br&gt;① C端SSO（授权码+PKCE）　② 协议交互/登出　③ 门户30s心跳自省　④ 门户应用卡片&lt;br&gt;⑤ 管理台入口　⑥ 管理透传→认证中心　⑦ 管理透传→资源中心　⑧ 资源面introspect&lt;br&gt;⑨ 登录期角色供给（M2M，失败降级猜测）　⑩ 删用户联动（admin-m2m）　⑪ demo直连协议　⑫ demo调开放能力" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fafafa;strokeColor=#999999;fontSize=10;align=left;spacingLeft=10;spacing=4;" vertex="1" parent="1">
+          <mxGeometry x="60" y="920" width="700" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="warn" value="&lt;b&gt;⚠ 形态问题标注&lt;/b&gt;&lt;br&gt;· 无网关：内外流量不分流，第三方流量无受控入口&lt;br&gt;· ⑨ 身份域反向依赖权限域，失败即按展示字段猜测角色&lt;br&gt;· capability/subscription 开放平台种子错位寄居资源中心&lt;br&gt;· 管理面与协议面同进程，发版互相影响" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fad7ac;strokeColor=#b46504;fontSize=10;align=left;spacingLeft=10;spacing=4;fontStyle=0" vertex="1" parent="1">
+          <mxGeometry x="800" y="920" width="640" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=1.5;" edge="1" parent="1" source="u_c" target="pweb"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=1.5;" edge="1" parent="1" source="pweb" target="pbff"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e3" value="①② SSO 授权码+PKCE · 登出" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=1.5;labelBackgroundColor=#ffffff;fontSize=10;exitX=0.25;exitY=1;entryX=0.25;entryY=0;" edge="1" parent="1" source="pbff" target="proto"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e4" value="③ 30s 心跳自省" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=1.5;dashed=1;labelBackgroundColor=#ffffff;fontSize=10;exitX=0.6;exitY=1;entryX=0.55;entryY=0;" edge="1" parent="1" source="pbff" target="proto"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e5" value="④ 应用卡片查询" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=1.5;labelBackgroundColor=#ffffff;fontSize=10;exitX=1;exitY=0.8;entryX=0;entryY=0.15;" edge="1" parent="1" source="pbff" target="doms"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="680" y="220" /><mxPoint x="680" y="530" /></Array></mxGeometry></mxCell>
+        <mxCell id="e6" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=1.5;exitX=0.7;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="u_a" target="aweb"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e7" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=1.5;exitX=1;exitY=0.35;entryX=0;entryY=0.35;" edge="1" parent="1" source="aweb" target="abff"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e8" value="⑥ 管理透传 /api/admin/**" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=1.5;labelBackgroundColor=#ffffff;fontSize=10;exitX=0;exitY=0.77;entryX=1;entryY=0.3;" edge="1" parent="1" source="abff" target="adminapi"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="660" y="225" /><mxPoint x="660" y="593" /></Array></mxGeometry></mxCell>
+        <mxCell id="e9" value="⑦ 透传 权限·应用·策略·能力" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=1.5;labelBackgroundColor=#ffffff;fontSize=10;exitX=0;exitY=0.92;entryX=0;entryY=0.45;" edge="1" parent="1" source="abff" target="doms"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="700" y="241" /><mxPoint x="700" y="575" /></Array></mxGeometry></mxCell>
+        <mxCell id="e10" value="⑧ opaque 自省 introspect" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=1.5;labelBackgroundColor=#ffffff;fontSize=10;exitX=0.15;exitY=0;entryX=0.82;entryY=0;" edge="1" parent="1" source="intro" target="proto"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="910" y="286" /><mxPoint x="523" y="286" /></Array></mxGeometry></mxCell>
+        <mxCell id="e11" value="⑨ 登录期取角色 M2M · 失败降级猜测" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=1.5;dashed=1;strokeColor=#B85450;fontColor=#B85450;labelBackgroundColor=#ffffff;fontSize=10;exitX=1;exitY=0.5;entryX=0;entryY=0.72;" edge="1" parent="1" source="login" target="doms"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="730" y="492" /><mxPoint x="730" y="616" /></Array></mxGeometry></mxCell>
+        <mxCell id="e12" value="⑩ 删用户联动 admin-m2m" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=1.5;dashed=1;strokeColor=#B85450;fontColor=#B85450;labelBackgroundColor=#ffffff;fontSize=10;exitX=1;exitY=0.7;entryX=0;entryY=0.9;" edge="1" parent="1" source="adminapi" target="doms"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="765" y="631" /><mxPoint x="765" y="643" /></Array></mxGeometry></mxCell>
+        <mxCell id="e13" value="⑪ 协议直连" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=1.5;labelBackgroundColor=#ffffff;fontSize=10;exitX=0;exitY=0.5;entryX=1;entryY=0.6;" edge="1" parent="1" source="u_d" target="proto"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="720" y="75" /><mxPoint x="720" y="389" /></Array></mxGeometry></mxCell>
+        <mxCell id="e14" value="⑫ 开放能力调用" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=1.5;labelBackgroundColor=#ffffff;fontSize=10;exitX=0.35;exitY=1;entryX=1;entryY=0.35;" edge="1" parent="1" source="u_d" target="doms"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1585" y="560" /></Array></mxGeometry></mxCell>
+        <mxCell id="s1" value="令牌/会话" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;dashed=1;fontSize=9;strokeColor=#666666;fontColor=#666666;exitX=0.15;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="authC" source="login" target="redisd"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="s2" value="凭据校验" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;dashed=1;fontSize=9;strokeColor=#666666;fontColor=#666666;exitX=0.75;exitY=1;entryX=0.4;entryY=0;" edge="1" parent="authC" source="login" target="idb"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="s3" value="自省" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;dashed=1;fontSize=9;strokeColor=#666666;fontColor=#666666;exitX=0.2;exitY=1;entryX=0.75;entryY=0;" edge="1" parent="authC" source="adminapi" target="redisd"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="s4" value="CRUD" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;dashed=1;fontSize=9;strokeColor=#666666;fontColor=#666666;exitX=0.7;exitY=1;entryX=0.7;entryY=0;" edge="1" parent="authC" source="adminapi" target="idb"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="s5" value="读写" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;dashed=1;fontSize=9;strokeColor=#666666;fontColor=#666666;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="resC" source="doms" target="rbacd"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="s6" value="回查RBAC" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;dashed=1;fontSize=9;strokeColor=#666666;fontColor=#666666;exitX=0.08;exitY=1;entryX=0.06;entryY=0;" edge="1" parent="resC" source="intro" target="rbacd"><mxGeometry relative="1" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

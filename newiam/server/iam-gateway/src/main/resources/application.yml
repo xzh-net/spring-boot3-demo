@@ -1,0 +1,23 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: iam-gateway
+  cloud:
+    gateway:
+      # 固定端口直连拓扑 (无注册中心), 路由静态配置
+      routes:
+        - id: open-capability
+          # 开放流量路由组: 第三方调用开放能力的唯一入口
+          # /api/open/** → iam-open-service /api/** (RewritePath 去掉 /open 段)
+          uri: http://localhost:9030
+          predicates:
+            - Path=/api/open/**
+          filters:
+            - RewritePath=/api/open/(?<segment>.*), /api/$\{segment}
+
+logging:
+  level:
+    root: INFO
+    net.xzh.iam.gateway: INFO

@@ -1,0 +1,66 @@
+server:
+  port: 9010
+  servlet:
+    context-path: /
+
+spring:
+  profiles:
+    active: local
+
+  application:
+    name: iam-access-service
+
+  # ===== MySQL 8 数据源 (Druid 连接池) — 权限中心专用库 (iam_authorization_v2), 承载 RBAC + 业务数据 =====
+  # 资源服务器不做 Redis 依赖, 身份/权限直接读 MySQL
+  datasource:
+    type: com.alibaba.druid.pool.DruidDataSource
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    druid:
+      initial-size: 5
+      min-idle: 5
+      max-active: 20
+      max-wait: 60000
+      time-between-eviction-runs-millis: 60000
+      min-evictable-idle-time-millis: 300000
+      validation-query: SELECT 1
+      test-while-idle: true
+      test-on-borrow: false
+      test-on-return: false
+      pool-prepared-statements: false
+
+# ===== MyBatis-Plus =====
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: net.xzh.iam.access.entity
+
+# ===== OAuth2 资源服务器 (Opaque Token introspection) =====
+# 所有 Bearer Token 统一交给授权服务器 /oauth2/introspect 校验
+spring.security.oauth2.resourceserver.opaquetoken.introspection-uri: http://localhost:9000/oauth2/introspect
+spring.security.oauth2.resourceserver.opaquetoken.client-id: resource-server
+spring.security.oauth2.resourceserver.opaquetoken.client-secret: 123456
+
+# ===== 认证中心对接 (V6 分库后客户端目录经目录 API 获取) =====
+authserver:
+  base-url: http://localhost:9000
+  client-id: resource-server
+  client-secret: 123456
+  # 服务令牌判定兜底 (M2M): 该列表内 client_id 且无 grant_type 属性的令牌视为服务间调用 (注入 PORTAL_SERVICE_TOKEN);
+  # 与 internal 域解耦——internal 为硬规则 (仅 resource-server 可调, 见 EndpointAdmissionManager) 不受本配置影响
+  service-client-ids: [resource-server]
+  # 门户客户端白名单: 仅列表内客户端签发的令牌可访问 portal 域 (/api/public/**), 门户信息不对任意客户端开放
+  portal-client-ids: [portal-app]
+  # 管理 M2M 凭证白名单: 列表内客户端签发的服务令牌视为「管理 M2M」(身份管理面以机器身份执行管理写 (删用户联动清理)),
+  # 内省注入 ADMIN_SERVICE_TOKEN (管理服务凭证), 供 /api/admin/** 管理写鉴权 (调用方: iam-identity-service)
+  admin-m2m-client-ids: [admin-m2m]
+
+logging:
+  level:
+    root: INFO
+    net.xzh.iam.access: DEBUG
+    org.springframework.security: DEBUG

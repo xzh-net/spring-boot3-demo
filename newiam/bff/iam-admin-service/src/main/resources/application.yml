@@ -1,0 +1,38 @@
+server:
+  port: 8101
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: iam-admin-service
+
+  # ===== OAuth2 Client (授权码登录认证中心) =====
+  security:
+    oauth2:
+      client:
+        registration:
+          admin-app:
+            provider: iam
+            client-id: admin-app
+            client-secret: 123456
+            authorization-grant-type: authorization_code
+            redirect-uri: http://localhost:8101/login/oauth2/code/admin-app
+            scope: openid,profile,read,write
+            client-name: 管理后台
+        provider:
+          iam:
+            issuer-uri: http://localhost:9000
+
+# ===== 管理后台 BFF 自定义配置 (新拓扑三目标) =====
+iam:
+  admin-web-url: http://localhost:8201
+  identity-base-url: http://localhost:9020
+  access-base-url: http://localhost:9010
+  open-base-url: http://localhost:9030
+
+logging:
+  level:
+    root: INFO
+    net.xzh.iam.admin: DEBUG
+    org.springframework.security.oauth2: DEBUG

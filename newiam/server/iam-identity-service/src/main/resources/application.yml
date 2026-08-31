@@ -1,0 +1,32 @@
+server:
+  port: 9020
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: iam-identity-service
+
+  # ===== OAuth2 资源服务器 (Opaque Token introspection, 校验管理台用户令牌) =====
+  # 入站令牌为 admin-app 签发的用户令牌 (ADMIN_SERVICE_TOKEN 准入), 经认证中心内省校验
+  security.oauth2.resourceserver.opaquetoken.introspection-uri: http://localhost:9000/oauth2/introspect
+  security.oauth2.resourceserver.opaquetoken.client-id: admin-m2m
+  security.oauth2.resourceserver.opaquetoken.client-secret: 123456
+
+# ===== 身份管理面对接配置 =====
+identity:
+  # 认证中心 (身份供给内部 API 所在)
+  auth-base-url: http://localhost:9000
+  # 权限中心 (删用户联动清理 / 登录边界策略所在)
+  access-base-url: http://localhost:9010
+  # 管理 M2M 服务身份 (client_credentials, 本服务调用下游的唯一机器身份)
+  service-token-endpoint: http://localhost:9000/oauth2/token
+  m2m-client-id: admin-m2m
+  m2m-client-secret: 123456
+  # 管理台客户端白名单 (入站用户令牌的 client_id)
+  admin-client-ids: [admin-app]
+
+logging:
+  level:
+    root: INFO
+    net.xzh.iam.identity: DEBUG

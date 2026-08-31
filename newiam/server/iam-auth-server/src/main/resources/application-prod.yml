@@ -1,0 +1,21 @@
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:mysql://prod-db-host:3306/iam_identity_v2?useUnicode=true&characterEncoding=utf8&useSSL=true&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=false}
+    username: ${DB_USERNAME:oauth2_app}
+    password: ${DB_PASSWORD:CHANGE_ME}
+
+  data:
+    redis:
+      host: ${REDIS_HOST:prod-redis-host}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:CHANGE_ME}
+      database: 0
+
+# 生产环境降低日志级别
+logging:
+  level:
+    root: WARN
+    net.xzh.iam.auth: INFO
+    org.springframework.security: WARN
+    org.springframework.security.oauth2: WARN
+    org.springframework.security.authorization: WARN

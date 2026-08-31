@@ -1,0 +1,51 @@
+server:
+  port: 9030
+  servlet:
+    context-path: /
+
+spring:
+  profiles:
+    active: local
+
+  application:
+    name: iam-open-service
+
+  # ===== MySQL 8 数据源 (Druid 连接池) — 开放平台专用库 (iam_open) =====
+  datasource:
+    type: com.alibaba.druid.pool.DruidDataSource
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    druid:
+      initial-size: 5
+      min-idle: 5
+      max-active: 20
+      max-wait: 60000
+      time-between-eviction-runs-millis: 60000
+      min-evictable-idle-time-millis: 300000
+      validation-query: SELECT 1
+      test-while-idle: true
+      test-on-borrow: false
+      test-on-return: false
+      pool-prepared-statements: false
+
+# ===== MyBatis-Plus =====
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: net.xzh.iam.open.entity
+
+# ===== OAuth2 资源服务器 (Opaque Token introspection) =====
+# 能力开放域/管理域令牌统一交认证中心 /oauth2/introspect 校验
+spring.security.oauth2.resourceserver.opaquetoken.introspection-uri: http://localhost:9000/oauth2/introspect
+spring.security.oauth2.resourceserver.opaquetoken.client-id: resource-server
+spring.security.oauth2.resourceserver.opaquetoken.client-secret: 123456
+
+logging:
+  level:
+    root: INFO
+    net.xzh.iam.open: DEBUG
+    org.springframework.security: DEBUG

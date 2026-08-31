@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>统一认证中心 · 应用管理</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+            background: #f0f2f5; color: #1e293b; min-height: 100vh;
+        }
+        .navbar {
+            background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+            color: #fff; padding: 0 24px; height: 56px;
+            display: flex; align-items: center; gap: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            position: sticky; top: 0; z-index: 10; overflow-x: auto; flex-wrap: nowrap;
+        }
+        .navbar .brand { font-weight: 700; font-size: 16px; color: #ffffff; }
+        .navbar a { color: #dbeafe; text-decoration: none; padding: 8px 14px; border-radius: 6px; font-size: 14px; }
+        .navbar a:hover { background: rgba(255,255,255,0.15); color: #ffffff; }
+        .navbar a.active { background: rgba(255,255,255,0.22); color: #ffffff; }
+        .navbar .spacer { flex: 1; }
+        .navbar .logout { color: #dbeafe; font-size: 13px; }
+
+        .container { max-width: 1200px; margin: 24px auto; padding: 0 24px; }
+        .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .page-header h2 { font-size: 22px; color: #1e3a5f; }
+        .page-header .hint { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+        .btn {
+            padding: 8px 18px; border-radius: 6px; border: none; cursor: pointer;
+            font-size: 14px; font-weight: 500; transition: all 0.2s;
+        }
+        .btn-primary { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; }
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(37,99,235,0.35); }
+        .btn-ghost { background: #fff; border: 1px solid #cbd5e1; color: #1e293b; }
+        .btn-ghost:hover { background: #f1f5f9; }
+        .btn-sm { padding: 5px 12px; font-size: 12px; }
+        .btn-link { background: none; border: none; color: #2563eb; cursor: pointer; font-size: 13px; }
+        .btn-link:hover { text-decoration: underline; }
+        .btn-link.danger { color: #dc2626; }
+
+        .card {
+            background: #ffffff; border-radius: 10px; border: 1px solid #e2e8f0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.06); overflow: hidden; margin-bottom: 18px;
+        }
+        .card-header {
+            padding: 14px 20px; border-bottom: 1px solid #f0f0f0;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .card-header h3 { font-size: 15px; color: #1e3a5f; }
+        .card-header .sub { font-size: 12px; color: #94a3b8; margin-top: 2px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px 16px; text-align: left; font-size: 13px; }
+        th { background: #fafafa; color: #475569; border-bottom: 1px solid #e2e8f0; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px; }
+        td { border-bottom: 1px solid #f0f0f0; color: #334155; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover { background: #f8fafc; }
+        .tag { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; }
+        .tag.green { background: rgba(34,197,94,0.08); color: #16a34a; border: 1px solid rgba(34,197,94,0.2); }
+        .tag.red { background: rgba(239,68,68,0.08); color: #dc2626; border: 1px solid rgba(239,68,68,0.2); }
+        .tag.blue { background: rgba(37,99,235,0.08); color: #2563eb; border: 1px solid rgba(37,99,235,0.2); }
+        .tag.gray { background: rgba(100,116,139,0.08); color: #64748b; border: 1px solid rgba(100,116,139,0.2); }
+        .tag.orange { background: rgba(249,115,22,0.08); color: #ea580c; border: 1px solid rgba(249,115,22,0.2); }
+        .tag.purple { background: rgba(168,85,247,0.08); color: #9333ea; border: 1px solid rgba(168,85,247,0.2); }
+
+        .empty { text-align: center; padding: 40px; color: #94a3b8; font-size: 14px; }
+
+        .modal-bg {
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+            align-items: center; justify-content: center; z-index: 100;
+        }
+        .modal-bg.show { display: flex; }
+        .modal {
+            background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; width: 560px; max-height: 85vh; overflow-y: auto;
+            box-shadow: 0 16px 50px rgba(0,0,0,0.18); color: #1e293b;
+        }
+        .modal-header {
+            padding: 16px 24px; border-bottom: 1px solid #f0f0f0; display: flex;
+            justify-content: space-between; align-items: center;
+        }
+        .modal-header h3 { font-size: 16px; color: #1e3a5f; }
+        .modal-header .sub { font-size: 12px; color: #94a3b8; margin-top: 2px; }
+        .close-btn { background: none; border: none; font-size: 22px; cursor: pointer; color: #64748b; }
+        .modal-body { padding: 20px 24px; }
+        .form-row { margin-bottom: 14px; }
+        .form-row label { display: block; font-size: 12px; color: #475569; margin-bottom: 5px; font-weight: 500; }
+        .form-row input, .form-row textarea, .form-row select {
+            width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px;
+            font-size: 13px; outline: none; transition: border-color 0.2s;
+            background: #ffffff; color: #1e293b;
+        }
+        .form-row input:focus, .form-row textarea:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.12); }
+        .form-row textarea { min-height: 60px; resize: vertical; font-family: inherit; color: #1e293b; }
+        .form-row .hint { font-size: 11px; color: #64748b; margin-top: 4px; }
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .form-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; padding-top: 16px; border-top: 1px solid #f0f0f0; }
+
+        .sub-panel { display: none; }
+        .sub-panel.show { display: block; }
+        .back-link { color: #2563eb; cursor: pointer; font-size: 13px; text-decoration: none; }
+        .back-link:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="navbar" id="navbar"></div>
+
+    <div class="container">
+        <div class="page-header">
+            <div>
+                <h2 id="pageTitle">应用管理</h2>
+                <div class="hint" id="pageHint">门户工作台应用目录 · 应用 → 渠道 / 授权 维护</div>
+            </div>
+            <div>
+                <button class="btn btn-primary" id="btnAdd" onclick="openAppModal()">＋ 新增应用</button>
+                <button class="btn btn-ghost" style="margin-left:10px;" onclick="loadApps()">🔄 刷新</button>
+            </div>
+        </div>
+
+        <!-- 应用列表 -->
+        <div class="card" id="appPanel">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>应用编码</th>
+                        <th>应用名称</th>
+                        <th>排序</th>
+                        <th>门户可见性</th>
+                        <th>状态</th>
+                        <th>渠道数</th>
+                        <th style="width: 300px">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="appTable"></tbody>
+            </table>
+            <div class="empty" id="emptyTip" style="display:none;">暂无应用数据</div>
+        </div>
+
+        <!-- 渠道列表 (点击"应用渠道"进入) -->
+        <div class="sub-panel" id="channelPanel">
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <h3 id="channelTitle">渠道管理</h3>
+                        <div class="sub" id="channelSub"></div>
+                    </div>
+                    <div>
+                        <button class="btn btn-primary btn-sm" onclick="openChannelModal()">＋ 新增渠道</button>
+                        <button class="btn btn-ghost btn-sm" style="margin-left:8px;" onclick="loadChannels()">🔄 刷新</button>
+                        <a class="back-link" style="margin-left:14px;" onclick="backToApps()">← 返回应用列表</a>
+                    </div>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>渠道名称</th>
+                            <th>类型</th>
+                            <th>跳转地址</th>
+                            <th>SSO 客户端</th>
+                            <th>密钥状态</th>
+                            <th>默认</th>
+                            <th>状态</th>
+                            <th style="width: 120px">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="channelTable"></tbody>
+                </table>
+                <div class="empty" id="channelEmpty" style="display:none;">该应用暂无渠道, 点击「新增渠道」创建</div>
+            </div>
+        </div>
+
+        <!-- 授权列表 (点击"应用授权"进入) -->
+        <div class="sub-panel" id="authzPanel">
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <h3 id="authzTitle">应用授权</h3>
+                        <div class="sub">哪些主体可见/可访问该应用 · channel_id=0 表示全渠道</div>
+                    </div>
+                    <div>
+                        <button class="btn btn-primary btn-sm" onclick="openAuthzModal()">＋ 新增授权</button>
+                        <button class="btn btn-ghost btn-sm" style="margin-left:8px;" onclick="loadAuthz()">🔄 刷新</button>
+                        <a class="back-link" style="margin-left:14px;" onclick="backToApps()">← 返回应用列表</a>
+                    </div>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>主体类型</th>
+                            <th>主体 ID</th>
+                            <th>渠道</th>
+                            <th>状态</th>
+                            <th>授权时间</th>
+                            <th style="width: 80px">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="authzTable"></tbody>
+                </table>
+                <div class="empty" id="authzEmpty" style="display:none;">该应用暂无授权</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 应用弹窗 -->
+    <div class="modal-bg" id="appModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="appModalTitle">新增应用</h3>
+                <button class="close-btn" onclick="closeModal('appModal')">×</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editAppId">
+                <div class="form-grid">
+                    <div class="form-row">
+                        <label>应用编码</label>
+                        <input type="text" id="fAppCode" placeholder="如 OA / CRM" autocomplete="off">
+                    </div>
+                    <div class="form-row">
+                        <label>应用名称</label>
+                        <input type="text" id="fAppName" placeholder="如 OA 办公系统">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <label>应用描述</label>
+                    <textarea id="fAppDesc" placeholder="应用描述 (可选)"></textarea>
+                </div>
+                <div class="form-grid">
+                    <div class="form-row">
+                        <label>门户排序 (小前大后)</label>
+                        <input type="number" id="fAppSort" value="0" min="0">
+                    </div>
+                    <div class="form-row">
+                        <label>门户可见性</label>
+                        <select id="fAppVisible">
+                            <option value="1">全部可见 (无需授权)</option>
+                            <option value="0">仅授权可见</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <label>状态</label>
+                    <select id="fAppStatus">
+                        <option value="1">启用</option>
+                        <option value="0">禁用</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-ghost" onclick="closeModal('appModal')">取消</button>
+                    <button class="btn btn-primary" onclick="saveApp()">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 渠道弹窗 -->
+    <div class="modal-bg" id="channelModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="channelModalTitle">新增渠道</h3>
+                <div class="sub">渠道 = 应用的门户形态 + 独立 SSO 客户端绑定（密钥零落库方案 A）</div>
+                <button class="close-btn" onclick="closeModal('channelModal')">×</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editChannelId">
+                <div class="form-grid">
+                    <div class="form-row">
+                        <label>渠道名称</label>
+                        <input type="text" id="fChannelName" placeholder="如 Web 门户">
+                    </div>
+                    <div class="form-row">
+                        <label>渠道类型</label>
+                        <select id="fChannelType">
+                            <option value="WEB">WEB (Web 门户)</option>
+                            <option value="MOBILE">MOBILE (移动门户)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <label>跳转地址</label>
+                    <input type="text" id="fAccessUrl" placeholder="http://localhost:8300">
+                </div>
+                <div class="form-grid">
+                    <div class="form-row">
+                        <label>SSO 客户端 (sso_client_id)</label>
+                        <input type="text" id="fSsoClientId" placeholder="可选, 跨库引用认证中心 client_id">
+                        <div class="hint">方案 A：只存客户端标识，密钥密文在认证中心</div>
+                    </div>
+                    <div class="form-row">
+                        <label>密钥状态</label>
+                        <select id="fSecretStatus">
+                            <option value="0">未配置</option>
+                            <option value="1">已配置</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-grid">
+                    <div class="form-row">
+                        <label>排序</label>
+                        <input type="number" id="fChannelSort" value="0" min="0">
+                    </div>
+                    <div class="form-row">
+                        <label>默认渠道</label>
+                        <select id="fIsDefault">
+                            <option value="0">否</option>
+                            <option value="1">是</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <label>状态</label>
+                    <select id="fChannelStatus">
+                        <option value="1">启用</option>
+                        <option value="0">禁用</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-ghost" onclick="closeModal('channelModal')">取消</button>
+                    <button class="btn btn-primary" onclick="saveChannel()">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 授权弹窗 -->
+    <div class="modal-bg" id="authzModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>新增授权</h3>
+                <button class="close-btn" onclick="closeModal('authzModal')">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-grid">
+                    <div class="form-row">
+                        <label>主体类型</label>
+                        <select id="fSubjectType" onchange="onSubjectTypeChange()">
+                            <option value="ROLE">ROLE (角色编码)</option>
+                            <option value="USER">USER (用户编码)</option>
+                            <option value="ORG">ORG (组织编码)</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label>主体</label>
+                        <select id="fRoleCode">
+                            <option value="">请选择角色</option>
+                        </select>
+                        <input type="text" id="fSubjectId" style="display:none;" placeholder="USER=user_code / ORG=组织编码 org_code">
+                        <div class="hint" id="fSubjectHint" style="font-size:12px;color:#94a3b8;margin-top:4px;">ROLE 为主体按角色编码 (sys_role.code) 授权, 如 ADMIN</div>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <label>授权渠道</label>
+                    <select id="fAuthzChannel">
+                        <option value="0">全渠道 (整个应用)</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-ghost" onclick="closeModal('authzModal')">取消</button>
+                    <button class="btn btn-primary" onclick="saveAuthz()">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script src="/common.js"></script>
+<script>
+let appList = [];
+let currentAppId = null;
+let currentChannels = [];
+let currentRoles = [];
+let currentView = 'apps'; // apps | channels | authz
+
+// ------------------------------------------------------------------
+// 视图切换
+// ------------------------------------------------------------------
+
+function showApps() {
+    currentView = 'apps';
+    document.getElementById('appPanel').style.display = '';
+    document.getElementById('channelPanel').classList.remove('show');
+    document.getElementById('authzPanel').classList.remove('show');
+    document.getElementById('btnAdd').style.display = '';
+    document.getElementById('pageTitle').textContent = '应用管理';
+    document.getElementById('pageHint').textContent = '门户工作台应用目录 · 应用 → 渠道 / 授权 维护';
+}
+
+function backToApps() { showApps(); loadApps(); }
+
+function showChannels(appId) {
+    currentView = 'channels';
+    currentAppId = appId;
+    const a = appList.find(x => x.id === appId);
+    document.getElementById('channelTitle').textContent = `渠道管理 · ${a ? a.appName : appId}`;
+    document.getElementById('channelSub').textContent = `应用编码: ${a ? a.appCode : ''} · 每个渠道绑定独立 SSO 客户端`;
+    document.getElementById('appPanel').style.display = 'none';
+    document.getElementById('channelPanel').classList.add('show');
+    document.getElementById('authzPanel').classList.remove('show');
+    document.getElementById('btnAdd').style.display = 'none';
+    document.getElementById('pageTitle').textContent = a ? a.appName : '应用详情';
+    document.getElementById('pageHint').textContent = '渠道管理';
+    loadChannels();
+}
+
+function showAuthz(appId) {
+    currentView = 'authz';
+    currentAppId = appId;
+    const a = appList.find(x => x.id === appId);
+    document.getElementById('authzTitle').textContent = `应用授权 · ${a ? a.appName : appId}`;
+    document.getElementById('appPanel').style.display = 'none';
+    document.getElementById('channelPanel').classList.remove('show');
+    document.getElementById('authzPanel').classList.add('show');
+    document.getElementById('btnAdd').style.display = 'none';
+    document.getElementById('pageTitle').textContent = a ? a.appName : '应用详情';
+    document.getElementById('pageHint').textContent = '应用授权';
+    loadAuthz();
+}
+
+// ------------------------------------------------------------------
+// 应用
+// ------------------------------------------------------------------
+
+async function loadApps() {
+    try { appList = await App.api('/api/admin/applications') || []; }
+    catch (e) { alert('加载应用失败: ' + e.message); return; }
+    const tbody = document.getElementById('appTable');
+    const empty = document.getElementById('emptyTip');
+    if (appList.length === 0) {
+        tbody.innerHTML = ''; empty.style.display = 'block'; return;
+    }
+    empty.style.display = 'none';
+    tbody.innerHTML = appList.map(a => {
+        // 仅授权可见 (visible=0) 才显示"应用授权"按钮
+        const authzBtn = a.visible === 0
+            ? `<button class="btn-link" onclick="showAuthz(${a.id})">应用授权</button>`
+            : '';
+        return `<tr>
+            <td style="font-family:monospace;">${a.id}</td>
+            <td><span class="tag blue">${App.esc(a.appCode)}</span></td>
+            <td>${App.esc(a.appName || '-')}</td>
+            <td>${a.sort || 0}</td>
+            <td>${a.visible === 1 ? '<span class="tag green">全部可见</span>' : '<span class="tag orange">仅授权</span>'}</td>
+            <td>${a.status === 1 ? '<span class="tag green">启用</span>' : '<span class="tag red">禁用</span>'}</td>
+            <td>${(a.channels || []).length}</td>
+            <td>
+                <button class="btn-link" onclick="openAppModal(${a.id})">编辑</button>
+                ${authzBtn}
+                <button class="btn-link" onclick="showChannels(${a.id})">应用渠道</button>
+                <button class="btn-link danger" onclick="delApp(${a.id})">删除</button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function openAppModal(id) {
+    document.getElementById('appModalTitle').textContent = id ? '编辑应用' : '新增应用';
+    document.getElementById('editAppId').value = id || '';
+    document.getElementById('fAppCode').value = '';
+    document.getElementById('fAppCode').disabled = !!id;
+    document.getElementById('fAppName').value = '';
+    document.getElementById('fAppDesc').value = '';
+    document.getElementById('fAppSort').value = 0;
+    document.getElementById('fAppVisible').value = 1;
+    document.getElementById('fAppStatus').value = 1;
+    if (id) {
+        const a = appList.find(x => x.id === id);
+        if (a) {
+            document.getElementById('fAppCode').value = a.appCode || '';
+            document.getElementById('fAppName').value = a.appName || '';
+            document.getElementById('fAppDesc').value = a.description || '';
+            document.getElementById('fAppSort').value = a.sort ?? 0;
+            document.getElementById('fAppVisible').value = a.visible ?? 1;
+            document.getElementById('fAppStatus').value = a.status ?? 1;
+        }
+    }
+    document.getElementById('appModal').classList.add('show');
+}
+
+async function saveApp() {
+    const id = document.getElementById('editAppId').value;
+    const code = document.getElementById('fAppCode').value.trim();
+    const name = document.getElementById('fAppName').value.trim();
+    if (!code) { alert('应用编码不能为空'); return; }
+    if (!name) { alert('应用名称不能为空'); return; }
+    const body = {
+        appCode: code,
+        appName: name,
+        description: document.getElementById('fAppDesc').value.trim(),
+        sort: Number(document.getElementById('fAppSort').value) || 0,
+        visible: Number(document.getElementById('fAppVisible').value),
+        status: Number(document.getElementById('fAppStatus').value)
+    };
+    try {
+        if (id) {
+            await App.api('/api/admin/applications/' + id, { method: 'PUT', body });
+        } else {
+            await App.api('/api/admin/applications', { method: 'POST', body });
+        }
+        alert(id ? '✅ 应用已更新' : '✅ 应用已创建');
+        closeModal('appModal'); loadApps();
+    } catch (e) { alert('保存失败: ' + e.message); }
+}
+
+async function delApp(id) {
+    const a = appList.find(x => x.id === id);
+    if (!confirm(`确认删除应用 "${a ? a.appName : id}" ?\n将同时删除其全部渠道与授权`)) return;
+    try {
+        await App.api('/api/admin/applications/' + id, { method: 'DELETE' });
+        alert('✅ 应用已删除'); loadApps();
+    } catch (e) { alert('删除失败: ' + e.message); }
+}
+
+// ------------------------------------------------------------------
+// 渠道
+// ------------------------------------------------------------------
+
+async function loadChannels() {
+    if (currentAppId === null) return;
+    let data;
+    try { data = await App.api('/api/admin/applications/' + currentAppId + '/channels'); }
+    catch (e) { alert('加载渠道失败: ' + e.message); return; }
+    currentChannels = data || [];
+    const tbody = document.getElementById('channelTable');
+    const empty = document.getElementById('channelEmpty');
+    if (currentChannels.length === 0) {
+        tbody.innerHTML = ''; empty.style.display = 'block'; return;
+    }
+    empty.style.display = 'none';
+    tbody.innerHTML = currentChannels.map(c => `
+        <tr>
+            <td style="font-family:monospace;">${c.id}</td>
+            <td>${App.esc(c.channelName || '-')}</td>
+            <td><span class="tag ${c.channelType === 'MOBILE' ? 'orange' : 'blue'}">${App.esc(c.channelType || '-')}</span></td>
+            <td style="font-family:monospace;font-size:12px;color:#64748b;">${App.esc(c.accessUrl || '-')}</td>
+            <td style="font-family:monospace;font-size:12px;">${c.ssoClientId ? App.esc(c.ssoClientId) : '<span style="color:#94a3b8;">-</span>'}</td>
+            <td>${c.secretStatus === 1 ? '<span class="tag green">已配置</span>' : '<span class="tag gray">未配置</span>'}</td>
+            <td>${c.isDefault === 1 ? '<span class="tag blue">默认</span>' : '-'}</td>
+            <td>${c.status === 1 ? '<span class="tag green">启用</span>' : '<span class="tag red">禁用</span>'}</td>
+            <td>
+                <button class="btn-link" onclick="openChannelModal(${c.id})">编辑</button>
+                <button class="btn-link danger" onclick="delChannel(${c.id})">删除</button>
+            </td>
+        </tr>`).join('');
+}
+
+function openChannelModal(id) {
+    document.getElementById('channelModalTitle').textContent = id ? '编辑渠道' : '新增渠道';
+    document.getElementById('editChannelId').value = id || '';
+    document.getElementById('fChannelName').value = '';
+    document.getElementById('fChannelType').value = 'WEB';
+    document.getElementById('fAccessUrl').value = '';
+    document.getElementById('fSsoClientId').value = '';
+    document.getElementById('fSecretStatus').value = 0;
+    document.getElementById('fChannelSort').value = 0;
+    document.getElementById('fIsDefault').value = 0;
+    document.getElementById('fChannelStatus').value = 1;
+    if (id) {
+        const c = currentChannels.find(x => x.id === id);
+        if (c) {
+            document.getElementById('fChannelName').value = c.channelName || '';
+            document.getElementById('fChannelType').value = c.channelType || 'WEB';
+            document.getElementById('fAccessUrl').value = c.accessUrl || '';
+            document.getElementById('fSsoClientId').value = c.ssoClientId || '';
+            document.getElementById('fSecretStatus').value = c.secretStatus || 0;
+            document.getElementById('fChannelSort').value = c.sort || 0;
+            document.getElementById('fIsDefault').value = c.isDefault || 0;
+            document.getElementById('fChannelStatus').value = c.status ?? 1;
+        }
+    }
+    document.getElementById('channelModal').classList.add('show');
+}
+
+async function saveChannel() {
+    const id = document.getElementById('editChannelId').value;
+    const name = document.getElementById('fChannelName').value.trim();
+    if (!name) { alert('渠道名称不能为空'); return; }
+    const body = {
+        channelName: name,
+        channelType: document.getElementById('fChannelType').value,
+        accessUrl: document.getElementById('fAccessUrl').value.trim(),
+        ssoClientId: document.getElementById('fSsoClientId').value.trim() || null,
+        secretStatus: Number(document.getElementById('fSecretStatus').value),
+        sort: Number(document.getElementById('fChannelSort').value) || 0,
+        isDefault: Number(document.getElementById('fIsDefault').value),
+        status: Number(document.getElementById('fChannelStatus').value)
+    };
+    const base = '/api/admin/applications/' + currentAppId + '/channels';
+    try {
+        if (id) {
+            await App.api(base + '/' + id, { method: 'PUT', body });
+        } else {
+            await App.api(base, { method: 'POST', body });
+        }
+        alert(id ? '✅ 渠道已更新' : '✅ 渠道已创建');
+        closeModal('channelModal'); loadChannels();
+    } catch (e) { alert('保存失败: ' + e.message); }
+}
+
+async function delChannel(id) {
+    if (!confirm('确认删除该渠道 ?\n将同时解除该渠道的授权')) return;
+    try {
+        await App.api('/api/admin/applications/' + currentAppId + '/channels/' + id, { method: 'DELETE' });
+        alert('✅ 渠道已删除'); loadChannels();
+    } catch (e) { alert('删除失败: ' + e.message); }
+}
+
+// ------------------------------------------------------------------
+// 应用授权
+// ------------------------------------------------------------------
+
+async function loadAuthz() {
+    if (currentAppId === null) return;
+    let data;
+    try { data = await App.api('/api/admin/applications/' + currentAppId + '/authorizations'); }
+    catch (e) { alert('加载授权失败: ' + e.message); return; }
+    const authz = data || [];
+    const tbody = document.getElementById('authzTable');
+    const empty = document.getElementById('authzEmpty');
+    if (authz.length === 0) {
+        tbody.innerHTML = ''; empty.style.display = 'block'; return;
+    }
+    empty.style.display = 'none';
+    tbody.innerHTML = authz.map(z => {
+        const channel = currentChannels.find(c => c.id === z.channelId);
+        return `<tr>
+            <td style="font-family:monospace;">${z.id}</td>
+            <td><span class="tag ${z.subjectType === 'USER' ? 'orange' : z.subjectType === 'ORG' ? 'purple' : 'blue'}">${App.esc(z.subjectType)}</span></td>
+            <td style="font-family:monospace;">${App.esc(z.subjectId)}</td>
+            <td>${z.channelId === 0 ? '<span class="tag green">全渠道</span>' : App.esc((channel && channel.channelName) || z.channelId)}</td>
+            <td>${z.status === 1 ? '<span class="tag green">有效</span>' : '<span class="tag red">停用</span>'}</td>
+            <td style="font-size:12px;color:#64748b;">${App.fmtTime(z.grantTime)}</td>
+            <td><button class="btn-link danger" onclick="delAuthz(${z.id})">删除</button></td>
+        </tr>`;
+    }).join('');
+}
+
+function onSubjectTypeChange() {
+    const type = document.getElementById('fSubjectType').value;
+    const isRole = type === 'ROLE';
+    document.getElementById('fRoleCode').style.display = isRole ? '' : 'none';
+    document.getElementById('fSubjectId').style.display = isRole ? 'none' : '';
+    const hint = document.getElementById('fSubjectHint');
+    hint.textContent = isRole
+        ? 'ROLE 为主体按角色编码 (sys_role.code) 授权, 如 ADMIN'
+        : (type === 'ORG' ? 'ORG 为主体按组织编码 (iam_org.org_code) 授权' : 'USER 为主体按业务用户编码 (user_code) 授权');
+}
+
+async function openAuthzModal() {
+    // 刷新渠道与角色
+    try { currentChannels = await App.api('/api/admin/applications/' + currentAppId + '/channels') || []; }
+    catch (e) { currentChannels = []; }
+    try { currentRoles = await App.api('/api/admin/roles') || []; }
+    catch (e) { currentRoles = []; }
+    const sel = document.getElementById('fAuthzChannel');
+    sel.innerHTML = '<option value="0">全渠道 (整个应用)</option>' +
+        currentChannels.map(c => `<option value="${c.id}">${App.esc(c.channelName)} (${App.esc(c.channelType)})</option>`).join('');
+    const roleSel = document.getElementById('fRoleCode');
+    roleSel.innerHTML = '<option value="">请选择角色</option>' +
+        currentRoles.map(r => `<option value="${App.esc(r.code)}">${App.esc(r.name || r.code)} (${App.esc(r.code)})</option>`).join('');
+    document.getElementById('fSubjectType').value = 'ROLE';
+    document.getElementById('fRoleCode').value = '';
+    document.getElementById('fSubjectId').value = '';
+    onSubjectTypeChange();
+    document.getElementById('authzModal').classList.add('show');
+}
+
+async function saveAuthz() {
+    const type = document.getElementById('fSubjectType').value;
+    const subjectId = type === 'ROLE'
+        ? document.getElementById('fRoleCode').value
+        : document.getElementById('fSubjectId').value.trim();
+    if (!subjectId) { alert(type === 'ROLE' ? '请选择角色' : '主体不能为空'); return; }
+    const body = {
+        appId: currentAppId,
+        subjectType: document.getElementById('fSubjectType').value,
+        subjectId: subjectId,
+        channelId: Number(document.getElementById('fAuthzChannel').value) || 0
+    };
+    try {
+        await App.api('/api/admin/applications/authorizations', { method: 'POST', body });
+        alert('✅ 授权已创建');
+        closeModal('authzModal'); loadAuthz();
+    } catch (e) { alert('保存失败: ' + e.message); }
+}
+
+async function delAuthz(id) {
+    if (!confirm('确认删除该授权 ?')) return;
+    try {
+        await App.api('/api/admin/applications/authorizations/' + id, { method: 'DELETE' });
+        alert('✅ 授权已删除'); loadAuthz();
+    } catch (e) { alert('删除失败: ' + e.message); }
+}
+
+// ------------------------------------------------------------------
+// 通用
+// ------------------------------------------------------------------
+
+function closeModal(id) {
+    document.getElementById(id).classList.remove('show');
+}
+
+App.guard().then(function (me) {
+    App.renderNavbar('application', me);
+    loadApps();
+});
+</script>
+</body>
+</html>

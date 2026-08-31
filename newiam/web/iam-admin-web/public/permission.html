@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>统一认证中心 · 权限管理</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif; background: #f0f2f5; color: #1e293b; min-height: 100vh; }
+        .navbar { background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%); color: #fff; padding: 0 24px; height: 56px; display: flex; align-items: center; gap: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); position: sticky; top: 0; z-index: 10; }
+        .navbar .brand { font-weight: 700; font-size: 16px; color: #ffffff; margin-right: 8px; }
+        .navbar a { color: #dbeafe; text-decoration: none; padding: 8px 12px; border-radius: 6px; font-size: 14px; white-space: nowrap; }
+        .navbar a:hover { background: rgba(255,255,255,0.15); color: #ffffff; }
+        .navbar a.active { background: rgba(255,255,255,0.22); color: #ffffff; }
+        .navbar .spacer { flex: 1; }
+        .navbar .logout { color: #dbeafe; font-size: 13px; cursor: pointer; }
+
+        .container { max-width: 1200px; margin: 24px auto; padding: 0 24px; }
+        .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .page-header h2 { font-size: 22px; color: #1e3a5f; }
+        .page-header .hint { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+        .btn { padding: 8px 18px; border-radius: 6px; border: none; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s; }
+        .btn-primary { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; }
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(37,99,235,0.35); }
+        .btn-link { background: none; border: none; color: #2563eb; cursor: pointer; font-size: 13px; }
+        .btn-link:hover { text-decoration: underline; }
+        .btn-link.danger { color: #dc2626; }
+
+        .card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); overflow: hidden; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px 16px; text-align: left; font-size: 13px; }
+        th { background: #fafafa; color: #475569; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px; border-bottom: 1px solid #e2e8f0; }
+        td { border-bottom: 1px solid #f0f0f0; color: #334155; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover { background: #f8fafc; }
+
+        .tag { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; }
+        .tag.green { background: rgba(34,197,94,0.08); color: #16a34a; }
+        .tag.gray { background: rgba(100,116,139,0.08); color: #64748b; }
+        .tag.blue { background: rgba(37,99,235,0.08); color: #2563eb; }
+        .tag.amber { background: rgba(245,158,11,0.10); color: #d97706; }
+
+        .empty { text-align: center; padding: 40px; color: #94a3b8; font-size: 14px; }
+
+        .form { display: flex; flex-direction: column; gap: 14px; }
+        .form-row { display: flex; flex-direction: column; gap: 6px; }
+        .form-row label { display: block; font-size: 12px; color: #475569; margin-bottom: 4px; font-weight: 500; }
+        .form-row input, .form-row textarea, .form-row select { width: 100%; padding: 8px 10px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; outline: none; color: #1e293b; }
+        .form-row input:focus, .form-row textarea:focus, .form-row select:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.12); }
+        .form-row input::placeholder, .form-row textarea::placeholder, .form-row select::placeholder { color: #94a3b8; opacity: 0.8; }
+
+        .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); align-items: center; justify-content: center; z-index: 100; padding: 24px; }
+        .modal-bg.show { display: flex; }
+        .modal { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; width: 560px; max-width: 100%; max-height: 85vh; overflow-y: auto; box-shadow: 0 16px 50px rgba(0,0,0,0.18); display: flex; flex-direction: column; }
+        .modal-header { padding: 16px 24px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+        .modal-header h3 { font-size: 16px; color: #1e3a5f; }
+        .modal-header .sub { font-size: 12px; color: #94a3b8; margin-top: 2px; }
+        .close-btn { background: none; border: none; font-size: 22px; cursor: pointer; color: #64748b; }
+        .modal-body { padding: 24px; }
+        .modal-footer { padding: 14px 24px; border-top: 1px solid #f0f0f0; display: flex; justify-content: flex-end; gap: 10px; flex-shrink: 0; }
+        .btn-ghost { background: #eef2f7; color: #334155; }
+        .btn-ghost:hover { background: #e2e8f0; }
+    </style>
+</head>
+<body>
+    <div class="navbar" id="navbar"></div>
+
+    <div class="container">
+        <div class="page-header">
+            <div>
+                <h2>权限管理</h2>
+                <div class="hint">RBAC 权限点维护 · 权限需绑定到角色后对用户生效</div>
+            </div>
+            <div>
+                <button class="btn btn-primary" onclick="openPermModal()">＋ 新增权限</button>
+                <button class="btn btn-primary" style="margin-left:10px;" onclick="loadPerms()">🔄 刷新</button>
+            </div>
+        </div>
+        <div class="card">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>权限标识</th>
+                        <th>权限名称</th>
+                        <th>类型</th>
+                        <th>备注</th>
+                        <th>创建时间</th>
+                        <th style="width:140px">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="permTable"></tbody>
+            </table>
+            <div class="empty" id="emptyTip" style="display:none;">暂无权限, 点击「新增权限」创建</div>
+        </div>
+    </div>
+
+    <!-- 新增/编辑权限弹窗 -->
+    <div class="modal-bg" id="permModal">
+        <div class="modal">
+            <div class="modal-header">
+                <div>
+                    <h3 id="permModalTitle">新增权限</h3>
+                    <div class="sub" id="permModalSub"></div>
+                </div>
+                <button class="close-btn" onclick="closePermModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form">
+                    <div class="form-row">
+                        <label>权限标识 (唯一, 如 app:portal)</label>
+                        <input id="permCode" placeholder="请输入权限标识">
+                    </div>
+                    <div class="form-row">
+                        <label>权限名称</label>
+                        <input id="permName" placeholder="请输入权限名称">
+                    </div>
+                    <div class="form-row">
+                        <label>类型</label>
+                        <div style="display:flex;gap:18px;padding:6px 0;flex-wrap:wrap;">
+                            <label style="display:flex;align-items:center;gap:6px;font-size:13px;white-space:nowrap;"><input type="radio" name="permType" value="app" checked> 应用</label>
+                            <label style="display:flex;align-items:center;gap:6px;font-size:13px;white-space:nowrap;"><input type="radio" name="permType" value="api"> 接口</label>
+                            <label style="display:flex;align-items:center;gap:6px;font-size:13px;white-space:nowrap;"><input type="radio" name="permType" value="menu"> 菜单</label>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <label>备注</label>
+                        <textarea id="permRemark" rows="2" placeholder="权限描述 (可选)"></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" onclick="closePermModal()">取消</button>
+                <button class="btn btn-primary" onclick="savePerm()">保存</button>
+            </div>
+        </div>
+    </div>
+
+<script src="/common.js"></script>
+<script>
+let permList = [];
+let editingPermId = null;
+
+async function loadPerms() {
+    try {
+        permList = await App.api('/api/admin/permissions') || [];
+    } catch (e) {
+        alert('加载权限失败: ' + e.message);
+        return;
+    }
+    const tbody = document.getElementById('permTable');
+    const empty = document.getElementById('emptyTip');
+    if (permList.length === 0) {
+        tbody.innerHTML = '';
+        empty.style.display = 'block';
+        return;
+    }
+    empty.style.display = 'none';
+    tbody.innerHTML = permList.map(p => `
+        <tr>
+            <td style="font-family:monospace;">${p.id}</td>
+            <td><span class="tag blue">${App.esc(p.code)}</span></td>
+            <td>${App.esc(p.name || '-')}</td>
+            <td><span class="tag ${p.type === 'app' ? 'green' : p.type === 'api' ? 'amber' : 'gray'}">${App.esc(p.type || 'app')}</span></td>
+            <td style="font-size:12px;color:#64748b;">${App.esc(p.remark || '-')}</td>
+            <td style="font-size:12px;color:#64748b;">${App.fmtTime(p.createTime)}</td>
+            <td>
+                <button class="btn-link" onclick="openPermModal(${p.id})">编辑</button>
+                <button class="btn-link danger" onclick="deletePerm(${p.id})">删除</button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function openPermModal(id) {
+    editingPermId = id || null;
+    document.getElementById('permModalTitle').textContent = id ? '编辑权限' : '新增权限';
+    document.getElementById('permModalSub').textContent = id ? '权限标识创建后不可修改' : '';
+    document.getElementById('permCode').value = '';
+    document.getElementById('permName').value = '';
+    setPermType('app');
+    document.getElementById('permRemark').value = '';
+    document.getElementById('permCode').disabled = !!id;
+    if (id) {
+        const p = permList.find(x => x.id === id);
+        if (p) {
+            document.getElementById('permCode').value = p.code || '';
+            document.getElementById('permName').value = p.name || '';
+            setPermType(p.type || 'app');
+            document.getElementById('permRemark').value = p.remark || '';
+        }
+    }
+    document.getElementById('permModal').classList.add('show');
+}
+
+function closePermModal() {
+    document.getElementById('permModal').classList.remove('show');
+    editingPermId = null;
+}
+
+function setPermType(v) {
+    document.querySelectorAll('input[name="permType"]').forEach(r => { r.checked = (r.value === v); });
+}
+
+async function savePerm() {
+    const code = document.getElementById('permCode').value.trim();
+    const name = document.getElementById('permName').value.trim();
+    const type = (document.querySelector('input[name="permType"]:checked') || {}).value || 'app';
+    const remark = document.getElementById('permRemark').value.trim();
+    if (!code) { alert('权限标识不能为空'); return; }
+    if (!name) { alert('权限名称不能为空'); return; }
+    const body = { code, name, type, remark };
+    try {
+        if (editingPermId) {
+            await App.api('/api/admin/permissions/' + editingPermId, { method: 'PUT', body });
+        } else {
+            await App.api('/api/admin/permissions', { method: 'POST', body });
+        }
+        alert(editingPermId ? '✅ 权限已更新' : '✅ 权限已创建');
+        closePermModal();
+        loadPerms();
+    } catch (e) {
+        alert('保存失败: ' + e.message);
+    }
+}
+
+async function deletePerm(id) {
+    const p = permList.find(x => x.id === id);
+    if (!confirm(`确认删除权限 "${p ? p.name : id}" ?\n将同时解除所有角色与该权限的绑定`)) return;
+    try {
+        await App.api('/api/admin/permissions/' + id, { method: 'DELETE' });
+        alert('✅ 权限已删除');
+        loadPerms();
+    } catch (e) {
+        alert('删除失败: ' + e.message);
+    }
+}
+
+App.guard().then(function (me) {
+    App.renderNavbar('permission', me);
+    loadPerms();
+});
+</script>
+</body>
+</html>
