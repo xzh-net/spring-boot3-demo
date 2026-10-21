@@ -6,7 +6,7 @@
 
 - [Spring Authorization Server 三件套（分离版）](spring-authorization-server) — 授权服务器 + 资源服务器 + 客户端分离架构，设备码流程与三方登录（GitHub / Google）原理讲解
 
-- [统一认证中心（单体版）](spring-authorization-server-single) — 授权 / 资源 / 管理后台一体，含 4 种客户端（授权码 / 设备码 / PKCE / 客户端模式）对接演示
+- [统一认证中心（多模块平台）](iam-platform) — 认证 / 资源 / 管理后台 / 门户多服务分离部署，演示授权码、设备码、PKCE、客户端模式接入
 
 ---
 
@@ -30,7 +30,7 @@
 
 ## 3. AgentScope
 
-- [基于 A2A 协议的分布式智能体构建](agentscope-a2a) — Agent-to-Agent 协议实现多智能体协作
+- [基于 A2A 协议的分布式智能体构建](agentscope-a2a) — A2A 服务端发布 AgentCard 与技能，客户端四种接入方式，支持 Nacos 注册与服务发现
 
 - [AG-UI 多智能体服务](agentscope-agui) — AgentScope Web UI 多智能体交互服务
 

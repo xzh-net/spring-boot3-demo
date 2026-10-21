@@ -1,4 +1,4 @@
-# Gradle
+# Gradle 构建工具集成示例
 
 Gradle是一个自动化的构建工具，它基于Apache Ant和Apache Maven的概念，但提供了更为灵活和强大的功能。与Maven相比，Gradle使用了一种基于Groovy的特定领域语言（DSL）来声明项目设置，这使得构建脚本更为简洁和易读。同时，Gradle也支持基于Kotlin语言的Kotlin DSL，从而提供了更多的选择
 

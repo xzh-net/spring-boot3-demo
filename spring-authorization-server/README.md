@@ -1,4 +1,5 @@
-# Spring Authorization Server 1.4.1
+# Spring Authorization Server 三件套（分离版）
+> 基于 Spring Authorization Server 1.4.1
 
 - spring-security-oauth2-authorization-server已迁移至 Spring Security 7.0
 

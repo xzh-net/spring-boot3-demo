@@ -1,4 +1,4 @@
-# Spring AI 调用本地向量模型
+# Spring AI 调用向量模型
 
 EmbeddingModel接口提供两类方法
 
