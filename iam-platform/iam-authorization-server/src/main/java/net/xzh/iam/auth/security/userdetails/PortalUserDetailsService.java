@@ -27,7 +27,8 @@ import net.xzh.iam.resource.service.PermissionService;
  * {@link PermissionService#findRoleCodes} 按 user_code 供给 (角色编码原样, 不拼 ROLE_ 前缀);
  * 本地角色查询异常时降级按 user_label 映射（ADMIN_SERVICE_TOKEN/ROLE_USER），
  * 保证管理端在异常时仍可登录
- * （令牌签发准入仍在 {@code ClientUserPolicyService} 按 fail-closed 把关）。
+ * （签发准入：旧 ClientUserPolicyService 登录边界策略已随 iam_client_policy 退役,
+ *  双维准入由自省层 scope∧RBAC 交集承担）。
  * <p>
  * 历史命名 PortalUserDetailsService (bean: portalUserDetailsService) 保留不变。
  *

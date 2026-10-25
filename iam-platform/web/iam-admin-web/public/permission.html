@@ -88,6 +88,7 @@
                             <th>权限码</th>
                             <th>名称</th>
                             <th>能力域</th>
+                            <th>所属授权范围</th>
                             <th>状态</th>
                             <th>备注</th>
                             <th style="width:110px">操作</th>
@@ -100,7 +101,8 @@
         </div>
 
         <div class="note">
-            说明: 权限码经用户令牌注入 (内省器按角色汇总启用态权限码); 端点是否需要某个码, 在「资源准入」页把该码设为对应行的准入要求。
+            说明: 令牌实际业务码 = <b>用户 RBAC 码 ∩ 客户端授权范围 (「授权范围」页) 展开码</b> — 双维交集注入, 任一维缺口即 403;
+            端点是否需要某个码, 在「资源准入」页把该码设为对应行的准入要求; 「所属授权范围」列显示该码被哪些粗组收编。
         </div>
     </div>
 
@@ -156,6 +158,17 @@
 <script>
 let permList = [];
 let editingPermId = null;
+let scopeMap = {}; // permission_id → [scope 码] (所属授权范围, 只读投影)
+
+async function loadScopeMap() {
+    try {
+        const scopes = (await App.api('/api/admin/scopes')) || [];
+        scopeMap = {};
+        scopes.forEach(s => (s.permissions || []).forEach(p => {
+            (scopeMap[p.id] = scopeMap[p.id] || []).push(s.code);
+        }));
+    } catch (e) { scopeMap = {}; }
+}
 
 async function loadPerms() {
     try {
@@ -178,6 +191,7 @@ async function loadPerms() {
             <td><span class="tag blue" style="font-family:monospace;">${App.esc(p.code)}</span></td>
             <td>${App.esc(p.name || '-')}</td>
             <td><span class="tag ${p.domain === 'admin' ? 'blue' : p.domain === 'portal' ? 'green' : 'gray'}">${App.esc(p.domain || 'admin')}</span></td>
+            <td>${(scopeMap[p.id] || []).map(c => `<span class="tag amber" title="客户端授权范围">${App.esc(c)}</span>`).join('') || '<span style="color:#94a3b8;font-size:11px;" title="未被任何授权范围收编">-</span>'}</td>
             <td><span class="tag ${p.status === 0 ? 'gray' : 'green'}">${p.status === 0 ? '停用' : '启用'}</span></td>
             <td style="font-size:12px;color:#64748b;">${App.esc(p.remark || '-')}</td>
             <td>
@@ -251,7 +265,7 @@ async function deletePerm(id) {
 
 App.guard().then(function (me) {
     App.renderNavbar('permission', me);
-    loadPerms();
+    loadScopeMap().then(loadPerms);
 });
 </script>
 </body>

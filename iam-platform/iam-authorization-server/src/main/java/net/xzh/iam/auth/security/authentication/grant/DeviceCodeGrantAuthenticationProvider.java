@@ -12,7 +12,6 @@ import java.util.Map;
 import java.util.Set;
 
 import lombok.extern.slf4j.Slf4j;
-import net.xzh.iam.auth.security.ClientUserPolicyService;
 import net.xzh.iam.auth.security.userdetails.PortalUserDetailsService;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -98,20 +97,15 @@ public final class DeviceCodeGrantAuthenticationProvider implements Authenticati
     /** 令牌生成器，根据 TokenSettings.accessTokenFormat 选择生成策略 */
     private final OAuth2TokenGenerator<?> tokenGenerator;
 
-    /** 令牌签发准入策略 (客户端 × 身份类型) */
-    private final ClientUserPolicyService clientUserPolicyService;
-
     public DeviceCodeGrantAuthenticationProvider(
             RegisteredClientRepository registeredClientRepository,
             OAuth2AuthorizationService authorizationService,
             UserDetailsService userDetailsService,
-            OAuth2TokenGenerator<?> tokenGenerator,
-            ClientUserPolicyService clientUserPolicyService) {
+            OAuth2TokenGenerator<?> tokenGenerator) {
         this.registeredClientRepository = registeredClientRepository;
         this.authorizationService = authorizationService;
         this.userDetailsService = userDetailsService;
         this.tokenGenerator = tokenGenerator;
-        this.clientUserPolicyService = clientUserPolicyService;
     }
 
     @Override
@@ -197,9 +191,6 @@ public final class DeviceCodeGrantAuthenticationProvider implements Authenticati
             throw new OAuth2AuthenticationException(
                     new OAuth2Error(OAuth2ErrorCodes.ACCESS_DENIED, "用户不存在或已停用", DEVICE_ERROR_URI));
         }
-
-        // 令牌签发准入策略: 客户端 × 身份类型不匹配则拒绝签发 (不产生任何 token)
-        clientUserPolicyService.check(registeredClient, principalName);
 
         // 构建资源所有者认证对象（用于令牌生成时注入用户身份信息）
         Authentication resourceOwnerAuthentication = new UsernamePasswordAuthenticationToken(

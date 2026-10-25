@@ -33,9 +33,7 @@ import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationConsentService;
-import org.springframework.security.oauth2.server.authorization.authentication.OAuth2AuthorizationCodeAuthenticationProvider;
 import org.springframework.security.oauth2.server.authorization.authentication.OAuth2DeviceCodeAuthenticationProvider;
-import org.springframework.security.oauth2.server.authorization.authentication.OAuth2RefreshTokenAuthenticationProvider;
 import org.springframework.security.oauth2.server.authorization.authentication.OAuth2TokenIntrospectionAuthenticationProvider;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
 import org.springframework.security.oauth2.server.authorization.config.annotation.web.configuration.OAuth2AuthorizationServerConfiguration;
@@ -80,17 +78,13 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import lombok.extern.slf4j.Slf4j;
 import net.xzh.iam.auth.entity.SysUser;
 import net.xzh.iam.auth.mapper.SysUserMapper;
-import net.xzh.iam.auth.security.ClientUserPolicyService;
 import net.xzh.iam.auth.security.repository.RedisOAuth2AuthorizationService;
 import net.xzh.iam.auth.security.authentication.client.DeviceClientAuthenticationProvider;
 import net.xzh.iam.auth.security.authentication.grant.DeviceCodeGrantAuthenticationProvider;
 import net.xzh.iam.auth.security.authentication.grant.PasswordGrantAuthenticationProvider;
-import net.xzh.iam.auth.security.authentication.grant.PolicyAwareAuthorizationCodeAuthenticationProvider;
-import net.xzh.iam.auth.security.authentication.grant.PolicyAwareRefreshTokenAuthenticationProvider;
 import net.xzh.iam.auth.security.session.RedisSessionRegistry;
 import net.xzh.iam.auth.security.token.EnrichedOAuth2TokenIntrospectionAuthenticationProvider;
 import net.xzh.iam.auth.security.web.ActiveClientTrackingFilter;
-import net.xzh.iam.auth.security.web.AuthorizePolicyFilter;
 import net.xzh.iam.auth.security.web.CompositeSecurityContextRepository;
 import net.xzh.iam.auth.security.web.SessionExpirationFilter;
 import net.xzh.iam.auth.security.web.converter.DeviceClientAuthenticationConverter;
@@ -304,7 +298,7 @@ public class AuthorizationServerConfig {
 			@Qualifier("portalUserDetailsService") UserDetailsService portalUserDetailsService,
 			PasswordEncoder passwordEncoder,
 			@Qualifier("portalDaoProvider") DaoAuthenticationProvider portalDaoProvider,
-			SessionRegistry sessionRegistry, ClientUserPolicyService clientUserPolicyService) throws Exception {
+			SessionRegistry sessionRegistry) throws Exception {
 
 		// 1. 准备自定义的认证组件
 		// 创建用于设备授权流程的客户端认证转换器，指定其处理的端点路径
@@ -350,31 +344,17 @@ public class AuthorizationServerConfig {
 											// 移除默认的设备码认证提供者
 											providers
 													.removeIf(p -> p instanceof OAuth2DeviceCodeAuthenticationProvider);
-											// 令牌签发准入策略: 移除默认的授权码/刷新令牌提供者,
-											// 换成策略感知包装器 (签发前先做"客户端 × 身份类型"校验)
-											providers
-													.removeIf(p -> p instanceof OAuth2AuthorizationCodeAuthenticationProvider);
-											providers
-													.removeIf(p -> p instanceof OAuth2RefreshTokenAuthenticationProvider);
-											// 添加自定义的密码模式认证提供者 (内置准入校验)
+											// 添加自定义的密码模式认证提供者
 											providers.add(new PasswordGrantAuthenticationProvider(
 													registeredClientRepository, portalUserDetailsService,
-													passwordEncoder, authorizationService, tokenGenerator,
-													clientUserPolicyService));
-											// 添加自定义的设备码认证提供者 (内置准入校验)
+													passwordEncoder, authorizationService, tokenGenerator));
+											// 添加自定义的设备码认证提供者
 											providers.add(new DeviceCodeGrantAuthenticationProvider(
 													registeredClientRepository, authorizationService,
-													portalUserDetailsService, tokenGenerator,
-													clientUserPolicyService));
-											// 授权码兑换 / 刷新令牌: 包装 SAS 默认提供者, 带准入策略
-											providers.add(new PolicyAwareAuthorizationCodeAuthenticationProvider(
-													new OAuth2AuthorizationCodeAuthenticationProvider(
-															authorizationService, tokenGenerator),
-													clientUserPolicyService, authorizationService));
-											providers.add(new PolicyAwareRefreshTokenAuthenticationProvider(
-													new OAuth2RefreshTokenAuthenticationProvider(
-															authorizationService, tokenGenerator),
-													clientUserPolicyService, authorizationService));
+													portalUserDetailsService, tokenGenerator));
+											// 授权码兑换/刷新令牌: 保留 SAS 默认提供者
+											// (旧 "客户端×身份类型" 登录边界策略已随 iam_client_policy 退役,
+											//  双维准入由自省层 scope∧RBAC 交集承担, 见 RbacAuthoritiesOpaqueTokenIntrospector)
 										})
 										// 【目的】组合多种认证转换器，确保能处理密码模式、授权码、刷新令牌等多种请求
 										.accessTokenRequestConverter(new DelegatingAuthenticationConverter(
@@ -433,11 +413,7 @@ public class AuthorizationServerConfig {
 				// 在 SecurityContextHolderFilter 之后添加自定义的会话过期过滤器
 				.addFilterAfter(new SessionExpirationFilter(sessionRegistry), SecurityContextHolderFilter.class)
 				// 跟踪当前活跃客户端 (解析 Bearer Token, 存入 Session)
-				.addFilterAfter(new ActiveClientTrackingFilter(authorizationService), SecurityContextHolderFilter.class)
-				// 【增强】授权端点发码前先做"客户端 × 身份类型"准入:
-				// 不合规直接回认证中心登录页 /login.html?error, 不向客户端签发授权码
-				// (过滤器内部用 /oauth2/authorize 匹配器限定范围, 不影响令牌等其它端点)
-				.addFilterAfter(new AuthorizePolicyFilter(clientUserPolicyService), SecurityContextHolderFilter.class);
+				.addFilterAfter(new ActiveClientTrackingFilter(authorizationService), SecurityContextHolderFilter.class);
 
 		return http.build();
 	}

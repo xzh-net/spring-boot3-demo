@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>统一认证中心 · 授权范围</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif; background: #f0f2f5; color: #1e293b; min-height: 100vh; }
+        .navbar { background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%); color: #fff; padding: 0 24px; height: 56px; display: flex; align-items: center; gap: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); position: sticky; top: 0; z-index: 10; }
+        .navbar .brand { font-weight: 700; font-size: 16px; color: #ffffff; margin-right: 8px; }
+        .navbar a { color: #dbeafe; text-decoration: none; padding: 8px 12px; border-radius: 6px; font-size: 14px; white-space: nowrap; }
+        .navbar a:hover { background: rgba(255,255,255,0.15); color: #ffffff; }
+        .navbar a.active { background: rgba(255,255,255,0.22); color: #ffffff; }
+        .navbar .spacer { flex: 1; }
+        .navbar .logout { color: #dbeafe; font-size: 13px; cursor: pointer; }
+
+        .container { max-width: 1280px; margin: 24px auto; padding: 0 24px; }
+        .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .page-header h2 { font-size: 22px; color: #1e3a5f; }
+        .page-header .hint { font-size: 12px; color: #94a3b8; margin-top: 4px; max-width: 780px; }
+        .btn { padding: 8px 18px; border-radius: 6px; border: none; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s; }
+        .btn-primary { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; }
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(37,99,235,0.35); }
+
+        .card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); overflow: hidden; }
+        .card-body { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 11px 14px; text-align: left; font-size: 13px; vertical-align: top; }
+        th { background: #fafafa; color: #475569; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
+        td { border-bottom: 1px solid #f0f0f0; color: #334155; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover { background: #f8fafc; }
+
+        .tag { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin: 1px 2px 1px 0; }
+        .tag.green { background: rgba(34,197,94,0.08); color: #16a34a; }
+        .tag.gray { background: rgba(100,116,139,0.08); color: #64748b; }
+        .tag.blue { background: rgba(37,99,235,0.08); color: #2563eb; }
+        .tag.amber { background: rgba(245,158,11,0.10); color: #d97706; }
+        .tag.off { background: rgba(220,38,38,0.07); color: #b91c1c; text-decoration: line-through; }
+
+        .empty { text-align: center; padding: 40px; color: #94a3b8; font-size: 14px; }
+        .note { margin-top: 16px; padding: 12px 16px; border-left: 3px solid #2563eb; border-radius: 4px; background: #ffffff; font-size: 13px; color: #64748b; line-height: 1.8; }
+        .muted { color: #94a3b8; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="navbar" id="navbar"></div>
+
+    <div class="container">
+        <div class="page-header">
+            <div>
+                <h2>授权范围</h2>
+                <div class="hint">客户端授权范围字典 (sys_scope + sys_scope_permission) — 双维权限控制的<b>客户端维度</b>: 每行 = 一组权限码的具名粗捆绑 (对标用户维度的角色)。客户端经「客户端管理」页勾选持有 scope, 持码展开后与用户 RBAC 码取<b>交集</b>注入令牌。本页<b>只读</b>: 字典增删改走 iam.sql 种子。</div>
+            </div>
+            <div>
+                <button class="btn btn-primary" onclick="loadScopes()">🔄 刷新</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width:46px;">ID</th>
+                            <th>scope 码</th>
+                            <th>名称</th>
+                            <th>能力域</th>
+                            <th>状态</th>
+                            <th>内含权限码 (细粒度)</th>
+                            <th>引用客户端</th>
+                            <th>备注</th>
+                        </tr>
+                    </thead>
+                    <tbody id="scopeTable"></tbody>
+                </table>
+                <div class="empty" id="emptyTip" style="display:none;">暂无授权范围字典 (iam.sql 种子未加载)</div>
+            </div>
+        </div>
+
+        <div class="note">
+            双维裁决链: <b>令牌业务码 = 用户 RBAC 码 ∩ 客户端 scope 展开码</b> (自省层, fail-closed) —
+            用户有码而客户端无 scope → 不注入 (403); 客户端有 scope 而用户无码 → 不注入 (403);
+            scope 停用 → 持有该组的客户端等同一码不放。
+            客户端↔scope 绑定在「客户端管理」页编辑 (blue 描边徽标 = 业务授权范围, 灰色 = 保留占位 scope)。
+        </div>
+    </div>
+
+<script src="/common.js"></script>
+<script>
+async function loadScopes() {
+    let data;
+    try { data = await App.api('/api/admin/scopes') || []; }
+    catch (e) { alert('加载授权范围失败: ' + e.message); return; }
+    const tbody = document.getElementById('scopeTable');
+    const empty = document.getElementById('emptyTip');
+    if (data.length === 0) {
+        tbody.innerHTML = '';
+        empty.style.display = 'block';
+        return;
+    }
+    empty.style.display = 'none';
+    tbody.innerHTML = data.map(s => {
+        const perms = (s.permissions || []).map(p =>
+            p.status === 0
+                ? `<span class="tag off" title="权限码已停用">${App.esc(p.code)}</span>`
+                : `<span class="tag blue" title="${App.esc(p.name || '')}">${App.esc(p.code)}</span>`
+        ).join('') || '<span class="muted">(空 — 展开无业务码, 走通道粗档)</span>';
+        const clients = (s.clientIds || []).map(c =>
+            `<span class="tag amber" style="font-family:monospace;">${App.esc(c)}</span>`
+        ).join('') || '<span class="muted">(无客户端持有)</span>';
+        return `<tr>
+            <td style="font-family:monospace;">${s.id}</td>
+            <td><span class="tag blue" style="font-family:monospace;">${App.esc(s.code)}</span></td>
+            <td>${App.esc(s.name || '-')}</td>
+            <td><span class="tag ${s.domain === 'admin' ? 'blue' : s.domain === 'portal' ? 'green' : 'gray'}">${App.esc(s.domain || '-')}</span></td>
+            <td><span class="tag ${s.status === 0 ? 'off' : 'green'}">${s.status === 0 ? '停用' : '启用'}</span></td>
+            <td>${perms}</td>
+            <td>${clients}</td>
+            <td style="font-size:12px;color:#64748b;">${App.esc(s.remark || '-')}</td>
+        </tr>`;
+    }).join('');
+}
+
+App.guard().then(function (me) {
+    App.renderNavbar('policy', me);
+    loadScopes();
+});
+</script>
+</body>
+</html>

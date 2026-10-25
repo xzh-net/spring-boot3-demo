@@ -2,12 +2,15 @@
 -- 合并基线 - IAM 单库 (认证域 + 资源域)
 -- 数据库: iam
 -- 归属: iam-authorization-server (合并后单服务, 原认证中心 + 资源中心)
--- 表清单 (共 17 表):
---   认证域 6 表: oauth2_authorization_consent / oauth2_authorization_record /
---                oauth2_registered_client / sys_user / iam_client_policy / iam_external_identity
+-- 表清单 (共 16 表):
+--   认证域 5 表: oauth2_authorization_consent / oauth2_authorization_record /
+--                oauth2_registered_client / sys_user / iam_external_identity
 --   资源域 11 表: sys_permission / sys_role / sys_role_permission / sys_user_role /
+--                 sys_scope / sys_scope_permission (客户端授权范围字典, 双维控制客户端维度) /
 --                 iam_application / iam_application_channel / iam_org / iam_app_authorization /
 --                 iam_endpoint_policy (iam_api_capability / iam_capability_subscription 已随开放能力退役删除)
+-- 双维准入: 令牌业务码 = 用户 RBAC 码 ∩ 客户端 scope 展开码 (自省层交集, fail-closed);
+--           iam_client_policy (登录边界策略) 已退役删除, 其职责由 scope 双维交集覆盖。
 -- 说明: 租户功能已整体移除 (iam_tenant / iam_tenant_user 表删除, 各表 tenant_code 列、
 --       种子值与唯一键中的租户位一并清除)。
 -- 基线: iam_identity.sql (原认证中心) + iam_authorization.sql (原资源中心)
@@ -95,9 +98,9 @@ CREATE TABLE `oauth2_registered_client`  (
 -- INSERT INTO `oauth2_registered_client` VALUES ('1', 'resource-server', '2026-08-13 09:56:12', '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e', NULL, '资源服务器', 'client_secret_basic', 'client_credentials', '', '', 'read,write', '{"requireProofKey":false,"requireAuthorizationConsent":false}', '{"accessTokenFormat":"reference","authorizationCodeTimeToLive":"PT5M","accessTokenTimeToLive":"PT30M","reuseRefreshTokens":false}');
 -- 阶段 4: resource-server 客户端退役 (原跨服务 ServiceTokenProvider/InternalUserDataClient 凭证,
 -- 远程调用与 internal 域控制器删除后无消费方; 服务令牌判定改由 grant_type=client_credentials 覆盖)
-INSERT INTO `oauth2_registered_client` VALUES ('2', 'admin-app', '2026-08-13 12:00:00', '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e', NULL, '管理后台', 'client_secret_basic', 'refresh_token,authorization_code', 'http://localhost:8085/login/oauth2/code/admin-app', 'http://localhost:8001/logged-out', 'openid,profile,read,write', '{"requireProofKey":false,"requireAuthorizationConsent":false}', '{"accessTokenFormat":"reference","authorizationCodeTimeToLive":"PT5M","accessTokenTimeToLive":"PT2H","reuseRefreshTokens":false,"refreshTokenTimeToLive":"PT12H"}');
-INSERT INTO `oauth2_registered_client` VALUES ('3', 'portal-app', '2026-08-11 20:00:08', '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e', NULL, '门户应用 (SSO)', 'client_secret_basic', 'refresh_token,authorization_code', 'http://localhost:8083/portal-sso-callback,http://localhost:8081/portal-sso-callback,http://localhost:8080/login/oauth2/code/portal-app-oidc', 'http://localhost:8000/logged-out,http://localhost:8081/logged-out', 'openid,profile,email', '{"requireProofKey":true,"requireAuthorizationConsent":false}', '{"accessTokenFormat":"reference","authorizationCodeTimeToLive":"PT5M","accessTokenTimeToLive":"PT2H","reuseRefreshTokens":false,"refreshTokenTimeToLive":"PT12H"}');
-INSERT INTO `oauth2_registered_client` VALUES ('4', 'web-app', '2026-08-11 20:00:08', '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e', NULL, 'Web 应用客户端', 'client_secret_basic,client_secret_post', 'authorization_code,refresh_token,password', 'http://localhost:8081/callback,http://127.0.0.1:8081/callback', 'http://localhost:8081/logout', 'openid,profile,email,read,write', '{"requireProofKey":false,"requireAuthorizationConsent":true}', '{"accessTokenFormat":"REFERENCE","accessTokenTimeToLive":"PT2H","reuseRefreshTokens":false,"refreshTokenTimeToLive":"PT12H","idTokenSignatureAlgorithm":"RS256"}');
+INSERT INTO `oauth2_registered_client` VALUES ('2', 'admin-app', '2026-08-13 12:00:00', '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e', NULL, '管理后台', 'client_secret_basic', 'refresh_token,authorization_code', 'http://localhost:8085/login/oauth2/code/admin-app', 'http://localhost:8001/logged-out', 'openid,profile,read,write,admin.full', '{"requireProofKey":false,"requireAuthorizationConsent":false}', '{"accessTokenFormat":"reference","authorizationCodeTimeToLive":"PT5M","accessTokenTimeToLive":"PT2H","reuseRefreshTokens":false,"refreshTokenTimeToLive":"PT12H"}');
+INSERT INTO `oauth2_registered_client` VALUES ('3', 'portal-app', '2026-08-11 20:00:08', '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e', NULL, '门户应用 (SSO)', 'client_secret_basic', 'refresh_token,authorization_code', 'http://localhost:8083/portal-sso-callback,http://localhost:8081/portal-sso-callback,http://localhost:8080/login/oauth2/code/portal-app-oidc', 'http://localhost:8000/logged-out,http://localhost:8081/logged-out', 'openid,profile,email,portal.profile', '{"requireProofKey":true,"requireAuthorizationConsent":false}', '{"accessTokenFormat":"reference","authorizationCodeTimeToLive":"PT5M","accessTokenTimeToLive":"PT2H","reuseRefreshTokens":false,"refreshTokenTimeToLive":"PT12H"}');
+INSERT INTO `oauth2_registered_client` VALUES ('4', 'web-app', '2026-08-11 20:00:08', '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e', NULL, 'Web 应用客户端', 'client_secret_basic,client_secret_post', 'authorization_code,refresh_token,password', 'http://localhost:8081/callback,http://127.0.0.1:8081/callback', 'http://localhost:8081/logout', 'openid,profile,email,read,write,third.profile', '{"requireProofKey":false,"requireAuthorizationConsent":true}', '{"accessTokenFormat":"REFERENCE","accessTokenTimeToLive":"PT2H","reuseRefreshTokens":false,"refreshTokenTimeToLive":"PT12H","idTokenSignatureAlgorithm":"RS256"}');
 INSERT INTO `oauth2_registered_client` VALUES ('5', 'device-app', '2026-08-11 20:00:08', NULL, NULL, '设备码客户端', 'none', 'refresh_token,urn:ietf:params:oauth:grant-type:device_code', NULL, NULL, 'openid,profile,email,read', '{"requireProofKey":false,"requireAuthorizationConsent":true}', '{"accessTokenFormat":"REFERENCE","accessTokenTimeToLive":"PT1H","reuseRefreshTokens":false,"refreshTokenTimeToLive":"PT12H"}');
 INSERT INTO `oauth2_registered_client` VALUES ('6', 'mobile-app', '2026-08-11 20:00:08', NULL, NULL, '移动应用客户端(PKCE)', 'none', 'authorization_code,refresh_token', 'com.example.mobileapp://oauth2/redirect,http://localhost:8083/callback', 'http://localhost:8083/logout', 'openid,profile,email,read,write', '{"requireProofKey":true,"requireAuthorizationConsent":true}', '{"accessTokenFormat":"REFERENCE","accessTokenTimeToLive":"PT2H","reuseRefreshTokens":false,"refreshTokenTimeToLive":"PT12H","idTokenSignatureAlgorithm":"RS256"}');
 -- INSERT INTO `oauth2_registered_client` VALUES ('7', 'service-app', '2026-08-11 20:00:08', '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e', NULL, '服务间调用客户端', 'client_secret_basic', 'client_credentials', NULL, NULL, 'read,write', '{"requireProofKey":false,"requireAuthorizationConsent":true}', '{"accessTokenFormat":"REFERENCE","accessTokenTimeToLive":"PT30M","reuseRefreshTokens":false}');
@@ -140,27 +143,52 @@ INSERT INTO `sys_user` VALUES (1, 'u_1a2b3c4d5e6f708090a0b0c0d0e0f001', 'admin',
 INSERT INTO `sys_user` VALUES (2, 'u_1a2b3c4d5e6f708090a0b0c0d0e0f002', 'user', '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e', '普通用户', 'user@example.com', NULL, NULL, 'client', 1, 1, 1, 1, '2026-08-11 20:00:08', '2026-08-11 20:00:08');
 
 -- ----------------------------
--- Table structure for iam_client_policy (客户端登录边界策略, 隔离管理端/门户端交叉登录)
+-- 退役清理: iam_client_policy (登录边界策略) 已删除, 职责由 scope∧RBAC 双维交集覆盖
 -- ----------------------------
 DROP TABLE IF EXISTS `iam_client_policy`;
-CREATE TABLE `iam_client_policy`  (
+
+-- ----------------------------
+-- Table structure for sys_scope (客户端授权范围字典: 双维控制的客户端维度粗分组, 只读)
+-- ----------------------------
+DROP TABLE IF EXISTS `sys_scope`;
+CREATE TABLE `sys_scope`  (
   `id` bigint(0) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `client_id` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '客户端ID (关联 oauth2_registered_client.client_id)',
-  `allowed_roles` varchar(1000) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '允许登录该客户端的角色编码列表 (逗号分隔, 如 ADMIN; 空或*表示不限制)',
-  `status` tinyint(1) NOT NULL DEFAULT 1 COMMENT '是否启用: 1=启用, 0=停用(默认放行)',
+  `code` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT 'scope 码 (如 admin.full), 客户端注册串 oauth2_registered_client.scopes 引用此码',
+  `name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '展示名',
+  `domain` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL DEFAULT 'admin' COMMENT '能力域归属: admin=管理端/portal=门户/third=三方 (展示用)',
+  `status` tinyint(1) NOT NULL DEFAULT 1 COMMENT '状态: 1=启用, 0=停用(展开剔除, 持有该组的客户端等同一码不放)',
   `remark` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '备注',
   `create_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0) COMMENT '创建时间',
   `update_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0) ON UPDATE CURRENT_TIMESTAMP(0) COMMENT '更新时间',
   PRIMARY KEY (`id`) USING BTREE,
-  UNIQUE INDEX `uk_client_id`(`client_id`) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 2 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '客户端登录边界策略表 (管理端/门户端同库用户的交叉登录隔离)' ROW_FORMAT = Dynamic;
+  UNIQUE INDEX `uk_code`(`code`) USING BTREE
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '客户端授权范围(scope)字典: 一组权限码的具名粗捆绑 (只读, SQL种子演进)' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
--- Records of iam_client_policy (admin-app 仅允许 ADMIN; portal-app 仅允许 PORTAL)
+-- Table structure for sys_scope_permission (scope ↔ 权限码 N:N, 对标 sys_role_permission, 只读)
 -- ----------------------------
-INSERT INTO `iam_client_policy` (id, client_id, allowed_roles, status, remark) VALUES
-(1, 'admin-app', 'ADMIN', 1, '管理后台: 仅允许 ADMIN 角色登录'),
-(2, 'portal-app', 'PORTAL', 1, '门户前端: 仅允许 PORTAL 角色登录');
+DROP TABLE IF EXISTS `sys_scope_permission`;
+CREATE TABLE `sys_scope_permission`  (
+  `id` bigint(0) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `scope_id` bigint(0) NOT NULL COMMENT '→ sys_scope.id',
+  `permission_id` bigint(0) NOT NULL COMMENT '→ sys_permission.id',
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE INDEX `uk_scope_perm`(`scope_id`, `permission_id`) USING BTREE,
+  INDEX `idx_perm`(`permission_id`) USING BTREE
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = 'scope 内含权限码 N:N 映射 (只读, SQL种子演进)' ROW_FORMAT = Dynamic;
+
+-- ----------------------------
+-- Records of sys_scope (甲案: 3 个粗组; 门户暂无业务码故 portal.profile 映射为空)
+-- ----------------------------
+INSERT INTO `sys_scope` (id, code, name, domain, status, remark) VALUES
+(1, 'admin.full', '管理端全量', 'admin', 1, '管理后台应用: 含全部管理权限码 (admin-app 持有)'),
+(2, 'portal.profile', '门户工作台', 'portal', 1, '门户应用授权范围: 门户端点走通道粗档, 业务码预留 (portal-app 持有)'),
+(3, 'third.profile', '三方最小读', 'third', 1, '三方/外部演示客户端最小集: 仅 user:read (web-app 持有)');
+
+INSERT INTO `sys_scope_permission` (scope_id, permission_id) VALUES
+(1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (1, 7), (1, 8),
+(1, 9), (1, 10), (1, 11), (1, 12), (1, 13), (1, 14),
+(3, 1);
 
 -- ----------------------------
 -- Table structure for iam_external_identity (外部身份绑定表: 微信/企业微信/钉钉/支付宝/谷歌/GitHub)
@@ -466,14 +494,11 @@ INSERT INTO `iam_endpoint_policy` (`domain`, `method`, `path`, `required_authori
 ('admin', 'DELETE', '/api/admin/applications/{appId}/channels/{channelId}', 'application:write', 'override', 1),
 ('admin', 'GET', '/api/admin/clients', 'client:read', 'override', 1),
 ('admin', 'GET', '/api/admin/clients/{id}', 'client:read', 'override', 1),
-('admin', 'GET', '/api/admin/policies', 'client:read', 'override', 1),
-('admin', 'GET', '/api/admin/policies/{clientId}', 'client:read', 'override', 1),
+('admin', 'GET', '/api/admin/scopes', 'client:read', 'override', 1),
 ('admin', 'POST', '/api/admin/clients', 'client:write', 'override', 1),
 ('admin', 'PUT', '/api/admin/clients/{id}', 'client:write', 'override', 1),
 ('admin', 'DELETE', '/api/admin/clients/{id}', 'client:write', 'override', 1),
 ('admin', 'POST', '/api/admin/clients/{id}/reset-secret', 'client:write', 'override', 1),
-('admin', 'POST', '/api/admin/policies', 'client:write', 'override', 1),
-('admin', 'DELETE', '/api/admin/policies/{clientId}', 'client:write', 'override', 1),
 ('admin', 'GET', '/api/admin/permissions', 'permission:read', 'override', 1),
 ('admin', 'POST', '/api/admin/permissions', 'permission:write', 'override', 1),
 ('admin', 'PUT', '/api/admin/permissions/{id}', 'permission:write', 'override', 1),

@@ -177,8 +177,13 @@
                 </div>
 
                 <div class="form-row">
-                    <label>Scopes (逗号分隔)</label>
-                    <input type="text" id="scopes" placeholder="openid,profile,email,read,write">
+                    <label>授权范围 (客户端维度) <span style="color:#94a3b8;font-weight:normal;">(字典只读, 见「授权范围」页)</span></label>
+                    <div class="checkbox-group" id="scopeGroups"></div>
+                    <div class="hint" id="scopeGroupsHint" style="display:none;color:#94a3b8;font-size:11px;">授权范围字典加载失败 — 仅可编辑下方保留 Scope</div>
+                </div>
+                <div class="form-row">
+                    <label>保留 Scope (逗号分隔) <span style="color:#94a3b8;font-weight:normal;">(openid/profile 等非业务占位)</span></label>
+                    <input type="text" id="scopesReserved" placeholder="openid,profile,email,read,write">
                 </div>
                 <div class="form-row">
                     <label>Redirect URIs (逗号分隔)</label>
@@ -254,6 +259,34 @@ function getChecked(list, prefix) {
     return list.filter(x => document.getElementById(prefix + x.v).checked).map(x => x.v);
 }
 
+/** 授权范围字典 (只读, /api/admin/scopes): 勾选式编辑 → 写入 registered_client.scopes */
+let SCOPE_GROUPS = [];
+async function loadScopeGroups() {
+    try { SCOPE_GROUPS = (await App.api("/api/admin/scopes")) || []; }
+    catch (e) {
+        SCOPE_GROUPS = [];
+        const hint = document.getElementById("scopeGroupsHint");
+        if (hint) hint.style.display = "block";
+    }
+    const box = document.getElementById("scopeGroups");
+    if (!SCOPE_GROUPS.length) {
+        box.innerHTML = '<span style="color:#94a3b8;font-size:12px;">(暂无授权范围字典, 请在 iam.sql 种子维护)</span>';
+        return;
+    }
+    box.innerHTML = SCOPE_GROUPS.map(s =>
+        `<label title="${App.esc(s.remark || '')}"><input type="checkbox" value="${App.esc(s.code)}">` +
+        ` ${App.esc(s.name)} <span style="color:#94a3b8;font-size:11px;">${App.esc(s.code)}</span>` +
+        `${s.status === 0 ? ' <span style="color:#dc2626;font-size:11px;">(停用)</span>' : ''}</label>`
+    ).join("");
+}
+function scopeGroupCodes() { return SCOPE_GROUPS.map(s => s.code); }
+function setScopeChecks(codes) {
+    document.querySelectorAll("#scopeGroups input").forEach(i => i.checked = codes.includes(i.value));
+}
+function getCheckedScopes() {
+    return Array.from(document.querySelectorAll("#scopeGroups input:checked")).map(i => i.value);
+}
+
 async function list() {
     let data;
     try { data = await App.api("/api/admin/clients"); }
@@ -265,7 +298,14 @@ async function list() {
     }
     empty.style.display = "none";
     tbody.innerHTML = data.map(c => {
-        const scopes = c.scopes ? c.scopes.split(",").map(s => `<span class="tag">${s}</span>`).join("") : "";
+        const groupCodes = scopeGroupCodes();
+        const scopes = c.scopes ? c.scopes.split(",").map(s => {
+            const code = s.trim();
+            const isGroup = groupCodes.includes(code);
+            return isGroup
+                ? `<span class="tag" style="border:1px solid #2563eb;color:#2563eb;" title="授权范围 (客户端维度)">${App.esc(code)}</span>`
+                : `<span class="tag">${App.esc(code)}</span>`;
+        }).join("") : "";
         const grants = c.authorizationGrantTypes ? c.authorizationGrantTypes.split(",").map(g => {
             const found = GRANT_TYPES.find(x => x.v === g);
             return `<span class="tag green">${found ? found.l : g}</span>`;
@@ -296,7 +336,8 @@ function openModal() {
     document.getElementById("clientId").disabled = false;
     document.getElementById("clientName").value = "";
     document.getElementById("clientSecret").value = "";
-    document.getElementById("scopes").value = "openid,profile,email";
+    document.getElementById("scopesReserved").value = "openid,profile,email";
+    setScopeChecks([]);
     document.getElementById("redirectUris").value = "";
     document.getElementById("postLogoutUris").value = "";
     document.getElementById("requireProofKey").checked = false;
@@ -325,7 +366,10 @@ async function edit(id) {
     document.getElementById("clientId").disabled = true;
     document.getElementById("clientName").value = data.clientName || "";
     document.getElementById("clientSecret").value = "";
-    document.getElementById("scopes").value = data.scopes ? data.scopes.join(",") : "";
+    const allScopes = data.scopes || [];
+    const groupCodes = scopeGroupCodes();
+    setScopeChecks(allScopes.filter(c => groupCodes.includes(c)));
+    document.getElementById("scopesReserved").value = allScopes.filter(c => !groupCodes.includes(c)).join(",");
     document.getElementById("redirectUris").value = data.redirectUris ? data.redirectUris.join(",") : "";
     document.getElementById("postLogoutUris").value = data.postLogoutRedirectUris ? data.postLogoutRedirectUris.join(",") : "";
     document.getElementById("requireProofKey").checked = data.requireProofKey;
@@ -353,7 +397,10 @@ async function save() {
         clientSecret: clientSecret,
         authorizationGrantTypes: grants,
         clientAuthenticationMethods: methods,
-        scopes: document.getElementById("scopes").value.split(",").map(s => s.trim()).filter(Boolean),
+        scopes: Array.from(new Set([
+            ...document.getElementById("scopesReserved").value.split(",").map(s => s.trim()).filter(Boolean),
+            ...getCheckedScopes()
+        ])),
         redirectUris: redirectUris,
         postLogoutRedirectUris: document.getElementById("postLogoutUris").value.split(",").map(s => s.trim()).filter(Boolean),
         requireProofKey: document.getElementById("requireProofKey").checked,
@@ -405,7 +452,7 @@ initCheckboxes();
 
 App.guard().then(function (me) {
     App.renderNavbar('client', me);
-    list();
+    loadScopeGroups().then(list);
 });
 </script>
 </body>

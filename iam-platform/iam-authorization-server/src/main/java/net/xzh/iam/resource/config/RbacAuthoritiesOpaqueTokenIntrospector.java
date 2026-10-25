@@ -17,24 +17,27 @@ import lombok.extern.slf4j.Slf4j;
 import net.xzh.iam.auth.config.AuthServerProperties;
 import net.xzh.iam.auth.security.token.RedisOpaqueTokenIntrospector;
 import net.xzh.iam.resource.service.PermissionService;
+import net.xzh.iam.resource.service.ScopeService;
 
 /**
- * RBAC 增强型 Opaque Token 自省器 (单服务本地内省).
+ * RBAC + Scope 双维增强型 Opaque Token 自省器 (单服务本地内省).
  * <p>
  * 委托同进程 {@link RedisOpaqueTokenIntrospector} 完成 token 校验 (Redis 查授权记录,
  * 不再 HTTP 自回环调 /oauth2/introspect), 依据 <b>grant_type 与 client_id</b> 判定令牌身份,
  * 而非「本地查不到用户」反推:
  * <ul>
  *   <li><b>服务令牌</b> (client_credentials, 或 client_id ∈ {@code authserver.service-client-ids} 兜底):
- *       注入 {@code PORTAL_SERVICE_TOKEN} (门户服务凭证);</li>
- *   <li><b>门户应用客户端</b> (client_id ∈ {@code authserver.portal-client-ids} 白名单, 如 portal-app) 签发的
- *       <b>用户令牌</b>: 在注入业务 RBAC 之外追加 {@code PORTAL_SERVICE_TOKEN},
- *       作为 portal 域 (/api/public/**) 的门票, 门户信息不对任意客户端开放;</li>
- *   <li><b>其它用户令牌</b>: 依据 sub (业务用户编码 user_code) 解析本地业务 RBAC
- *       (单库 iam: sys_user_role → sys_role → sys_permission),
- *       注入各业务角色编码与权限编码 authorities; 业务角色含 {@code ADMIN} 时额外注入
- *       {@code ADMIN_SERVICE_TOKEN} (管理服务凭证) 供管理接口准入鉴权
- *       (用户权威在 iam.sys_user, 无影子用户表)</li>
+ *       注入 {@code PORTAL_SERVICE_TOKEN} (门户服务凭证), M2M 无用户维度;</li>
+ *   <li><b>用户令牌</b>: 业务权限码注入 = <b>用户 RBAC 码 ∩ 客户端 scope 展开码</b> (双维交集, fail-closed):
+ *       <ul>
+ *         <li>用户码: sub (user_code) → sys_user_role → sys_role → sys_role_permission → sys_permission (启用态, 细粒度);</li>
+ *         <li>客户端码: client_id → oauth2_registered_client.scopes → sys_scope (启用态)
+ *              → sys_scope_permission → sys_permission (启用态, 粗粒度, 见 {@link ScopeService});</li>
+ *         <li>用户有码、客户端 scope 未含 → 不注入 (403), 反之亦然;</li>
+ *       </ul>
+ *       业务码之外: 业务角色含 {@code ADMIN} 时注入 {@code ADMIN_SERVICE_TOKEN} (通道粗档),
+ *       门户客户端令牌追加 {@code PORTAL_SERVICE_TOKEN} (portal 域门票), 业务角色码原样注入;</li>
+ *   <li>端点裁决不变: {@code iam_endpoint_policy.required_authority} ∈ 上述 authorities (见 EndpointAdmissionManager)。</li>
  * </ul>
  */
 @Slf4j
@@ -55,15 +58,18 @@ public class RbacAuthoritiesOpaqueTokenIntrospector implements OpaqueTokenIntros
 
     private final RedisOpaqueTokenIntrospector delegate;
     private final PermissionService permissionService;
+    private final ScopeService scopeService;
     private final Set<String> serviceClientIds;
     private final Set<String> portalClientIds;
 
     public RbacAuthoritiesOpaqueTokenIntrospector(
             RedisOpaqueTokenIntrospector delegate,
             PermissionService permissionService,
+            ScopeService scopeService,
             AuthServerProperties authServerProperties) {
         this.delegate = delegate;
         this.permissionService = permissionService;
+        this.scopeService = scopeService;
         this.serviceClientIds = authServerProperties.getServiceClientIds();
         this.portalClientIds = authServerProperties.getPortalClientIds();
     }
@@ -97,11 +103,20 @@ public class RbacAuthoritiesOpaqueTokenIntrospector implements OpaqueTokenIntros
                 // 门户信息仅限门户客户端访问
                 authorities.add(new SimpleGrantedAuthority(PORTAL_SERVICE_TOKEN));
             }
-            for (String permission : permissionService.findPermissions(userCode)) {
-                authorities.add(new SimpleGrantedAuthority(permission));
+            // ★ 双维交集 (核心): 业务码 = 用户 RBAC 码 ∩ 客户端 scope 展开码
+            // 用户有码、客户端 scope 未含 → 不注入; 反之亦不注入; 客户端无业务 scope → fail-closed 一码不放
+            String clientId = clientIdOf(principal);
+            Set<String> clientCodes = scopeService.resolveClientBusinessCodes(clientId);
+            Set<String> userCodes = permissionService.findPermissions(userCode);
+            Set<String> grantedCodes = new LinkedHashSet<>();
+            for (String permission : userCodes) {
+                if (clientCodes.contains(permission)) {
+                    grantedCodes.add(permission);
+                    authorities.add(new SimpleGrantedAuthority(permission));
+                }
             }
-            log.debug("[Introspect] 用户令牌注入 RBAC authorities, sub={}, roles={}",
-                    userCode, roleCodes);
+            log.debug("[Introspect] 用户令牌双维裁决, sub={}, roles={}, client={}, userCodes={}, scopeCodes={}, 交集注入={}",
+                    userCode, roleCodes, clientId, userCodes, clientCodes, grantedCodes);
         }
 
         return new EnrichedPrincipal(principal, authorities);
@@ -125,6 +140,12 @@ public class RbacAuthoritiesOpaqueTokenIntrospector implements OpaqueTokenIntros
     private boolean isPortalClient(OAuth2AuthenticatedPrincipal principal) {
         Object clientId = principal.getAttributes().get("client_id");
         return clientId != null && portalClientIds.contains(clientId.toString());
+    }
+
+    /** 取令牌内省属性中的 client_id (无则 null → scope 展开 fail-closed) */
+    private String clientIdOf(OAuth2AuthenticatedPrincipal principal) {
+        Object clientId = principal.getAttributes().get("client_id");
+        return clientId == null ? null : clientId.toString();
     }
 
     /** 保留原始属性, 覆写 authorities 的 principal 包装 */

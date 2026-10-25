@@ -91,7 +91,7 @@ window.App = (() => {
         ['endpointPolicy', '/endpoint_policy.html', '资源准入'],
         ['client', '/client.html', '客户端管理'],
         ['application', '/application.html', '应用管理'],
-        ['policy', '/policy.html', '准入策略'],
+        ['policy', '/scope.html', '授权范围'],
         ['online', '/online.html', '在线用户'],
         ['authorization', '/authorization.html', '授权管理']
     ];
