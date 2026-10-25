@@ -1,18 +1,14 @@
 # ========================================
-# 统一认证中心 — 接口测试 (分两部分)
+# 统一认证中心 — 接口测试
 # ========================================
-# 使用前先启动应用 (授权中心 9000, 资源中心 9010)
+# 使用前先启动应用 (合并后单服务 :9000, 授权与业务 API 同进程)
 #
-# ── 第一部分: admin-app — 常规授权链路
+# ── admin-app — 常规授权链路
 #    验证授权码 / 换 token / 刷新 / 用户信息 / 管理 API (前端、后端能力全部可用)
-#
-# ── 第二部分: service-app — 仅具备登录能力 (注册为 client_credentials 的 M2M 客户端)
-#    验证「能换到 token (登录成功)」但「前后端能力皆不可用」:
-#      · 前端能力 (portal 域 /api/public/**)  → 403 (client_id 不在门户白名单)
-#      · 后端能力 (admin 域 /api/admin/**)   → 403 (无 ADMIN_SERVICE_TOKEN)
+#    (原第二部分 service-app M2M 负例已随该测试客户端退役移除)
 # ========================================
 @authBaseUrl = http://localhost:9000
-@resourceBaseUrl = http://localhost:9010
+@resourceBaseUrl = http://localhost:9000
 
 
 # ========================================
@@ -37,7 +33,7 @@ GET {{authBaseUrl}}/.well-known/openid-configuration
 GET {{authBaseUrl}}/oauth2/jwks
 
 ### 1.3 浏览器发起授权码登录 (认证中心 /login.html 登录 admin/123456 后跳回)
-# 授权完成会经 redirect_uri 回到 admin-service, 从浏览器地址栏 / 调试器取 code 填入 {{adminCode}}
+# 授权完成会经 redirect_uri 回到 admin-bff, 从浏览器地址栏 / 调试器取 code 填入 {{adminCode}}
 GET {{authBaseUrl}}/oauth2/authorize?response_type=code&client_id=admin-app&scope=openid+profile+read+write&redirect_uri=http://localhost:8085/login/oauth2/code/admin-app&state=STATE123
 
 ### 1.4 用 code 换 token (授权码模式)
@@ -94,49 +90,11 @@ token={{adminToken}}&token_type_hint=access_token
 GET {{authBaseUrl}}/api/admin/users
 Authorization: Bearer {{adminToken}}
 
-### 4.2 后端能力: 管理 API (资源中心 :9010, 需 ADMIN_SERVICE_TOKEN)
+### 4.2 后端能力: 管理 API (同服务 :9000, 需 ADMIN_SERVICE_TOKEN)
 GET {{resourceBaseUrl}}/api/admin/roles
 Authorization: Bearer {{adminToken}}
 
-### 4.3 前端能力: 门户应用中心 (资源中心 :9010)
+### 4.3 前端能力: 门户应用中心 (同服务 :9000)
 # 说明: admin-app 不在门户客户端白名单, 此接口预期 403 —— 前端能力仅对 portal-app 客户端开放
 GET {{resourceBaseUrl}}/api/public/clients/mine
 Authorization: Bearer {{adminToken}}
-
-
-# ========================================
-# 第二部分: service-app (仅具备登录能力)
-# ========================================
-# 服务间调用 (M2M) 客户端, 授权类型仅 client_credentials, 无终端用户。
-# 凭据: client_id=service-app / secret=123456 (Basic Auth)
-@serviceClientId = service-app
-@serviceAuth = Basic c2VydmljZS1hcHA6MTIzNDU2
-
-# ⚠️ 运行时变量
-@serviceToken = __SERVICE_TOKEN__
-
-### 5.1 登录能力: 客户端模式换 token (应成功, 即「具备登录能力」)
-POST {{authBaseUrl}}/oauth2/token
-Authorization: {{serviceAuth}}
-Content-Type: application/x-www-form-urlencoded
-
-grant_type=client_credentials&scope=read+write
-
-### 5.2 令牌自省 (确认令牌类别为服务令牌)
-POST {{authBaseUrl}}/oauth2/introspect
-Authorization: {{serviceAuth}}
-Content-Type: application/x-www-form-urlencoded
-
-token={{serviceToken}}&token_type_hint=access_token
-
-### 5.3 前端能力: 门户应用中心 (应 403 —— client_id 不在门户白名单, 前端能力不可用)
-GET {{resourceBaseUrl}}/api/public/clients/mine
-Authorization: Bearer {{serviceToken}}
-
-### 5.4 后端能力: 管理 API (应 403 —— 无 ADMIN_SERVICE_TOKEN, 后端能力不可用)
-GET {{resourceBaseUrl}}/api/admin/users
-Authorization: Bearer {{serviceToken}}
-
-### 5.5 对照: 同一令牌访问认证中心管理 API (同样 403)
-GET {{authBaseUrl}}/api/admin/users
-Authorization: Bearer {{serviceToken}}

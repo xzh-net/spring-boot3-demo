@@ -1,12 +1,12 @@
 -- ============================================================
 -- V6.1 迁移 - 认证中心新增 iam_client_policy (客户端登录边界策略表)
--- 背景: 管理端用户与门户端用户统一在 iam_identity.sys_user 管理, 用该表限定各客户端
+-- 背景: 管理端用户与门户端用户统一在 sys_user 管理, 用该表限定各客户端
 --       允许登录的角色集合, 隔离管理端/门户端用户交叉登录 (原 yaml client-identity-policy)
--- 归属: iam_identity 库 / iam-authorization-server
--- 备注: 用户业务 RBAC 角色权威在资源中心 iam_authorization (sys_user_role)
+-- 归属: iam 库 / iam-authorization-server (合并后单服务)
+-- 备注: 用户业务 RBAC 角色权威在单库 iam (sys_user_role)
 -- ============================================================
 
-USE iam_identity;
+USE iam;
 
 CREATE TABLE IF NOT EXISTS `iam_client_policy`  (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',

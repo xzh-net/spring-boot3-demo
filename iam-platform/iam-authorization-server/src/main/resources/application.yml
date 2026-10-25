@@ -69,35 +69,28 @@ mybatis-plus:
       logic-delete-value: 1
       logic-not-delete-value: 0
   mapper-locations: classpath*:/mapper/**/*.xml
-  type-aliases-package: net.xzh.authserver.entity
+  type-aliases-package: net.xzh.iam.auth.entity,net.xzh.iam.resource.entity
 
 # ===== 自定义配置 =====
 authserver:
-  # JWT 签名密钥 (实际生产环境请替换为 RSA 密钥对)
-  jwt-issuer: http://localhost:9000
-  access-token-time-to-live: PT2H
-  refresh-token-time-to-live: PT168H
-  authorization-code-time-to-live: PT5M
-  device-code-time-to-live: PT5M
-  # 允许访问管理 API (/api/admin/**) 的客户端 client_id 白名单
+  # 允许访问管理 API (/api/admin/**) 的客户端 client_id 白名单 (阶段 3: 并入 EndpointAdmissionManager admin 域闸门)
+  # 注: 原 jwt-issuer/*-time-to-live 死键已清理 — issuer 硬编码于 AuthorizationServerConfig,
+  #     令牌 TTL 权威在 DB oauth2_registered_client.token_settings (每客户端) + 生成器默认;
+  #     admin-m2m 客户端及其 admin-m2m-client-ids 授予白名单已退役 (跨服务调用链本地化, 无消费方)
   admin-client-ids:
     - admin-app
   # ===== 客户端登录边界策略 (管理端/门户端同库用户的交叉登录隔离, 原 yaml client-identity-policy) =====
   # 角色行: 管理端用户经 /api/admin/policies 维护 (admin-app 默认仅允许 ADMIN 角色, 隔离门户端交叉登录)
-  # 用户业务角色权威在资源中心 iam_authorization (sys_user_role), 认证中心以 D6 内部接口获取
-  resource-service-base-url: http://localhost:9010
-  service-token-endpoint: http://localhost:9000/oauth2/token
-  service-token-client-id: resource-server
-  service-token-client-secret: 123456
-  # 管理 M2M 服务凭证 (client_credentials, admin-m2m): 认证中心以机器身份调用资源中心管理端
-  # 能力时签发服务令牌, 资源中心按 client_id 白名单内省注入 ADMIN_SERVICE_TOKEN
-  admin-service-token-client-id: admin-m2m
-  admin-service-token-client-secret: 123456
+  # 用户业务角色权威在单库 iam (sys_user_role, 阶段 4 已本地化, 远程调用退役)
+  # 服务令牌判定兜底 (M2M): 列表内 client_id 且无 grant_type 属性的令牌视为服务间调用 (注入 PORTAL_SERVICE_TOKEN)
+  service-client-ids: []
+  # 门户客户端白名单: 仅列表内客户端签发的令牌可访问 portal 域 (/api/public/**)
+  portal-client-ids: [portal-app]
 
 logging:
   level:
     root: INFO
-    net.xzh.authserver: DEBUG
+    net.xzh.iam: DEBUG
     org.springframework.security: DEBUG
     org.springframework.security.oauth2: DEBUG
     org.springframework.security.authorization: TRACE

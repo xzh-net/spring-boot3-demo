@@ -2,11 +2,11 @@
 -- V6.7 迁移 - 认证中心新增 iam_external_identity (外部身份绑定表)
 -- 说明: 对接微信 / 企业微信 / 钉钉 / 支付宝 / 谷歌 / GitHub 等第三方身份
 --       同一第三方唯一标识 (provider + provider_open_id) 至多绑定一个本地用户
--- 归属: iam_identity 库 / iam-authorization-server
+-- 归属: iam 库 / iam-authorization-server (合并后单服务)
 -- 备注: 仅建表, 绑定/解绑逻辑与登录链路后续版本接入
 -- ============================================================
 
-USE iam_identity;
+USE iam;
 
 CREATE TABLE IF NOT EXISTS `iam_external_identity`  (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',

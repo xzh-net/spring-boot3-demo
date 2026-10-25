@@ -1,6 +1,6 @@
 # Spring Authorization Server — 统一认证中心
 
-基于 Spring Authorization Server 1.4.1 的单体认证中心，提供 OAuth2 / OIDC 能力。管理后台已剥离为独立工程（[iam-admin-service](../iam-admin-service) + [iam-admin-web](../iam-admin-web)，见下方「管理后台」）。
+基于 Spring Authorization Server 1.4.1 的单体认证中心，提供 OAuth2 / OIDC 能力。管理后台已剥离为独立工程（[iam-admin-bff](../iam-admin-bff) + [iam-admin-web](../iam-admin-web)，见下方「管理后台」）。
 
 - 端口：`9000`
 - 依赖：MySQL 8（客户端 / 用户 / 授权同意 / 授权日志，库 `iam_identity`）、Redis（token / code / session 运行时状态）
@@ -13,8 +13,8 @@
 
 | 模块 | 端口 | 说明 |
 |------|------|------|
-| `iam-admin-service` | 8085 | 管理 BFF：OAuth2 Client (`admin-app`) 授权码登录认证中心，Bearer 透传管理 API |
-| `iam-admin-web` | 8001 | 纯 HTML 管理台（用户/客户端/授权/在线/监控），由 admin-service 代理后端 |
+| `iam-admin-bff` | 8085 | 管理 BFF：OAuth2 Client (`admin-app`) 授权码登录认证中心，Bearer 透传管理 API |
+| `iam-admin-web` | 8001 | 纯 HTML 管理台（用户/客户端/授权/在线/监控），由 admin-bff 代理后端 |
 
 访问 `http://localhost:8001` → 任一管理页触发登录 → 跳转认证中心登录页（`admin / 123456`）→ 回跳管理台。
 页面调用的 `GET /api/admin/**` 等管理 API 由认证中心 Order(2) 安全链保护（Bearer + `ADMIN_SERVICE_TOKEN`）。
@@ -63,8 +63,8 @@ User (用户)
 ## 开发说明 — 代码架构
 
 ```
-net.xzh.authserver
-├── AuthorizationServerApplication.java     # 启动类
+net.xzh.iam                              # 合并单服务根包 (common / auth / resource)
+├── AuthorizationServerApplication.java     # 启动类 (scanBasePackages = net.xzh.iam)
 ├── common/                                  # 通用工具
 │   └── Result.java                          #   统一响应封装
 ├── config/                                  # 基础设施配置
@@ -135,16 +135,14 @@ net.xzh.authserver
 
 | Order | 匹配路径 | 认证方式 | SecurityContext |
 |-------|---------|---------|-----------------|
-| 1 | `/oauth2/**` `/consent` `/.well-known/**` `/login` `/logout` `/userinfo` | OAuth2 客户端 + 表单 | Composite (DEVICE→PORTAL) |
-| 2 | `/api/admin/**` | Bearer (RedisOpaqueTokenIntrospector) | — |
-| 5 | `/activate` `/device-login` | 表单 (PortalUserDetailsService) | DEVICE (一次性) |
+| 1 | `/oauth2/**` `/login*` `/consent` `/logout` `/.well-known/**` | OAuth2 客户端 + 表单 | Composite (DEVICE→PORTAL) |
+| 2 | `/activate` `/device-login` | 表单 (PortalUserDetailsService) | DEVICE (一次性) |
+| 3 | `/api/**`（`securityMatcher`） | Bearer (本地 Redis 内省) + EndpointAdmissionManager | — (STATELESS, JSON 401/403) |
 
-> 原 Order(2) 资源服务器链 (/api/** Bearer 认证) 已随业务接口迁移到独立项目
-> [iam-resource-service](../iam-resource-service/README.md) (:9010)。
-> 认证中心保留的管理 API 位于 Order(2) 链：`/api/admin/**`（Bearer + `ADMIN_SERVICE_TOKEN`）。
-> 认证相关的 /userinfo 仍由本中心提供（Bearer 校验由 UserInfoController 自省实现）。
-> Order(3) 原管理后台表单链已随管理台迁移删除；Order(4) 预留。
-> 门户已拆分为独立项目 (iam-portal-web + iam-portal-service)，不再需要 Order(6) 兜底链。
+> 合并后安全链统一为三段（阶段 3 定稿）：协议链 Order(1) / 设备链 Order(2) / 统一 API 链 Order(3)。
+> 业务与管理 API 全部在 Order(3) 单链内（本地 Redis 内省 + 接口准入表驱动），无独立资源服务器、无服务间调用。
+> `/userinfo` 由 `UserInfoController` 自鉴权（本地内省），不走协议链 OIDC UserInfo 过滤器。
+> 门户已拆分为独立项目 (web/iam-portal-web + bff/iam-portal-bff)。
 
 ### 关键设计约束
 
@@ -163,18 +161,17 @@ net.xzh.authserver
 
 | 接入方 | client_id | 模式 | 参考演示 |
 |--------|-----------|------|---------|
-| 门户（前后端分离） | `portal-app` | 授权码 + PKCE | [iam-portal-web](../iam-portal-web/README.md) + [iam-portal-service](../iam-portal-service/README.md) |
-| 传统 Web 应用（有后端） | `web-app` | 授权码 / 密码 | [example/iam-client-web-demo](../example/iam-client-web-demo/README.md) |
-| 输入受限设备（TV/IoT/CLI） | `device-app` | 设备码 (RFC 8628) | [example/iam-client-device-demo](../example/iam-client-device-demo/README.md) |
-| 原生 App / SPA（无后端） | `mobile-app` | 授权码 + PKCE | [example/iam-client-mobile-demo](../example/iam-client-mobile-demo/README.md) |
-| 后端服务间调用 (M2M) | `service-app` | 客户端模式 | 见 [test.http](./test.http) |
+| 门户（前后端分离） | `portal-app` | 授权码 + PKCE | [web/iam-portal-web](../web/iam-portal-web) + [bff/iam-portal-bff](../bff/iam-portal-bff) |
+| 传统 Web 应用（有后端） | `web-app` | 授权码 / 密码 | [client/iam-client-web-demo](../client/iam-client-web-demo/README.md) |
+| 输入受限设备（TV/IoT/CLI） | `device-app` | 设备码 (RFC 8628) | [client/iam-client-device-demo](../client/iam-client-device-demo/README.md) |
+| 原生 App / SPA（无后端） | `mobile-app` | 授权码 + PKCE | [client/iam-client-mobile-demo](../client/iam-client-mobile-demo/README.md) |
 
 ### 通用接入步骤
 
 1. **发现端点**：`GET /.well-known/openid-configuration` 获取所有 OAuth2/OIDC 端点地址
 2. **授权**：引导用户到 `/oauth2/authorize?...`（授权码 / 设备码）或直接 `POST /oauth2/token`（密码 / 客户端模式）
 3. **换 token**：`POST /oauth2/token`，按模式带不同参数（授权码带 `code`，密码带 `username/password`，PKCE 带 `code_verifier`，客户端模式带 `client_secret`）
-4. **调 API**：`Authorization: Bearer <access_token>` 调业务 API（见 [iam-resource-service](../iam-resource-service/README.md)，:9010，如 `/api/contacts`）
+4. **调 API**：`Authorization: Bearer <access_token>` 调业务 API（同服务 :9000，如 `/api/contacts`、`/api/admin/**`）
 5. **获取用户信息**：`GET /userinfo`（需 `openid` scope）
 6. **续期 / 退出**：`refresh_token` 续期（Public Client 不可用，用 `prompt=none` 静默重新授权），`/oauth2/revoke` 吊销 token，`/logout?post_logout_redirect_uri=` 销毁会话
 
@@ -188,7 +185,7 @@ net.xzh.authserver
 
 ### 接口测试
 
-完整的 curl / REST Client 测试用例见 [test.http](./test.http)，覆盖 4 种授权模式、资源访问、内省、撤销、管理 API、管理后台模块（admin-service / admin-web），可直接在 VS Code / IntelliJ 中逐条执行。
+完整的 curl / REST Client 测试用例见 [test.http](./test.http)，覆盖 4 种授权模式、资源访问、内省、撤销、管理 API、管理后台模块（admin-bff / admin-web），可直接在 VS Code / IntelliJ 中逐条执行。
 
 ## 数据库
 
@@ -220,10 +217,10 @@ net.xzh.authserver
 | `web-app` | 授权码 / 密码 | client_secret_basic | 传统 Web 应用 |
 | `device-app` | 设备码 | none | 电视 / IoT / CLI |
 | `mobile-app` | 授权码 + PKCE | none | 原生 App / SPA |
-| `service-app` | 客户端模式 | client_secret_basic | 服务间调用 (M2M) |
-| `resource-server` | 客户端模式 | client_secret_basic | 资源中心 introspection / 目录 API |
+| ~~`service-app`~~ | — | — | **已退役**（client_credentials 测试账号；test.http 第二部分负例一并移除） |
+| ~~`resource-server`~~ | — | — | **已退役**（阶段 4：原跨服务内省/目录凭证，合并后无消费方） |
 
-客户端配置详见 [iam_identity.sql](./src/main/resources/iam_identity.sql)（唯一来源；新增/变更客户端走管理端 `/api/admin/clients`，不再有代码兜底初始化器），对接方式见各演示项目 README。
+客户端配置详见 [iam.sql](./src/main/resources/iam.sql)（唯一来源；新增/变更客户端走管理端 `/api/admin/clients`，不再有代码兜底初始化器），对接方式见各演示项目 README。
 
 ## 相关文档
 

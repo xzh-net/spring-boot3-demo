@@ -1,4 +1,4 @@
-﻿# =====================================================================
+# =====================================================================
 # start-all.ps1 — iam-platform 全量服务启停脚本 (PowerShell 5.1)
 # ---------------------------------------------------------------------
 # 每次执行:
@@ -7,10 +7,11 @@
 #   3. 未运行 -> 直接启动;
 #   4. 启动后轮询端口就绪, 输出各服务状态汇总。
 #
-# 服务清单 (核心平台):
-#   4 个 Java  (mvn spring-boot:run): authorization-server:9000,
-#              resource-service:9010, admin-service:8085, portal-service:8080
+# 服务清单 (核心平台, 合并后单服务 9000):
+#   3 个 Java  (mvn spring-boot:run): authorization-server:9000,
+#              admin-bff:8085, portal-bff:8080
 #   2 个 Node  (node server.js):       admin-web:8001,       portal-web:8000
+#   (iam-resource-service 已归档合并入 9000, 不再启动; 见 iam-resource-service/README.md)
 #
 # 用法:  powershell -ExecutionPolicy Bypass -File .\start-all.ps1
 # 可配:  powershell ... -File .\start-all.ps1 -SkipMvnBuild   (跳过 mvn 预编译, 直接 spring-boot:run)
@@ -30,11 +31,10 @@ New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 # ---------------------------------------------------------------------
 $services = @(
     @{ Name = 'iam-authorization-server'; Type = 'java'; Port = 9000; Dir = 'iam-authorization-server'; ReadyPath = '/actuator/health'; ReadyPort = 9000 }
-    @{ Name = 'iam-resource-service';     Type = 'java'; Port = 9010; Dir = 'iam-resource-service';     ReadyPort = 9010 }
-    @{ Name = 'iam-admin-service';        Type = 'java'; Port = 8085; Dir = 'iam-admin-service';        ReadyPort = 8085 }
-    @{ Name = 'iam-portal-service';       Type = 'java'; Port = 8080; Dir = 'iam-portal-service';       ReadyPort = 8080 }
-    @{ Name = 'iam-admin-web';            Type = 'node'; Port = 8001; Dir = 'iam-admin-web';            ReadyPort = 8001 }
-    @{ Name = 'iam-portal-web';           Type = 'node'; Port = 8000; Dir = 'iam-portal-web';           ReadyPort = 8000 }
+    @{ Name = 'iam-admin-bff';        Type = 'java'; Port = 8085; Dir = 'bff/iam-admin-bff';    ReadyPort = 8085 }
+    @{ Name = 'iam-portal-bff';       Type = 'java'; Port = 8080; Dir = 'bff/iam-portal-bff';   ReadyPort = 8080 }
+    @{ Name = 'iam-admin-web';            Type = 'node'; Port = 8001; Dir = 'web/iam-admin-web';        ReadyPort = 8001 }
+    @{ Name = 'iam-portal-web';           Type = 'node'; Port = 8000; Dir = 'web/iam-portal-web';       ReadyPort = 8000 }
 )
 
 # ---------------------------------------------------------------------

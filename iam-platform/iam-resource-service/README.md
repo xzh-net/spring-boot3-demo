@@ -1,6 +1,14 @@
-# Resource Service — 资源服务
+# Resource Service — 资源服务（已归档 · 对照用）
 
-独立 OAuth2 资源服务器，负责校验第三方传过来的 Bearer Token（Opaque）并承载受保护的业务 API。
+> **⚠ 归档说明（阶段 5）**
+> 本模块已于平台合并中**退役**：原资源中心功能（RBAC、`/api/admin/**`、`/api/public/**`、`/api/capability/**`、接口准入）已全部并入
+> [`iam-authorization-server`](../iam-authorization-server/README.md) **单服务 :9000**（包 `net.xzh.iam.resource`，单库 `iam`）。
+> 远程调用链（`/api/internal/**`、`resource-server` 客户端凭证、服务令牌互换）已随之删除。
+> **本目录不再启动、不参与构建**，仅作合并前对照保留。文档所述 9010 行为均为历史形态。
+
+---
+
+独立 OAuth2 资源服务器（**历史对照**），负责校验第三方传过来的 Bearer Token（Opaque）并承载受保护的业务 API。
 
 - 端口：`9010`
 - 依赖：Spring Boot 3.x + Spring Security OAuth2 Resource Server + MyBatis-Plus/Druid/MySQL
