@@ -33,6 +33,15 @@ function _generatePortalSsoState() {
 // 用 Map 暂存 state (一次性)
 const _portalSsoStates = new Set();
 
+// PKCE (RFC 7636): state → code_verifier (一次性, 换令牌后即删)
+// web-app 已设 requireProofKey=true, 发码必须带 code_challenge, 换票必须回传 code_verifier
+const _pkceVerifiers = new Map();
+
+/** RFC 7636 §4.6: code_challenge = base64url(sha256(ascii(code_verifier))) */
+function _computeS256Challenge(verifier) {
+    return crypto.createHash('sha256').update(verifier, 'ascii').digest('base64url');
+}
+
 /**
  * 生成「返回门户」的静默授权 URL.
  * 设计文档 §6: A 返回 Portal 时不直接跳门户首页, 而是为 portal-app 客户端
@@ -58,9 +67,17 @@ function getPortalSsoUrl() {
     return url;
 }
 
-/** 生成 OAuth2 授权码请求 URL — token 失效时直接 302 重定向到此地址 */
+/** 生成 OAuth2 授权码请求 URL — token 失效时直接 302 重定向到此地址 (带 PKCE) */
 function getAuthorizationUrl() {
-    return `${AUTH_SERVER}/oauth2/authorize?response_type=code&client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=openid%20profile%20email%20read%20write&state=demo`;
+    const state = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
+    const codeVerifier = crypto.randomBytes(32).toString('base64url');
+    _pkceVerifiers.set(state, codeVerifier); // 换令牌时取回, 一次性
+    const codeChallenge = _computeS256Challenge(codeVerifier);
+    return `${AUTH_SERVER}/oauth2/authorize?response_type=code&client_id=${CLIENT_ID}` +
+        `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
+        `&scope=openid%20profile%20email%20read%20write` +
+        `&state=${state}` +
+        `&code_challenge=${codeChallenge}&code_challenge_method=S256`;
 }
 
 // ============================================================
@@ -122,9 +139,17 @@ function request(options, body, timeoutMs) {
     });
 }
 
-/** 用 authorization_code 换 token */
-async function exchangeCodeForToken(code) {
-    const body = `grant_type=authorization_code&code=${encodeURIComponent(code)}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`;
+/** 用 authorization_code 换 token (PKCE: 携带发起时暂存的 code_verifier) */
+async function exchangeCodeForToken(code, state) {
+    let verifierPart = '';
+    const codeVerifier = state ? _pkceVerifiers.get(state) : undefined;
+    if (state) _pkceVerifiers.delete(state); // 一次性: 无论成败都清掉
+    if (codeVerifier) {
+        verifierPart = `&code_verifier=${encodeURIComponent(codeVerifier)}`;
+    } else {
+        console.warn(`[PKCE] 未找到 state=${state} 对应的 code_verifier, 换票将被认证中心拒绝`);
+    }
+    const body = `grant_type=authorization_code&code=${encodeURIComponent(code)}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}${verifierPart}`;
     const auth = Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64');
     const res = await request({
         hostname: 'localhost', port: 9000, path: '/oauth2/token', method: 'POST',
@@ -405,7 +430,7 @@ async function renderCallback(query, res) {
     // 用 code 换 token
     let tokenResult;
     try {
-        tokenResult = await exchangeCodeForToken(code);
+        tokenResult = await exchangeCodeForToken(code, query.state);
     } catch (e) {
         return layout('Token 交换失败', `
             <div class="card">

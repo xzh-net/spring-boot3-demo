@@ -95,5 +95,5 @@ node server.js
 
 ## 相关文档
 
-- [统一认证管理平台设计说明书](../../docs/统一认证管理平台设计说明书.md)（V4.0 完整版，含设备码模式设计）
+- [概要设计](../../docs/概要设计.md) / [详细设计](../../docs/详细设计.md) / [接口文档](../../docs/接口文档.md)
 - [认证中心 README](../../server/iam-authorization-server/README.md)

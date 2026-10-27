@@ -72,7 +72,7 @@ public class ClientService {
                 });
 
         if (StringUtils.hasText(vo.getClientSecret())) {
-            builder.clientSecret("{bcrypt}" + passwordEncoder.encode(vo.getClientSecret()));
+            builder.clientSecret(encodeSecretIfPlain(vo.getClientSecret()));
         }
         if (vo.getRedirectUris() != null) {
             builder.redirectUris(u -> vo.getRedirectUris().forEach(u::add));
@@ -140,7 +140,7 @@ public class ClientService {
 
         // Secret: 只有传了新密码才覆盖
         if (StringUtils.hasText(vo.getClientSecret())) {
-            builder.clientSecret("{bcrypt}" + passwordEncoder.encode(vo.getClientSecret()));
+            builder.clientSecret(encodeSecretIfPlain(vo.getClientSecret()));
         } else if (existing.getClientSecret() != null) {
             builder.clientSecret(existing.getClientSecret());
         }
@@ -227,10 +227,35 @@ public class ClientService {
                 && (vo.getRedirectUris() == null || vo.getRedirectUris().isEmpty())) {
             throw new IllegalArgumentException("授权码模式必须配置至少一个 Redirect URI");
         }
+        // PKCE 强制 (RFC 7636 / OAuth 2.1): 授权码模式必须开启, 否则认证中心
+        // 会因授权请求缺少 code_challenge 直接拒绝, 该客户端登录必然失败.
+        // 服务端为权威校验 (前端「客户端管理」页已联动锁定, 此处防绕过).
+        if (grants.contains("authorization_code") && !vo.isRequireProofKey()) {
+            throw new IllegalArgumentException("授权码模式必须开启 PKCE (requireProofKey=true)");
+        }
         Set<String> methods = vo.getClientAuthenticationMethods();
         if (methods != null && methods.contains("none") && StringUtils.hasText(vo.getClientSecret())) {
             throw new IllegalArgumentException("Public 客户端 (认证方式=none) 不能设置 client_secret");
         }
+    }
+
+    /**
+     * 明文则 BCrypt 编码；已编码值原样保留.
+     * <p>
+     * 防止「读-改-写」把哈希再次编码：GET 接口会回显存储的哈希（{@code $2a$...} / {@code {bcrypt}}...），
+     * 调用方不加处理地回传时若再次 encode，密钥会被静默改成"对哈希串的哈希"，导致该客户端登录
+     * 全部 invalid_client（曾实测发生过）。调用方若要改密钥，应传<b>新的明文</b>。
+     */
+    private String encodeSecretIfPlain(String secret) {
+        String s = secret.trim();
+        if (s.startsWith("{bcrypt}") || s.startsWith("{BCRYPT}")) {
+            return s;
+        }
+        if (s.startsWith("$2a$") || s.startsWith("$2b$") || s.startsWith("$2y$") || s.startsWith("$argon2")) {
+            // 裸 BCrypt/Argon2 哈希: 视为已编码, 补前缀原样保留
+            return s;
+        }
+        return "{bcrypt}" + passwordEncoder.encode(s);
     }
 
     private AuthorizationGrantType mapGrantType(String v) {

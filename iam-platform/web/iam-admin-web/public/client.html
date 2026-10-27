@@ -198,6 +198,7 @@
                     <label>Token 设置</label>
                     <div class="token-opts">
                         <label><input type="checkbox" id="requireProofKey"> 开启 PKCE</label>
+                        <span id="pkceHint" style="color:#dc2626;font-size:11px;align-self:center;"></span>
                         <label><input type="checkbox" id="requireConsent" checked> 需授权确认页面</label>
                         <label><input type="checkbox" id="reuseRefreshTokens" checked> 复用 Refresh Token</label>
                     </div>
@@ -253,6 +254,29 @@ function initCheckboxes() {
     const am = document.getElementById("authMethods");
     am.innerHTML = AUTH_METHODS.map(m =>
         `<label><input type="checkbox" value="${m.v}" id="am_${m.v}">${m.l}</label>`).join("");
+    // 授权码模式 ↔ PKCE 联动 (任一授权码勾选变化都同步)
+    GRANT_TYPES.forEach(g =>
+        document.getElementById("gt_" + g.v).addEventListener("change", syncPkceWithGrant));
+}
+
+/**
+ * PKCE 必选约束 (RFC 7636 / OAuth 2.1):
+ * 勾选「授权码」时强制勾选并锁定 PKCE —— 服务端 requireProofKey=true 会拒绝
+ * 不带 code_challenge 的授权请求, 放开即导致该客户端登录必然失败。
+ * 无授权码的客户端 (如设备码) 则保持可编辑。
+ */
+function syncPkceWithGrant() {
+    const needPkce = document.getElementById("gt_authorization_code").checked;
+    const pkce = document.getElementById("requireProofKey");
+    const hint = document.getElementById("pkceHint");
+    if (needPkce) {
+        pkce.checked = true;
+        pkce.disabled = true;
+        if (hint) hint.textContent = "授权码模式必选 (服务端强制)";
+    } else {
+        pkce.disabled = false;
+        if (hint) hint.textContent = "";
+    }
 }
 
 function getChecked(list, prefix) {
@@ -351,6 +375,7 @@ function openModal() {
     document.getElementById("gt_refresh_token").checked = true;
     AUTH_METHODS.forEach(m => document.getElementById("am_" + m.v).checked = false);
     document.getElementById("am_client_secret_basic").checked = true;
+    syncPkceWithGrant();
     document.getElementById("modal").classList.add("show");
 }
 
@@ -382,6 +407,7 @@ async function edit(id) {
         data.authorizationGrantTypes && Array.isArray(data.authorizationGrantTypes) && data.authorizationGrantTypes.includes(g.v));
     AUTH_METHODS.forEach(m => document.getElementById("am_" + m.v).checked =
         data.clientAuthenticationMethods && Array.isArray(data.clientAuthenticationMethods) && data.clientAuthenticationMethods.includes(m.v));
+    syncPkceWithGrant();
     document.getElementById("modal").classList.add("show");
 }
 
