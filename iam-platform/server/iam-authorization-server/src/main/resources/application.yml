@@ -1,0 +1,85 @@
+server:
+  port: 9000
+  servlet:
+    context-path: /
+
+spring:
+  profiles:
+    active: local
+
+  application:
+    name: iam-authorization-server
+  thymeleaf:
+    cache: false
+
+  # ===== MySQL 8 数据源 (Druid 连接池) =====
+  # 通用连接池参数 (url/username/password 在 application-{profile}.yml 中按环境配置)
+  datasource:
+    type: com.alibaba.druid.pool.DruidDataSource
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    druid:
+      initial-size: 5
+      min-idle: 5
+      max-active: 50
+      max-wait: 60000
+      time-between-eviction-runs-millis: 60000
+      min-evictable-idle-time-millis: 300000
+      validation-query: SELECT 1
+      test-while-idle: true
+      test-on-borrow: false
+      test-on-return: false
+      pool-prepared-statements: false
+      # [安全加固] 禁用 Druid 监控台 (/druid/*): 认证中心未有安全链匹配该路径,
+      # 启用 stat-view-servlet 会让控制台对外裸奔且口令硬编码. 如需监控改用本应用日志/Actuator.
+      stat-view-servlet:
+        enabled: false
+      web-stat-filter:
+        enabled: true
+        url-pattern: /*
+        exclusions: "*.js,*.gif,*.jpg,*.png,*.css,*.ico,/druid/*"
+
+  # ===== Redis =====
+  # host/port/password/database 在 application-{profile}.yml 中按环境配置
+  data:
+    redis:
+      timeout: 10s
+      lettuce:
+        pool:
+          max-active: 20
+          max-idle: 10
+          min-idle: 5
+          max-wait: 5s
+
+  # ===== Spring Session (HttpSession 持久化到 Redis) =====
+  session:
+    store-type: redis
+    timeout: 30m
+    redis:
+      namespace: "oauth2:session"
+
+# ===== MyBatis-Plus =====
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: net.xzh.iam.auth.entity,net.xzh.iam.resource.entity
+
+# ===== 自定义配置 =====
+# authserver.* 客户端白名单配置 (admin-client-ids / service-client-ids / portal-client-ids) 已退役删除:
+# 客户端维度隔离由令牌双维交集 (用户 RBAC 码 ∩ 客户端 scope 展开码) 承担, 无独立白名单闸门;
+# 端点准入全部按权限码裁决 (见 iam_endpoint_policy 与 EndpointAdmissionManager)。
+
+logging:
+  level:
+    root: INFO
+    net.xzh.iam: DEBUG
+    org.springframework.security: DEBUG
+    org.springframework.security.oauth2: DEBUG
+    org.springframework.security.authorization: TRACE

@@ -72,11 +72,11 @@
         <div class="page-header">
             <div>
                 <h2>资源准入</h2>
-                <div class="hint">资源接口准入策略 (iam_endpoint_policy): 每行 = 一个接口准入点 (方法+路径唯一)。启动扫描播种 (来源=扫描, 域默认粗档), 管理端编辑/新增一律「覆盖」不被重启冲掉; 停用 = 该端点准入直接拒绝; 对应运行中接口的行不可删除 (改停用)。准入要求可引用「权限管理」页的权限码 (实际命中 = 用户 RBAC ∩ 客户端授权范围, 见「授权范围」页), 或用粗档常量。</div>
-            </div>
-            <div>
-                <button class="btn btn-primary" onclick="openEpModal()">＋ 新增准入</button>
-                <button class="btn btn-primary" style="margin-left:10px;" onclick="loadEndpoints()">🔄 刷新</button>
+                <div class="hint">
+                    每行 = 一个接口准入点 (方法+路径唯一)：「准入要求」填该端点所需权限码，令牌须内含该码 (命中 = 用户 RBAC ∩ 客户端授权范围)；停用即拒绝，表外路径走认证档。<br>
+                    数据权威 = <code>iam.sql</code> 种子，启动自扫描只补新端点、不回写。新增接口：权限管理加码 → 角色/scope 绑定 → 种子加端点行，重载 DB重启。<br>
+                    控制器方法须位于 <code>controller.admin|portal|third</code> 包下才会入表，否则落认证档。
+                </div>
             </div>
         </div>
 
@@ -89,80 +89,13 @@
                             <th>方法</th>
                             <th>路径</th>
                             <th>准入要求</th>
-                            <th>能力域</th>
-                            <th>来源</th>
                             <th>状态</th>
                             <th>备注</th>
-                            <th style="width:110px">操作</th>
                         </tr>
                     </thead>
                     <tbody id="epTable"></tbody>
                 </table>
-                <div class="empty" id="epEmpty" style="display:none;">暂无准入行, 点击「新增准入」创建</div>
-            </div>
-        </div>
-
-        <div class="note">
-            说明: 表内行 (admin/portal/third 三域) 按「准入要求」裁决 — 权限码需令牌内含对应码 (见「角色管理」绑定), 粗档常量按令牌类别放行;
-            表外路径走认证档 (持有效令牌即放行); /api/permitall/** 链层放行, 不入本表。
-        </div>
-    </div>
-
-    <!-- 新增/编辑准入弹窗 -->
-    <div class="modal-bg" id="epModal">
-        <div class="modal">
-            <div class="modal-header">
-                <div>
-                    <h3 id="epModalTitle">新增准入</h3>
-                    <div class="sub">方法+路径唯一; 手工建/编辑一律「覆盖」(来源), 重启扫描不回写</div>
-                </div>
-                <button class="close-btn" onclick="closeEpModal()">×</button>
-            </div>
-            <div class="modal-body">
-                <div class="form">
-                    <div class="form-row">
-                        <label>准入要求 (权限码或粗档常量)</label>
-                        <select id="epRequired"></select>
-                    </div>
-                    <div class="form-row">
-                        <label>路径 (必填, Spring 注册模式)</label>
-                        <input id="epPath" placeholder="如 /api/admin/users/{id}">
-                    </div>
-                    <div class="form-row">
-                        <label>HTTP 方法</label>
-                        <select id="epMethod">
-                            <option value="ANY">ANY (全部方法)</option>
-                            <option value="GET">GET</option>
-                            <option value="POST">POST</option>
-                            <option value="PUT">PUT</option>
-                            <option value="DELETE">DELETE</option>
-                            <option value="PATCH">PATCH</option>
-                        </select>
-                    </div>
-                    <div class="form-row">
-                        <label>能力域</label>
-                        <select id="epDomain">
-                            <option value="admin">admin (管理端)</option>
-                            <option value="portal">portal (门户)</option>
-                            <option value="third">third (三方)</option>
-                        </select>
-                    </div>
-                    <div class="form-row">
-                        <label>状态</label>
-                        <select id="epStatus">
-                            <option value="1">启用</option>
-                            <option value="0">停用 (该端点准入直接拒绝)</option>
-                        </select>
-                    </div>
-                    <div class="form-row">
-                        <label>备注</label>
-                        <textarea id="epRemark" rows="2" placeholder="可选"></textarea>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-ghost" onclick="closeEpModal()">取消</button>
-                <button class="btn btn-primary" onclick="saveEp()">保存</button>
+                <div class="empty" id="epEmpty" style="display:none;">暂无准入行 (种子未加载，或扫描未发现三域 controller 端点)</div>
             </div>
         </div>
     </div>
@@ -170,10 +103,6 @@
 <script src="/common.js"></script>
 <script>
 let epList = [];
-let permList = [];
-let editingEpId = null;
-
-const COARSE_OPTIONS = ['AUTHENTICATED', 'ADMIN_SERVICE_TOKEN', 'PORTAL_SERVICE_TOKEN', 'PERMIT_ALL'];
 
 async function loadEndpoints() {
     try {
@@ -195,108 +124,11 @@ async function loadEndpoints() {
             <td style="font-family:monospace;">${p.id}</td>
             <td><span class="tag gray" style="font-family:monospace;">${App.esc(p.method || '-')}</span></td>
             <td style="font-family:monospace;font-size:12px;color:#475569;">${App.esc(p.path || '-')}</td>
-            <td>${COARSE_OPTIONS.includes(p.requiredAuthority)
-                ? `<span class="tag amber">${App.esc(p.requiredAuthority)}</span> <span style="font-size:10px;color:#94a3b8;">粗档</span>`
-                : `<span class="tag blue">${App.esc(p.requiredAuthority || '-')}</span>`}</td>
-            <td><span class="tag ${p.domain === 'admin' ? 'blue' : p.domain === 'portal' ? 'green' : 'gray'}">${App.esc(p.domain || '-')}</span></td>
-            <td><span class="tag ${p.source === 'coded' ? 'gray' : 'amber'}">${p.source === 'coded' ? '扫描' : '覆盖'}</span></td>
+            <td><span class="tag ${(p.requiredAuthority === 'AUTHENTICATED' || p.requiredAuthority === 'PERMIT_ALL') ? 'amber' : 'blue'}">${App.esc(p.requiredAuthority || '-')}</span>${(p.requiredAuthority === 'AUTHENTICATED' || p.requiredAuthority === 'PERMIT_ALL') ? ' <span style="font-size:10px;color:#94a3b8;">放行档</span>' : ''}</td>
             <td><span class="tag ${p.status === 0 ? 'gray' : 'green'}">${p.status === 0 ? '停用' : '启用'}</span></td>
             <td style="font-size:12px;color:#64748b;">${App.esc(p.remark || '-')}</td>
-            <td>
-                <button class="btn-link" onclick="openEpModal(${p.id})">编辑</button>
-                <button class="btn-link danger" onclick="deleteEp(${p.id})">删除</button>
-            </td>
         </tr>
     `).join('');
-}
-
-async function loadCodes() {
-    try {
-        permList = (await App.api('/api/admin/permissions') || []).filter(p => p.status !== 0);
-    } catch (e) {
-        permList = [];
-    }
-}
-
-function buildRequiredOptions(selected) {
-    const sel = document.getElementById('epRequired');
-    sel.innerHTML =
-        '<optgroup label="权限码">' +
-        (permList.length ? permList.map(p => `<option value="${App.esc(p.code)}">${App.esc(p.code)} — ${App.esc(p.name || '')}</option>`).join('')
-                        : '<option value="" disabled>(暂无权限码, 请先在「权限管理」页创建)</option>') +
-        '</optgroup>' +
-        '<optgroup label="粗档常量">' +
-        COARSE_OPTIONS.map(c => `<option value="${c}">${c}</option>`).join('') +
-        '</optgroup>';
-    if (selected) sel.value = selected;
-}
-
-function openEpModal(id) {
-    editingEpId = id || null;
-    document.getElementById('epModalTitle').textContent = id ? '编辑准入' : '新增准入';
-    document.getElementById('epPath').value = '';
-    document.getElementById('epMethod').value = 'ANY';
-    document.getElementById('epDomain').value = 'admin';
-    document.getElementById('epStatus').value = '1';
-    document.getElementById('epRemark').value = '';
-    const fill = (selected) => {
-        buildRequiredOptions(selected);
-        document.getElementById('epModal').classList.add('show');
-    };
-    if (id) {
-        const p = epList.find(x => x.id === id);
-        if (p) {
-            document.getElementById('epPath').value = p.path || '';
-            document.getElementById('epMethod').value = p.method || 'ANY';
-            document.getElementById('epDomain').value = p.domain || 'admin';
-            document.getElementById('epStatus').value = String(p.status ?? 1);
-            document.getElementById('epRemark').value = p.remark || '';
-        }
-        loadCodes().then(() => fill(p ? p.requiredAuthority : ''));
-    } else {
-        loadCodes().then(() => fill(''));
-    }
-}
-
-function closeEpModal() {
-    document.getElementById('epModal').classList.remove('show');
-    editingEpId = null;
-}
-
-async function saveEp() {
-    const requiredAuthority = document.getElementById('epRequired').value;
-    const path = document.getElementById('epPath').value.trim();
-    const method = document.getElementById('epMethod').value;
-    const domain = document.getElementById('epDomain').value;
-    const status = Number(document.getElementById('epStatus').value);
-    const remark = document.getElementById('epRemark').value.trim();
-    if (!requiredAuthority) { alert('准入要求不能为空 (权限码或粗档常量)'); return; }
-    if (!path) { alert('路径必填'); return; }
-    const body = { requiredAuthority, path, method, domain, status, remark };
-    try {
-        if (editingEpId) {
-            await App.api('/api/admin/endpoint-policies/' + editingEpId, { method: 'PUT', body });
-        } else {
-            await App.api('/api/admin/endpoint-policies', { method: 'POST', body });
-        }
-        alert(editingEpId ? '✅ 准入行已更新' : '✅ 准入行已创建');
-        closeEpModal();
-        loadEndpoints();
-    } catch (e) {
-        alert('保存失败: ' + e.message);
-    }
-}
-
-async function deleteEp(id) {
-    const p = epList.find(x => x.id === id);
-    if (!confirm(`确认删除准入行 "${p ? (p.method + ' ' + p.path) : id}" ?\n对应运行中接口的行不可删除 (请改用「停用」); 删除后该路径准入降级为认证档, 重启后扫描播种会重建 coded 行`)) return;
-    try {
-        await App.api('/api/admin/endpoint-policies/' + id, { method: 'DELETE' });
-        alert('✅ 准入行已删除');
-        loadEndpoints();
-    } catch (e) {
-        alert('删除失败: ' + e.message);
-    }
 }
 
 App.guard().then(function (me) {

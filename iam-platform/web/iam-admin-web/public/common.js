@@ -90,8 +90,8 @@ window.App = (() => {
         ['permission', '/permission.html', '权限管理'],
         ['endpointPolicy', '/endpoint_policy.html', '资源准入'],
         ['client', '/client.html', '客户端管理'],
-        ['application', '/application.html', '应用管理'],
         ['policy', '/scope.html', '授权范围'],
+        ['application', '/application.html', '应用管理'],
         ['online', '/online.html', '在线用户'],
         ['authorization', '/authorization.html', '授权管理']
     ];

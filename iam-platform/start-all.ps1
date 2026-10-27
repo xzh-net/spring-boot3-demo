@@ -11,7 +11,6 @@
 #   3 个 Java  (mvn spring-boot:run): authorization-server:9000,
 #              admin-bff:8085, portal-bff:8080
 #   2 个 Node  (node server.js):       admin-web:8001,       portal-web:8000
-#   (iam-resource-service 已归档合并入 9000, 不再启动; 见 iam-resource-service/README.md)
 #
 # 用法:  powershell -ExecutionPolicy Bypass -File .\start-all.ps1
 # 可配:  powershell ... -File .\start-all.ps1 -SkipMvnBuild   (跳过 mvn 预编译, 直接 spring-boot:run)
@@ -30,7 +29,7 @@ New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 # 服务定义
 # ---------------------------------------------------------------------
 $services = @(
-    @{ Name = 'iam-authorization-server'; Type = 'java'; Port = 9000; Dir = 'iam-authorization-server'; ReadyPath = '/actuator/health'; ReadyPort = 9000 }
+    @{ Name = 'iam-authorization-server'; Type = 'java'; Port = 9000; Dir = 'server/iam-authorization-server';ReadyPath = '/actuator/health'; ReadyPort = 9000 }
     @{ Name = 'iam-admin-bff';        Type = 'java'; Port = 8085; Dir = 'bff/iam-admin-bff';    ReadyPort = 8085 }
     @{ Name = 'iam-portal-bff';       Type = 'java'; Port = 8080; Dir = 'bff/iam-portal-bff';   ReadyPort = 8080 }
     @{ Name = 'iam-admin-web';            Type = 'node'; Port = 8001; Dir = 'web/iam-admin-web';        ReadyPort = 8001 }

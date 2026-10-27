@@ -89,7 +89,7 @@
         <div class="page-header">
             <div>
                 <h2>用户管理</h2>
-                <div class="hint">本地用户维护 · 支持分配角色、启用/禁用、重置密码，业务标签仅展示不参与准入</div>
+                <div class="hint">本地用户维护 · 支持分配角色、启用/禁用、重置密码</div>
             </div>
             <div>
                 <button class="btn btn-primary" onclick="openModal()">+ 新增用户</button>
@@ -100,7 +100,7 @@
             <table>
                 <thead>
                     <tr>
-                        <th>ID</th><th>用户名</th><th>用户编码</th><th>标签</th><th>状态</th><th>创建时间</th>
+                        <th>ID</th><th>用户名</th><th>用户编码</th><th>状态</th><th>创建时间</th>
                         <th style="width: 260px">操作</th>
                     </tr>
                 </thead>
@@ -123,13 +123,6 @@
                 <div class="form-row"><label>昵称</label><input type="text" id="nickname"></div>
                 <div class="form-row"><label>邮箱</label><input type="email" id="email"></div>
                 <div class="form-row"><label>手机号</label><input type="text" id="phone"></div>
-                <div class="form-row">
-                    <label>业务标签</label>
-                    <div style="display:flex;gap:18px;padding:8px 0;flex-wrap:wrap;">
-                        <label style="display:flex;align-items:center;gap:6px;font-size:13px;white-space:nowrap;"><input type="radio" name="userLabel" value="client" checked> 客户端</label>
-                        <label style="display:flex;align-items:center;gap:6px;font-size:13px;white-space:nowrap;"><input type="radio" name="userLabel" value="admin"> 管理端</label>
-                    </div>
-                </div>
                 <div class="form-actions">
                     <button class="btn" onclick="closeModal()">取消</button>
                     <button class="btn btn-primary" onclick="save()">保存</button>
@@ -160,11 +153,6 @@
 
 <script src="/common.js"></script>
 <script>
-function identityTag(v) {
-    if (v === 'admin') return `<span class="tag" style="background:rgba(249,115,22,0.08);color:#ea580c;">管理端</span>`;
-    return `<span class="tag gray">客户端</span>`;
-}
-
 /** 复制图标 (inline SVG, 与在线用户 Token 复制图标保持一致) */
 const COPY_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
 
@@ -203,7 +191,6 @@ async function listUsers() {
                 <span title="${u.userCode ? App.esc(u.userCode) : ''}" style="cursor:help;">${u.userCode ? App.maskUser({ username: u.userCode }) : "-"}</span>
                 ${u.userCode ? `<button class="btn-icon" data-code="${App.esc(u.userCode)}" onclick="copyCode(this)" title="复制用户编码">${COPY_ICON}<span class="copy-tooltip" data-full="${App.esc(u.userCode)}">${u.userCode.length > 40 ? u.userCode.substring(0, 20) + "..." + u.userCode.substring(u.userCode.length - 16) : App.esc(u.userCode)}</span></button>` : ''}
             </td>
-            <td>${identityTag(u.userLabel)}</td>
             <td>${enabledTag}</td>
             <td style="font-size:12px;color:#94a3b8;">${(u.createTime || "").replace("T", " ")}</td>
             <td>
@@ -227,7 +214,6 @@ function openModal() {
     document.getElementById("userCode").disabled = false;
     document.getElementById("username").disabled = false;
     document.getElementById("password").placeholder = "新增必填, 编辑可留空";
-    document.querySelector('input[name="userLabel"][value="client"]').checked = true;
     document.getElementById("modal").classList.add("show");
 }
 function closeModal() { document.getElementById("modal").classList.remove("show"); }
@@ -248,8 +234,6 @@ async function edit(id) {
     document.getElementById("nickname").value = data.nickname || "";
     document.getElementById("email").value = data.email || "";
     document.getElementById("phone").value = data.phone || "";
-    const lbl = data.userLabel === "admin" ? "admin" : "client";
-    document.querySelector('input[name="userLabel"][value="' + lbl + '"]').checked = true;
     document.getElementById("modal").classList.add("show");
 }
 
@@ -262,8 +246,7 @@ async function save() {
         password: document.getElementById("password").value,
         nickname: document.getElementById("nickname").value,
         email: document.getElementById("email").value,
-        phone: document.getElementById("phone").value,
-        userLabel: document.querySelector('input[name="userLabel"]:checked').value
+        phone: document.getElementById("phone").value
     };
     if (!username) { alert("用户名必填"); return; }
 

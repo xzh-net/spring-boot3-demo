@@ -87,7 +87,6 @@
                             <th>ID</th>
                             <th>权限码</th>
                             <th>名称</th>
-                            <th>能力域</th>
                             <th>所属授权范围</th>
                             <th>状态</th>
                             <th>备注</th>
@@ -125,14 +124,6 @@
                     <div class="form-row">
                         <label>名称</label>
                         <input id="permName" placeholder="请输入权限名称">
-                    </div>
-                    <div class="form-row">
-                        <label>能力域</label>
-                        <select id="permDomain">
-                            <option value="admin">admin (管理端)</option>
-                            <option value="portal">portal (门户)</option>
-                            <option value="third">third (三方)</option>
-                        </select>
                     </div>
                     <div class="form-row">
                         <label>状态</label>
@@ -190,7 +181,6 @@ async function loadPerms() {
             <td style="font-family:monospace;">${p.id}</td>
             <td><span class="tag blue" style="font-family:monospace;">${App.esc(p.code)}</span></td>
             <td>${App.esc(p.name || '-')}</td>
-            <td><span class="tag ${p.domain === 'admin' ? 'blue' : p.domain === 'portal' ? 'green' : 'gray'}">${App.esc(p.domain || 'admin')}</span></td>
             <td>${(scopeMap[p.id] || []).map(c => `<span class="tag amber" title="客户端授权范围">${App.esc(c)}</span>`).join('') || '<span style="color:#94a3b8;font-size:11px;" title="未被任何授权范围收编">-</span>'}</td>
             <td><span class="tag ${p.status === 0 ? 'gray' : 'green'}">${p.status === 0 ? '停用' : '启用'}</span></td>
             <td style="font-size:12px;color:#64748b;">${App.esc(p.remark || '-')}</td>
@@ -207,7 +197,6 @@ function openPermModal(id) {
     document.getElementById('permModalTitle').textContent = id ? '编辑权限码' : '新增权限码';
     document.getElementById('permCode').value = '';
     document.getElementById('permName').value = '';
-    document.getElementById('permDomain').value = 'admin';
     document.getElementById('permStatus').value = '1';
     document.getElementById('permRemark').value = '';
     if (id) {
@@ -215,7 +204,6 @@ function openPermModal(id) {
         if (p) {
             document.getElementById('permCode').value = p.code || '';
             document.getElementById('permName').value = p.name || '';
-            document.getElementById('permDomain').value = p.domain || 'admin';
             document.getElementById('permStatus').value = String(p.status ?? 1);
             document.getElementById('permRemark').value = p.remark || '';
         }
@@ -231,12 +219,11 @@ function closePermModal() {
 async function savePerm() {
     const code = document.getElementById('permCode').value.trim();
     const name = document.getElementById('permName').value.trim();
-    const domain = document.getElementById('permDomain').value;
     const status = Number(document.getElementById('permStatus').value);
     const remark = document.getElementById('permRemark').value.trim();
     if (!code) { alert('权限码不能为空'); return; }
     if (!name) { alert('权限名称不能为空'); return; }
-    const body = { code, name, domain, status, remark };
+    const body = { code, name, status, remark };
     try {
         if (editingPermId) {
             await App.api('/api/admin/permissions/' + editingPermId, { method: 'PUT', body });

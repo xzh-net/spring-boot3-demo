@@ -74,4 +74,4 @@ client_secret 不能暴露给浏览器，所以 code → token 的交换在 Node
 ## 相关文档
 
 - [统一认证管理平台设计说明书](../../docs/统一认证管理平台设计说明书.md)（V4.0 完整版，含 OIDC/PKCE SSO 设计）
-- [认证中心 README](../../iam-authorization-server/README.md)
+- [认证中心 README](../../server/iam-authorization-server/README.md)

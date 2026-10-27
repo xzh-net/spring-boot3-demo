@@ -134,5 +134,5 @@ net.xzh.portal
 
 ## 相关文档
 
-- [iam-portal-web README](../iam-portal-web/README.md)
-- [统一认证管理平台设计说明书](../docs/统一认证管理平台设计说明书.md)（V4.0 完整版，含 OIDC/PKCE SSO 设计）
+- [iam-portal-web README](../../web/iam-portal-web/README.md)
+- [统一认证管理平台设计说明书](../../docs/统一认证管理平台设计说明书.md)（V4.0 完整版，含 OIDC/PKCE SSO 设计）
