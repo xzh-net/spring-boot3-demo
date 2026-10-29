@@ -19,14 +19,14 @@ import java.time.Duration;
 /**
  * 管理 API 透传代理.
  * <p>
- * 接收管理后台页面 (iam-admin-web 8001) 转发的 /api/** 请求,
+ * 接收管理后台页面 (iam-admin-web 8001) 转发的 /admin/** 请求,
  * 附加当前登录用户 (admin-app) 的 Bearer Token 后转发到单服务合并实例 (9000);
  * resolveBase 按路径前缀分流在合并后指向同一目标 (保留分组语义, 无害冗余)。
  * 管理服务凭证 (ADMIN_SERVICE_TOKEN) 权限由对端内省校验。
  */
 @Slf4j
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/admin")
 public class ApiProxyController {
 
     private final HttpClient httpClient = HttpClient.newBuilder()
@@ -94,10 +94,10 @@ public class ApiProxyController {
      * 按路径前缀决定转发目标.
      */
     private String resolveBase(String uri) {
-        if (uri.startsWith("/api/admin/roles")
-                || uri.startsWith("/api/admin/permissions")
-                || uri.startsWith("/api/admin/user-roles")
-                || uri.startsWith("/api/admin/applications")) {
+        if (uri.startsWith("/admin/roles")
+                || uri.startsWith("/admin/permissions")
+                || uri.startsWith("/admin/user-roles")
+                || uri.startsWith("/admin/applications")) {
             return resourceServiceBaseUrl;
         }
         return authCenterBaseUrl;

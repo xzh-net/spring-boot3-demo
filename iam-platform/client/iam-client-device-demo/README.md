@@ -50,7 +50,7 @@ node server.js
 | `GET /` | 首页，已授权则展示功能入口，未授权跳转 /start |
 | `GET /start` | 发起设备码请求，跳转到等待授权页 |
 | `GET /device` | 展示用户码 + 轮询状态 |
-| `GET /api-demo` | 用 access_token 调用 /api/contacts (合并单服务 :9000) |
+| `GET /api-demo` | 用 access_token 调用 /biz/clients/mine (三方客户端预期被拒 403, 合并单服务 :9000) |
 | `GET /userinfo-demo` | 用 access_token 调用 /userinfo |
 | `GET /refresh-demo` | 用 refresh_token 换新 token |
 | `GET /introspect-demo` | 调用 /oauth2/introspect 验证 token |

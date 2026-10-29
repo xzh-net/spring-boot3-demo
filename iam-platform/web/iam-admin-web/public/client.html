@@ -283,10 +283,10 @@ function getChecked(list, prefix) {
     return list.filter(x => document.getElementById(prefix + x.v).checked).map(x => x.v);
 }
 
-/** 授权范围字典 (只读, /api/admin/scopes): 勾选式编辑 → 写入 registered_client.scopes */
+/** 授权范围字典 (只读, /admin/scopes): 勾选式编辑 → 写入 registered_client.scopes */
 let SCOPE_GROUPS = [];
 async function loadScopeGroups() {
-    try { SCOPE_GROUPS = (await App.api("/api/admin/scopes")) || []; }
+    try { SCOPE_GROUPS = (await App.api("/admin/scopes")) || []; }
     catch (e) {
         SCOPE_GROUPS = [];
         const hint = document.getElementById("scopeGroupsHint");
@@ -313,7 +313,7 @@ function getCheckedScopes() {
 
 async function list() {
     let data;
-    try { data = await App.api("/api/admin/clients"); }
+    try { data = await App.api("/admin/clients"); }
     catch (e) { alert("加载客户端失败: " + e.message); return; }
     const tbody = document.getElementById("clientTable");
     const empty = document.getElementById("emptyTip");
@@ -383,7 +383,7 @@ function closeModal() { document.getElementById("modal").classList.remove("show"
 
 async function edit(id) {
     let data;
-    try { data = await App.api("/api/admin/clients/" + id); }
+    try { data = await App.api("/admin/clients/" + id); }
     catch (e) { alert("加载失败: " + e.message); return; }
     document.getElementById("modalTitle").textContent = "编辑客户端";
     document.getElementById("editId").value = id;
@@ -446,7 +446,7 @@ async function save() {
         alert("Public 客户端 (认证方式=none) 不能设置 client_secret"); return;
     }
 
-    const url = id ? "/api/admin/clients/" + id : "/api/admin/clients";
+    const url = id ? "/admin/clients/" + id : "/admin/clients";
     const method = id ? "PUT" : "POST";
     try {
         await App.api(url, { method, body });
@@ -460,7 +460,7 @@ async function save() {
 async function del(id, clientId) {
     if (!confirm(`确认删除客户端 "${clientId}" ?`)) return;
     try {
-        await App.api("/api/admin/clients/" + id, { method: "DELETE" });
+        await App.api("/admin/clients/" + id, { method: "DELETE" });
         alert('✅ 客户端已删除');
         list();
     } catch (e) { alert("删除失败: " + e.message); }
@@ -469,7 +469,7 @@ async function del(id, clientId) {
 async function resetSecret(id, clientId) {
     if (!confirm(`确认重置客户端 "${clientId}" 的密钥 ?`)) return;
     try {
-        const data = await App.api("/api/admin/clients/" + id + "/reset-secret", { method: "POST" });
+        const data = await App.api("/admin/clients/" + id + "/reset-secret", { method: "POST" });
         prompt("新密钥 (请妥善保管):", data);
     } catch (e) { alert("重置失败: " + e.message); }
 }

@@ -30,7 +30,7 @@ import net.xzh.iam.resource.service.RbacService;
  */
 @Slf4j
 @RestController
-@RequestMapping("/api/admin")
+@RequestMapping("/admin")
 @RequiredArgsConstructor
 public class AdminUserDataController {
 

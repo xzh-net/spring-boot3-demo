@@ -153,7 +153,7 @@ let scopeMap = {}; // permission_id → [scope 码] (所属授权范围, 只读�
 
 async function loadScopeMap() {
     try {
-        const scopes = (await App.api('/api/admin/scopes')) || [];
+        const scopes = (await App.api('/admin/scopes')) || [];
         scopeMap = {};
         scopes.forEach(s => (s.permissions || []).forEach(p => {
             (scopeMap[p.id] = scopeMap[p.id] || []).push(s.code);
@@ -163,7 +163,7 @@ async function loadScopeMap() {
 
 async function loadPerms() {
     try {
-        permList = await App.api('/api/admin/permissions') || [];
+        permList = await App.api('/admin/permissions') || [];
     } catch (e) {
         alert('加载权限码失败: ' + e.message);
         return;
@@ -226,9 +226,9 @@ async function savePerm() {
     const body = { code, name, status, remark };
     try {
         if (editingPermId) {
-            await App.api('/api/admin/permissions/' + editingPermId, { method: 'PUT', body });
+            await App.api('/admin/permissions/' + editingPermId, { method: 'PUT', body });
         } else {
-            await App.api('/api/admin/permissions', { method: 'POST', body });
+            await App.api('/admin/permissions', { method: 'POST', body });
         }
         alert(editingPermId ? '✅ 权限码已更新' : '✅ 权限码已创建');
         closePermModal();
@@ -242,7 +242,7 @@ async function deletePerm(id) {
     const p = permList.find(x => x.id === id);
     if (!confirm(`确认删除权限码 "${p ? p.code : id}" ?\n被端点准入引用中的码不可删除; 删除将同时解除角色绑定`)) return;
     try {
-        await App.api('/api/admin/permissions/' + id, { method: 'DELETE' });
+        await App.api('/admin/permissions/' + id, { method: 'DELETE' });
         alert('✅ 权限码已删除');
         loadPerms();
     } catch (e) {

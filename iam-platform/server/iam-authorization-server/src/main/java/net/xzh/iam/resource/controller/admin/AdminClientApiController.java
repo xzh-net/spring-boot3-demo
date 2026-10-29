@@ -25,7 +25,7 @@ import net.xzh.iam.auth.vo.ClientVO;
  * </p>
  */
 @RestController
-@RequestMapping("/api/admin/clients")
+@RequestMapping("/admin/clients")
 @RequiredArgsConstructor
 public class AdminClientApiController {
 

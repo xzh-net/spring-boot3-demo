@@ -62,7 +62,7 @@ auth-server:
 # 资源域地址 (单服务合并: 与认证中心同在 9000, 阶段 4 双 base 收口)
 resource-server:
   base-url: http://localhost:9000
-  mine-clients-api: /api/public/clients/mine
+  mine-clients-api: /biz/clients/mine
 
 # iam-portal-web 前端地址 (用于 CORS)
 portal:

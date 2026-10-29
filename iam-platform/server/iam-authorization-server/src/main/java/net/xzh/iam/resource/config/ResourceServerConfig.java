@@ -14,14 +14,16 @@ import jakarta.servlet.http.HttpServletResponse;
 /**
  * 统一 API 资源服务器安全链 (阶段 3 三链合一: Order(3)).
  * <p>
- * 只接管 {@code /api/**}, 其余路径由协议链 (Order(1)) 与设备验证链 (Order(2)) 处理,
- * 不再有兜底 catch-all 链。准入分三档:
+ * 只接管业务端点三前缀 {@code /admin/** | /biz/** | /permitall/**}
+ * (按 controller 分包命名: admin=管理端 / portal=业务(门户+三方) / permitall=免权限),
+ * 其余路径由协议链 (Order(1)) 与设备验证链 (Order(2)) 处理,
+ * 不再有兜底 catch-all 链 (旧 /api/** 前缀已退役, 不入链未认证即 404)。准入分三档:
  * <ul>
- *   <li>{@code /api/permitall/**} — 链层 permitAll, 免令牌不经裁决;</li>
- *   <li>表内三域 {@code controller/admin | portal | third} — 启动扫描播种, 由
+ *   <li>{@code /permitall/**} — 链层 permitAll, 免令牌不经裁决;</li>
+ *   <li>表内端点 (启动扫描播种) — 由
  *       {@link EndpointAdmissionManager} 按 {@code required_authority} 裁决
  *       (全部为权限码, 粗档常量与客户端白名单闸均已退役, 客户端维度隔离由令牌双维交集承担);</li>
- *   <li>表外其余 {@code /api/**} — 走认证档, 持有效 Bearer Token 即放行。</li>
+ *   <li>表外其余三前缀端点 — 走认证档, 持有效 Bearer Token 即放行。</li>
  * </ul>
  * Bearer Token 由 {@link RbacAuthoritiesOpaqueTokenIntrospector} 同进程本地内省
  * (Redis 查授权记录, 无 HTTP 自回环), 并按业务 RBAC ∩ 客户端 scope 双维交集注入 authorities。
@@ -44,11 +46,11 @@ public class ResourceServerConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                .securityMatcher("/api/**")
+                .securityMatcher("/admin/**", "/biz/**", "/permitall/**")
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/permitall/**").permitAll()
+                        .requestMatchers("/permitall/**").permitAll()
                         .anyRequest().access(endpointAdmissionManager))
                 .oauth2ResourceServer(oauth2 -> oauth2.opaqueToken(
                         token -> token.introspector(rbacAuthoritiesOpaqueTokenIntrospector)))

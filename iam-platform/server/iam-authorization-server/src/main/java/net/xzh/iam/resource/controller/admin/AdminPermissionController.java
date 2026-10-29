@@ -23,7 +23,7 @@ import net.xzh.iam.resource.service.RbacService;
  */
 @Slf4j
 @RestController
-@RequestMapping("/api/admin/permissions")
+@RequestMapping("/admin/permissions")
 @RequiredArgsConstructor
 public class AdminPermissionController {
 

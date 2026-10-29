@@ -201,7 +201,7 @@ function copyToken(btn) {
 /** 加载统一在线用户列表 */
 async function loadOnlineUsers() {
     let data;
-    try { data = await App.api("/api/admin/sessions/online"); }
+    try { data = await App.api("/admin/sessions/online"); }
     catch (e) { alert("加载在线用户失败: " + e.message); return; }
     const tbody = document.getElementById("onlineTableBody");
     const empty = document.getElementById("onlineEmpty");
@@ -240,7 +240,7 @@ function closeSessionModal() { document.getElementById("sessionModal").classList
 /** 显示用户会话层级视图 (SSO 会话 → 客户端会话) */
 async function showUserSessions(userId, username) {
     let data;
-    try { data = await App.api(`/api/admin/sessions/users/${userId}`); }
+    try { data = await App.api(`/admin/sessions/users/${userId}`); }
     catch (e) { alert("加载会话失败: " + e.message); return; }
     document.getElementById("sessionModalTitle").textContent = `会话详情 - ${username}`;
     const body = document.getElementById("sessionModalBody");
@@ -326,7 +326,7 @@ async function showUserSessions(userId, username) {
 async function kickUser(userId, username) {
     if (!confirm(`确认将用户 "${username}" 全部踢下线 ?\n(所有设备的 SSO 会话和客户端会话将被撤销)`)) return;
     try {
-        const count = await App.api(`/api/admin/sessions/users/${userId}/logout`, { method: "POST" });
+        const count = await App.api(`/admin/sessions/users/${userId}/logout`, { method: "POST" });
         alert(`✅ 已将 ${username} 全部踢下线\n撤销会话数: ${count}`);
         loadOnlineUsers();
         closeSessionModal();
@@ -339,7 +339,7 @@ async function kickUser(userId, username) {
 async function kickSsoSession(ssoSessionId, userId, username) {
     if (!confirm(`确认踢下线此 SSO 会话 ?\n(仅此设备退出, 其他设备不受影响)\nSessionID: ${ssoSessionId.substring(0, 32)}...`)) return;
     try {
-        const ok = await App.api(`/api/admin/sessions/${encodeURIComponent(ssoSessionId)}/logout`, { method: "POST" });
+        const ok = await App.api(`/admin/sessions/${encodeURIComponent(ssoSessionId)}/logout`, { method: "POST" });
         if (ok) {
             alert("✅ 已踢下线此 SSO 会话");
             showUserSessions(userId, username); // 刷新弹窗内的会话列表
@@ -354,7 +354,7 @@ async function kickSsoSession(ssoSessionId, userId, username) {
 async function kickClientSession(username) {
     if (!confirm(`确认撤销用户 "${username}" 的所有客户端令牌 ?`)) return;
     try {
-        await App.api(`/api/admin/sessions/online/${encodeURIComponent(username)}`, { method: "DELETE" });
+        await App.api(`/admin/sessions/online/${encodeURIComponent(username)}`, { method: "DELETE" });
         alert("✅ 已撤销该用户的所有客户端令牌");
         loadOnlineUsers();
     } catch (e) {

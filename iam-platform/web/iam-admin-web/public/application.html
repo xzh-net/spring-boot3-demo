@@ -424,7 +424,7 @@ function showAuthz(appId) {
 // ------------------------------------------------------------------
 
 async function loadApps() {
-    try { appList = await App.api('/api/admin/applications') || []; }
+    try { appList = await App.api('/admin/applications') || []; }
     catch (e) { alert('加载应用失败: ' + e.message); return; }
     const tbody = document.getElementById('appTable');
     const empty = document.getElementById('emptyTip');
@@ -495,9 +495,9 @@ async function saveApp() {
     };
     try {
         if (id) {
-            await App.api('/api/admin/applications/' + id, { method: 'PUT', body });
+            await App.api('/admin/applications/' + id, { method: 'PUT', body });
         } else {
-            await App.api('/api/admin/applications', { method: 'POST', body });
+            await App.api('/admin/applications', { method: 'POST', body });
         }
         alert(id ? '✅ 应用已更新' : '✅ 应用已创建');
         closeModal('appModal'); loadApps();
@@ -508,7 +508,7 @@ async function delApp(id) {
     const a = appList.find(x => x.id === id);
     if (!confirm(`确认删除应用 "${a ? a.appName : id}" ?\n将同时删除其全部渠道与授权`)) return;
     try {
-        await App.api('/api/admin/applications/' + id, { method: 'DELETE' });
+        await App.api('/admin/applications/' + id, { method: 'DELETE' });
         alert('✅ 应用已删除'); loadApps();
     } catch (e) { alert('删除失败: ' + e.message); }
 }
@@ -520,7 +520,7 @@ async function delApp(id) {
 async function loadChannels() {
     if (currentAppId === null) return;
     let data;
-    try { data = await App.api('/api/admin/applications/' + currentAppId + '/channels'); }
+    try { data = await App.api('/admin/applications/' + currentAppId + '/channels'); }
     catch (e) { alert('加载渠道失败: ' + e.message); return; }
     currentChannels = data || [];
     const tbody = document.getElementById('channelTable');
@@ -587,7 +587,7 @@ async function saveChannel() {
         isDefault: Number(document.getElementById('fIsDefault').value),
         status: Number(document.getElementById('fChannelStatus').value)
     };
-    const base = '/api/admin/applications/' + currentAppId + '/channels';
+    const base = '/admin/applications/' + currentAppId + '/channels';
     try {
         if (id) {
             await App.api(base + '/' + id, { method: 'PUT', body });
@@ -602,7 +602,7 @@ async function saveChannel() {
 async function delChannel(id) {
     if (!confirm('确认删除该渠道 ?\n将同时解除该渠道的授权')) return;
     try {
-        await App.api('/api/admin/applications/' + currentAppId + '/channels/' + id, { method: 'DELETE' });
+        await App.api('/admin/applications/' + currentAppId + '/channels/' + id, { method: 'DELETE' });
         alert('✅ 渠道已删除'); loadChannels();
     } catch (e) { alert('删除失败: ' + e.message); }
 }
@@ -614,7 +614,7 @@ async function delChannel(id) {
 async function loadAuthz() {
     if (currentAppId === null) return;
     let data;
-    try { data = await App.api('/api/admin/applications/' + currentAppId + '/authorizations'); }
+    try { data = await App.api('/admin/applications/' + currentAppId + '/authorizations'); }
     catch (e) { alert('加载授权失败: ' + e.message); return; }
     const authz = data || [];
     const tbody = document.getElementById('authzTable');
@@ -650,9 +650,9 @@ function onSubjectTypeChange() {
 
 async function openAuthzModal() {
     // 刷新渠道与角色
-    try { currentChannels = await App.api('/api/admin/applications/' + currentAppId + '/channels') || []; }
+    try { currentChannels = await App.api('/admin/applications/' + currentAppId + '/channels') || []; }
     catch (e) { currentChannels = []; }
-    try { currentRoles = await App.api('/api/admin/roles') || []; }
+    try { currentRoles = await App.api('/admin/roles') || []; }
     catch (e) { currentRoles = []; }
     const sel = document.getElementById('fAuthzChannel');
     sel.innerHTML = '<option value="0">全渠道 (整个应用)</option>' +
@@ -680,7 +680,7 @@ async function saveAuthz() {
         channelId: Number(document.getElementById('fAuthzChannel').value) || 0
     };
     try {
-        await App.api('/api/admin/applications/authorizations', { method: 'POST', body });
+        await App.api('/admin/applications/authorizations', { method: 'POST', body });
         alert('✅ 授权已创建');
         closeModal('authzModal'); loadAuthz();
     } catch (e) { alert('保存失败: ' + e.message); }
@@ -689,7 +689,7 @@ async function saveAuthz() {
 async function delAuthz(id) {
     if (!confirm('确认删除该授权 ?')) return;
     try {
-        await App.api('/api/admin/applications/authorizations/' + id, { method: 'DELETE' });
+        await App.api('/admin/applications/authorizations/' + id, { method: 'DELETE' });
         alert('✅ 授权已删除'); loadAuthz();
     } catch (e) { alert('删除失败: ' + e.message); }
 }

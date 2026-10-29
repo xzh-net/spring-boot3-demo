@@ -177,7 +177,7 @@ function copyCode(btn) {
 
 async function listUsers() {
     let data;
-    try { data = await App.api("/api/admin/users"); }
+    try { data = await App.api("/admin/users"); }
     catch (e) { alert("加载用户失败: " + e.message); return; }
     const tbody = document.getElementById("userTable");
     tbody.innerHTML = (data || []).map(u => {
@@ -220,7 +220,7 @@ function closeModal() { document.getElementById("modal").classList.remove("show"
 
 async function edit(id) {
     let data;
-    try { data = await App.api("/api/admin/users/" + id); }
+    try { data = await App.api("/admin/users/" + id); }
     catch (e) { alert("加载失败: " + e.message); return; }
     document.getElementById("modalTitle").textContent = "编辑用户";
     document.getElementById("editId").value = id;
@@ -252,10 +252,10 @@ async function save() {
 
     let url, method;
     if (id) {
-        url = "/api/admin/users/" + id; method = "PUT";
+        url = "/admin/users/" + id; method = "PUT";
         if (!body.password) delete body.password;
     } else {
-        url = "/api/admin/users"; method = "POST";
+        url = "/admin/users"; method = "POST";
         if (!body.password) { alert("密码必填"); return; }
     }
     try {
@@ -270,7 +270,7 @@ async function save() {
 async function del(id, username) {
     if (!confirm(`确认删除用户 "${username}" ?\n(将自动强制下线所有会话)`)) return;
     try {
-        await App.api("/api/admin/users/" + id, { method: "DELETE" });
+        await App.api("/admin/users/" + id, { method: "DELETE" });
         alert('✅ 用户已删除');
         listUsers();
     } catch (e) { alert("删除失败: " + e.message); }
@@ -280,7 +280,7 @@ async function enable(id, enabled, username) {
     const action = enabled ? "启用" : "禁用";
     if (!confirm(`确认${action}用户 "${username}" ?`)) return;
     try {
-        await App.api("/api/admin/users/" + id + "/enable?enabled=" + enabled, { method: "PUT" });
+        await App.api("/admin/users/" + id + "/enable?enabled=" + enabled, { method: "PUT" });
         alert('✅ 用户已' + action);
         listUsers();
     } catch (e) { alert("操作失败: " + e.message); }
@@ -289,7 +289,7 @@ async function enable(id, enabled, username) {
 async function resetPassword(id, username) {
     if (!confirm(`确认重置用户 "${username}" 的密码 ?\n(系统将生成随机密码, 该用户所有会话将强制下线)`)) return;
     try {
-        await App.api("/api/admin/users/" + id + "/reset-password", { method: "POST" });
+        await App.api("/admin/users/" + id + "/reset-password", { method: "POST" });
         alert("密码已重置, 新密码将通过短信发送给用户");
     } catch (e) {
         alert("重置失败: " + (e.message || ""));
@@ -306,7 +306,7 @@ let currentUser = null;
 async function loadRoles() {
     roleMap = {};
     try {
-        const roles = await App.api('/api/admin/roles') || [];
+        const roles = await App.api('/admin/roles') || [];
         roles.forEach(r => roleMap[r.id] = r);
     } catch (e) {
         alert('加载角色失败: ' + e.message);
@@ -321,7 +321,7 @@ async function openAssign(userCode) {
 
     let cur = [];
     try {
-        const data = await App.api('/api/admin/user-roles/' + encodeURIComponent(userCode));
+        const data = await App.api('/admin/user-roles/' + encodeURIComponent(userCode));
         cur = data.roleIds || [];
     } catch (e) { cur = []; }
 
@@ -355,7 +355,7 @@ async function saveAssign() {
     const selected = Array.from(document.querySelectorAll('#roleGrid input:checked'))
         .map(input => Number(input.getAttribute('data-id')));
     try {
-        await App.api('/api/admin/user-roles/' + encodeURIComponent(currentUser), {
+        await App.api('/admin/user-roles/' + encodeURIComponent(currentUser), {
             method: 'PUT',
             body: selected
         });

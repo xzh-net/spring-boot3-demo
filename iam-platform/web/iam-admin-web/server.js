@@ -122,8 +122,8 @@ const server = http.createServer((req, res) => {
     const pathname = parsed.pathname || '/';
     const withQuery = parsed.path || '/';
 
-    // 管理 API → iam-admin-bff
-    if (pathname.startsWith('/api/')) {
+    // 管理 API (/admin/** 服务端代理 + /api/current-user 原生) → iam-admin-bff
+    if (pathname.startsWith('/api/') || pathname.startsWith('/admin/')) {
         return respondProxy(res, ADMIN_SERVICE + withQuery, req);
     }
 

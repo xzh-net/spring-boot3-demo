@@ -20,7 +20,7 @@ import net.xzh.iam.resource.vo.ScopeVO;
  * </p>
  */
 @RestController
-@RequestMapping("/api/admin/scopes")
+@RequestMapping("/admin/scopes")
 @RequiredArgsConstructor
 public class AdminScopeController {
 

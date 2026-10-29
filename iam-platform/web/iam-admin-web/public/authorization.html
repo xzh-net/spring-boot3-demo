@@ -151,7 +151,7 @@ function fmtTime(t) {
 
 async function loadConsentList() {
     let data;
-    try { data = await App.api("/api/admin/records/consents"); }
+    try { data = await App.api("/admin/records/consents"); }
     catch (e) { alert("加载授权列表失败: " + e.message); return; }
     const tbody = document.getElementById("consentTable");
     const empty = document.getElementById("emptyTip");
@@ -186,7 +186,7 @@ async function showDetail(clientId, principalName, clientName) {
     document.getElementById("detailModal").classList.add("show");
 
     let data;
-    try { data = await App.api(`/api/admin/records?clientId=${encodeURIComponent(clientId)}&principalName=${encodeURIComponent(principalName)}`); }
+    try { data = await App.api(`/admin/records?clientId=${encodeURIComponent(clientId)}&principalName=${encodeURIComponent(principalName)}`); }
     catch (e) { alert("加载授权明细失败: " + e.message); return; }
     const tbody = document.getElementById("detailTable");
     const empty = document.getElementById("detailEmpty");
@@ -218,7 +218,7 @@ function closeDetail() {
 async function revokeAuth(clientId, principalName, clientName) {
     if (!confirm(`确认取消用户 "${principalName}" 对客户端 "${clientName}" 的授权 ?\n(将同时强制下线该用户在该客户端上的所有会话)`)) return;
     try {
-        await App.api(`/api/admin/records?clientId=${encodeURIComponent(clientId)}&principalName=${encodeURIComponent(principalName)}`, { method: "DELETE" });
+        await App.api(`/admin/records?clientId=${encodeURIComponent(clientId)}&principalName=${encodeURIComponent(principalName)}`, { method: "DELETE" });
         alert("✅ 已取消该用户对客户端的授权");
         loadConsentList();
     } catch (e) {

@@ -27,7 +27,7 @@ import net.xzh.iam.resource.service.ApplicationService;
  */
 @Slf4j
 @RestController
-@RequestMapping("/api/admin/applications")
+@RequestMapping("/admin/applications")
 @RequiredArgsConstructor
 public class AdminApplicationController {
 

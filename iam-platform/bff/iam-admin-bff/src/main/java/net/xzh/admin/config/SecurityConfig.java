@@ -29,7 +29,7 @@ import org.springframework.util.MultiValueMap;
  * 管理后台服务安全配置.
  * <p>
  * 采用 OAuth2 Client (授权码模式) 登录认证中心。本服务不持有业务库,
- * 只作为 BFF 透传 /api/** 请求, 权限校验由认证中心在令牌自省时完成 (双维交集), 因此本服务只要求已登录。
+ * 只作为 BFF 透传 /admin/** 请求, 权限校验由认证中心在令牌自省时完成 (双维交集), 因此本服务只要求已登录。
  * <p>
  * <b>PKCE (RFC 7636)</b>：`admin-app` 已设 {@code requireProofKey=true}，本服务必须在授权请求中携带
  * {@code code_challenge=S256(sha256(code_verifier))}，并在换令牌时回传 {@code code_verifier}，
@@ -132,7 +132,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // OAuth2 回调端点放行
                         .requestMatchers("/error", "/login", "/login/**", "/logout", "/oauth2/**").permitAll()
-                        // 其余 (含 /api/**) 均需登录
+                        // 其余 (含 /admin/** 代理与 /api/current-user 原生) 均需登录
                         .anyRequest().authenticated())
                 .oauth2Login(login -> login
                         // PKCE: 授权请求带 code_challenge

@@ -399,7 +399,7 @@ async function renderIntrospectDemo(req, res) {
             ` : `<pre>${esc(bodyDisplay)}</pre>`}
             <div class="actions">
                 <a href="/userinfo-demo" class="btn btn-outline">👤 查询用户信息</a>
-                <a href="/api-demo" class="btn btn-outline">📋 调用通讯录 API</a>
+                <a href="/api-demo" class="btn btn-outline">📋 调用应用列表(三方受限)</a>
                 <a href="/refresh-demo" class="btn btn-outline">🔄 刷新 Token</a>
             </div>
         </div>
@@ -508,7 +508,7 @@ async function renderCallback(query, res) {
 
             <div class="actions">
                 <a href="/userinfo-demo" class="btn btn-outline">👤 查询用户信息</a>
-                <a href="/api-demo" class="btn btn-outline">📋 调用通讯录 API</a>
+                <a href="/api-demo" class="btn btn-outline">📋 调用应用列表(三方受限)</a>
                 <a href="/refresh-demo" class="btn btn-outline">🔄 刷新 Token</a>
                 <a href="/introspect-demo" class="btn btn-outline">🔍 验证 Token</a>
             </div>
@@ -532,7 +532,7 @@ async function renderApiDemo(req, res) {
 
     let result;
     try {
-        result = await callResourceServer('/api/contacts', session.tokens.access_token);
+        result = await callResourceServer('/biz/clients/mine', session.tokens.access_token);
     } catch (e) {
         return layout('API 调用失败', `<div class="card"><h1>⚠️ 请求失败</h1><pre>${esc(e.message)}</pre></div>`, true, portalAuthUrl);
     }
@@ -553,13 +553,13 @@ async function renderApiDemo(req, res) {
     let bodyDisplay = result.body;
     try { bodyDisplay = JSON.stringify(JSON.parse(result.body), null, 2); } catch {}
 
-    return layout('通讯录 API', `
+    return layout('应用列表 API (三方受限演示)', `
         <div class="card">
-            <h1>${ok ? '✅' : '❌'} /api/contacts — HTTP ${result.status}</h1>
+            <h1>${ok ? '✅' : '❌'} /biz/clients/mine — HTTP ${result.status}</h1>
             <div class="sub">资源端验证 access_token (Opaque introspect) — 单服务 :9000</div>
 
             <h2>请求</h2>
-            <pre>GET /api/contacts
+            <pre>GET /biz/clients/mine
 Authorization: Bearer ${esc(session.tokens.access_token.substring(0, 40))}...</pre>
 
             <h2 style="margin-top:16px;">响应</h2>
@@ -617,7 +617,7 @@ async function renderUserinfoDemo(req, res) {
             <div class="sub">OIDC UserInfo 端点, 返回用户基本信息</div>
             <pre>${esc(bodyDisplay)}</pre>
             <div class="actions">
-                <a href="/api-demo" class="btn btn-outline">📋 调用通讯录 API</a>
+                <a href="/api-demo" class="btn btn-outline">📋 调用应用列表(三方受限)</a>
                 <a href="/refresh-demo" class="btn btn-outline">🔄 刷新 Token</a>
                 <a href="/introspect-demo" class="btn btn-outline">🔍 验证 Token</a>
             </div>
@@ -679,7 +679,7 @@ async function renderRefreshDemo(req, res) {
             <pre>${esc(bodyDisplay)}</pre>
             <div class="actions">
                 <a href="/userinfo-demo" class="btn btn-outline">👤 查询用户信息</a>
-                <a href="/api-demo" class="btn btn-outline">📋 调用通讯录 API</a>
+                <a href="/api-demo" class="btn btn-outline">📋 调用应用列表(三方受限)</a>
                 <a href="/introspect-demo" class="btn btn-outline">🔍 验证 Token</a>
             </div>
         </div>

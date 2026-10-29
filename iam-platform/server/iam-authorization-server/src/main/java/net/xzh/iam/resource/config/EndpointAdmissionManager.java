@@ -18,13 +18,13 @@ import java.util.List;
 /**
  * 表驱动接口准入路由器 (AuthorizationManager).
  * <p>
- * 三档模型 (资源链仅接管 /api/**):
+ * 三档模型 (资源链仅接管三前缀):
  * <ul>
  *   <li><b>表内</b> (admin/portal/third 三域, 启动扫描播种): 按 required_authority 裁决
  *       (全部为权限码, 粗档常量已退役)。客户端维度隔离由令牌双维交集承担, 无独立白名单闸;</li>
- *   <li><b>表外</b> (其余 /api/**): 走认证档 — 持有效内省令牌 (OAuth2AuthenticatedPrincipal)
+ *   <li><b>表外</b> (三前缀其余端点): 走认证档 — 持有效内省令牌 (OAuth2AuthenticatedPrincipal)
  *       即放行, 匿名主体不算;</li>
- *   <li><b>/api/permitall/**}: 链层 permitAll, 不经本路由器。</li>
+ *   <li><b>/permitall/**}: 链层 permitAll, 不经本路由器。</li>
  * </ul>
  * </p>
  */

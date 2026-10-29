@@ -22,7 +22,7 @@ import net.xzh.iam.resource.service.RbacService;
  */
 @Slf4j
 @RestController
-@RequestMapping("/api/admin/user-roles")
+@RequestMapping("/admin/user-roles")
 @RequiredArgsConstructor
 public class AdminUserRoleController {
 

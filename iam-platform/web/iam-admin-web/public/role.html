@@ -177,7 +177,7 @@ function isBuiltinRole(code) {
 
 async function loadRoles() {
     try {
-        roleList = await App.api('/api/admin/roles') || [];
+        roleList = await App.api('/admin/roles') || [];
     } catch (e) {
         alert('加载角色失败: ' + e.message);
         return;
@@ -210,7 +210,7 @@ async function loadRoles() {
 
 async function loadPerms() {
     try {
-        permList = await App.api('/api/admin/permissions') || [];
+        permList = await App.api('/admin/permissions') || [];
     } catch (e) {
         alert('加载权限失败: ' + e.message);
     }
@@ -258,9 +258,9 @@ async function saveRole() {
     try {
         if (editingRoleId) {
             body.permissionIds = (roleList.find(r => r.id === editingRoleId) || {}).permissionIds || [];
-            await App.api('/api/admin/roles/' + editingRoleId, { method: 'PUT', body });
+            await App.api('/admin/roles/' + editingRoleId, { method: 'PUT', body });
         } else {
-            await App.api('/api/admin/roles', { method: 'POST', body });
+            await App.api('/admin/roles', { method: 'POST', body });
         }
         alert(editingRoleId ? '✅ 角色已更新' : '✅ 角色已创建');
         closeRoleModal();
@@ -278,7 +278,7 @@ async function deleteRole(id) {
     }
     if (!confirm(`确认删除角色 "${r ? r.name : id}" ?\n将同时解除该角色与所有用户、权限的绑定关系`)) return;
     try {
-        await App.api('/api/admin/roles/' + id, { method: 'DELETE' });
+        await App.api('/admin/roles/' + id, { method: 'DELETE' });
         alert('✅ 角色已删除');
         loadRoles();
     } catch (e) {
@@ -330,7 +330,7 @@ async function savePermBinding() {
         .map(input => Number(input.value));
     try {
         const r = roleList.find(x => x.id === bindingRoleId);
-        await App.api('/api/admin/roles/' + bindingRoleId, {
+        await App.api('/admin/roles/' + bindingRoleId, {
             method: 'PUT',
             body: { name: r.name, remark: r.remark || '', permissionIds: selected }
         });

@@ -35,7 +35,7 @@ import net.xzh.iam.auth.service.AuthSessionService;
  */
 @Slf4j
 @RestController
-@RequestMapping("/api/admin/records")
+@RequestMapping("/admin/records")
 @RequiredArgsConstructor
 public class AdminRecordApiController {
 

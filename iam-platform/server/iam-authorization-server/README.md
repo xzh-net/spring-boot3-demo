@@ -17,7 +17,7 @@
 | `iam-admin-web` | 8001 | 纯 HTML 管理台（用户/客户端/授权/在线/监控），由 admin-bff 代理后端 |
 
 访问 `http://localhost:8001` → 任一管理页触发登录 → 跳转认证中心登录页（`admin / 123456`）→ 回跳管理台。
-页面调用的 `GET /api/admin/**` 等管理 API 由认证中心 Order(2) 安全链保护（Bearer 令牌 + `iam_endpoint_policy` 按权限码裁决，业务码 = 用户 RBAC ∩ 客户端 scope）。
+页面调用的 `GET /admin/**` 等管理 API 由认证中心 Order(3) 安全链保护（Bearer 令牌 + `iam_endpoint_policy` 按权限码裁决，业务码 = 用户 RBAC ∩ 客户端 scope）。
 
 > 认证中心的 `/admin/**` 页面、`AdminUserDetailsService`、`templates/admin/*` 已随迁移删除。
 
@@ -36,19 +36,19 @@ User (用户)
 
 ### 管理 API
 
-三域管理 REST API 经 `/api/admin/**` 暴露（Order(2) 安全链：Bearer 令牌 + `iam_endpoint_policy` 按权限码裁决），由管理后台 / 运维脚本调用：
+三域管理 REST API 经 `/admin/**` 暴露（Order(2) 安全链：Bearer 令牌 + `iam_endpoint_policy` 按权限码裁决），由管理后台 / 运维脚本调用：
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET/POST/PUT/DELETE | `/api/admin/users` ... | 用户域 CRUD、启用/禁用、重置密码、踢会话 |
-| GET/POST/PUT/DELETE | `/api/admin/clients` ... | 客户端域 CRUD、重置密钥 |
-| GET | `/api/admin/sessions/online` | 统一在线用户列表（合并 SSO + 客户端会话） |
-| GET | `/api/admin/sessions/users/{id}` | 用户会话层级视图 |
-| POST | `/api/admin/sessions/users/{id}/logout` | 按用户踢下线（所有设备退出） |
-| POST | `/api/admin/sessions/{ssoSessionId}/logout` | 按 SSO 会话踢下线（仅指定设备退出） |
-| DELETE | `/api/admin/sessions/online/{username}` | 按用户撤销客户端令牌 |
-| GET | `/api/admin/records/consents` | 授权同意主表 |
-| GET/DELETE | `/api/admin/records` | 授权历史 / 取消授权 |
+| GET/POST/PUT/DELETE | `/admin/users` ... | 用户域 CRUD、启用/禁用、重置密码、踢会话 |
+| GET/POST/PUT/DELETE | `/admin/clients` ... | 客户端域 CRUD、重置密钥 |
+| GET | `/admin/sessions/online` | 统一在线用户列表（合并 SSO + 客户端会话） |
+| GET | `/admin/sessions/users/{id}` | 用户会话层级视图 |
+| POST | `/admin/sessions/users/{id}/logout` | 按用户踢下线（所有设备退出） |
+| POST | `/admin/sessions/{ssoSessionId}/logout` | 按 SSO 会话踢下线（仅指定设备退出） |
+| DELETE | `/admin/sessions/online/{username}` | 按用户撤销客户端令牌 |
+| GET | `/admin/records/consents` | 授权同意主表 |
+| GET/DELETE | `/admin/records` | 授权历史 / 取消授权 |
 
 ### UI 设计要点
 
@@ -73,10 +73,10 @@ net.xzh.iam                              # 合并单服务根包 (common / auth 
 │   └── RedisConfig.java                     #   Redis
 ├── controller/                              # Controller 层（按职责分包）
 │   ├── api/                                 #   管理 REST API（三域）
-│   │   ├── AdminUserApiController.java      #     /api/admin/users 用户域
-│   │   ├── AdminClientApiController.java    #     /api/admin/clients 客户端域
-│   │   ├── AdminSessionApiController.java   #     /api/admin/sessions 会话域
-│   │   └── AdminRecordApiController.java    #     /api/admin/records 授权记录域
+│   │   ├── AdminUserApiController.java      #     /admin/users 用户域
+│   │   ├── AdminClientApiController.java    #     /admin/clients 客户端域
+│   │   ├── AdminSessionApiController.java   #     /admin/sessions 会话域
+│   │   └── AdminRecordApiController.java    #     /admin/records 授权记录域
 │   └── auth/                                #   认证类页面/端点
 │       ├── LoginController.java             #     路由 (/, /portal)
 │       ├── ConsentController.java           #     授权同意页 (/consent)
@@ -137,7 +137,7 @@ net.xzh.iam                              # 合并单服务根包 (common / auth 
 |-------|---------|---------|-----------------|
 | 1 | `/oauth2/**` `/login*` `/consent` `/logout` `/.well-known/**` | OAuth2 客户端 + 表单 | Composite (DEVICE→PORTAL) |
 | 2 | `/activate` `/device-login` | 表单 (PlatformUserDetailsService) | DEVICE (一次性) |
-| 3 | `/api/**`（`securityMatcher`） | Bearer (本地 Redis 内省) + EndpointAdmissionManager | — (STATELESS, JSON 401/403) |
+| 3 | `/admin/**`、`/biz/**`、`/permitall/**`（`securityMatcher`） | Bearer (本地 Redis 内省) + EndpointAdmissionManager | — (STATELESS, JSON 401/403) |
 
 > 合并后安全链统一为三段（阶段 3 定稿）：协议链 Order(1) / 设备链 Order(2) / 统一 API 链 Order(3)。
 > 业务与管理 API 全部在 Order(3) 单链内（本地 Redis 内省 + 接口准入表驱动），无独立资源服务器、无服务间调用。
@@ -171,7 +171,7 @@ net.xzh.iam                              # 合并单服务根包 (common / auth 
 1. **发现端点**：`GET /.well-known/openid-configuration` 获取所有 OAuth2/OIDC 端点地址
 2. **授权**：引导用户到 `/oauth2/authorize?...`（授权码 / 设备码）或直接 `POST /oauth2/token`（密码 / 客户端模式）
 3. **换 token**：`POST /oauth2/token`，按模式带不同参数（授权码带 `code`，密码带 `username/password`，PKCE 带 `code_verifier`，客户端模式带 `client_secret`）
-4. **调 API**：`Authorization: Bearer <access_token>` 调业务 API（同服务 :9000，如 `/api/contacts`、`/api/admin/**`）
+4. **调 API**：`Authorization: Bearer <access_token>` 调业务 API（同服务 :9000，如 `/biz/clients/mine`、`/admin/**`）
 5. **获取用户信息**：`GET /userinfo`（需 `openid` scope）
 6. **续期 / 退出**：`refresh_token` 续期（Public Client 不可用，用 `prompt=none` 静默重新授权），`/oauth2/revoke` 吊销 token，`/logout?post_logout_redirect_uri=` 销毁会话
 
@@ -220,7 +220,7 @@ net.xzh.iam                              # 合并单服务根包 (common / auth 
 | ~~`service-app`~~ | — | — | **已退役**（client_credentials 测试账号；test.http 第二部分负例一并移除） |
 | ~~`resource-server`~~ | — | — | **已退役**（阶段 4：原跨服务内省/目录凭证，合并后无消费方） |
 
-客户端配置详见 [`sql/iam.sql`](../../sql/iam.sql)（唯一来源；新增/变更客户端走管理端 `/api/admin/clients`，不再有代码兜底初始化器），对接方式见各演示项目 README。
+客户端配置详见 [`sql/iam.sql`](../../sql/iam.sql)（唯一来源；新增/变更客户端走管理端 `/admin/clients`，不再有代码兜底初始化器），对接方式见各演示项目 README。
 
 ## 相关文档
 

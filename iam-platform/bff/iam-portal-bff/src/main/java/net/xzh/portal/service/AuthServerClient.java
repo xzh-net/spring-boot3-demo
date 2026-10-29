@@ -20,7 +20,7 @@ import java.util.Map;
  * <p>
  * 调用单服务 (iam-authorization-server:9000) 门户端公开接口:
  * <p>
- * 当前人员可见客户端列表 {@code GET /api/public/clients/mine} (携带用户 Bearer Token,
+ * 当前人员可见客户端列表 {@code GET /biz/clients/mine} (携带用户 Bearer Token,
  * 由资源中心按应用授权过滤)。客户端列表接口已从认证中心迁移至资源服务, 本类与认证中心无直接调用关系。
  * </p>
  */
@@ -43,7 +43,7 @@ public class AuthServerClient {
      * 获取当前人员可见客户端列表.
      * <p>
      * 携带当前登录用户 (portal-app) 的 Access Token 调用资源服务
-     * {@code GET /api/public/clients/mine}, 由资源中心按应用授权 (visible / iam_app_authorization)
+     * {@code GET /biz/clients/mine}, 由资源中心按应用授权 (visible / iam_app_authorization)
      * 过滤出该用户可见的应用/渠道卡片。
      * </p>
      */

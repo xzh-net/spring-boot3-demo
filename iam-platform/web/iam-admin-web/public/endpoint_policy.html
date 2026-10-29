@@ -106,7 +106,7 @@ let epList = [];
 
 async function loadEndpoints() {
     try {
-        epList = await App.api('/api/admin/endpoint-policies') || [];
+        epList = await App.api('/admin/endpoint-policies') || [];
     } catch (e) {
         alert('加载资源准入失败: ' + e.message);
         return;

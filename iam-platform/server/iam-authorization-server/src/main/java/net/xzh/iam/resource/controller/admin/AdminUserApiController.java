@@ -27,7 +27,7 @@ import net.xzh.iam.auth.vo.SsoSessionVO;
  * </p>
  */
 @RestController
-@RequestMapping("/api/admin/users")
+@RequestMapping("/admin/users")
 @RequiredArgsConstructor
 public class AdminUserApiController {
 

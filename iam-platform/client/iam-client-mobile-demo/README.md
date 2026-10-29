@@ -49,7 +49,7 @@ node server.js
 |------|------|
 | `GET /` | 首页，发起 PKCE 授权 |
 | `GET /callback` | 接收回调，用 code + code_verifier 换 token，展示结果 |
-| `GET /api-demo` | 用 access_token 调用 /api/contacts (合并单服务 :9000) |
+| `GET /api-demo` | 用 access_token 调用 /biz/clients/mine (三方客户端预期被拒 403, 合并单服务 :9000) |
 | `GET /userinfo-demo` | 用 access_token 调用 /userinfo |
 | `GET /introspect-demo` | 调用 /oauth2/introspect 验证 token |
 | `GET /reauth` | 静默重新授权 (清旧 session 后重走授权码流程) |

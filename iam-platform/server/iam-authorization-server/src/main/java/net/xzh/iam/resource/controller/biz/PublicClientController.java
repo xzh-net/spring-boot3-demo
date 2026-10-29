@@ -1,4 +1,4 @@
-package net.xzh.iam.resource.controller.portal;
+package net.xzh.iam.resource.controller.biz;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,7 +24,7 @@ import java.util.Map;
  */
 @Slf4j
 @RestController
-@RequestMapping("/api/public")
+@RequestMapping("/biz")
 @RequiredArgsConstructor
 public class PublicClientController {
 

@@ -31,8 +31,8 @@ import java.util.Set;
  *   <li>扫描只做两件事: 代码里新增的端点补入库 (默认 AUTHENTICATED) / 代码里已删除端点的行剪除;</li>
  *   <li>管理端<b>无</b>新增/编辑/删除入口, 页面只读 (domain/source 两列已删)。</li>
  * </ul>
- * 播种白名单: 仅 admin / portal / third 三域 controller 包的端点入库; 域外端点
- * (/api/permitall/** 由链层放行, 其余 /api/** 走认证档) 不入表。
+ * 播种白名单: 仅 admin / biz 两域 controller 包的端点入库; 域外端点
+ * (/permitall/** 由链层放行, 三前缀之外不入链) 不入表。
  * 粗档常量 (ADMIN_SERVICE_TOKEN / PORTAL_SERVICE_TOKEN) 已退役: 准入要求全部为权限码或放行档。
  * </p>
  */
@@ -40,7 +40,7 @@ import java.util.Set;
 @Service
 public class EndpointPolicyService {
 
-    /** 能力域: 仅作播种白名单的 controller 分包判定 (admin=管理端 / portal=门户 / third=三方) */
+    /** 能力域: 仅作播种白名单的 controller 分包判定 (admin=管理端 / biz=业务(门户+三方)) */
     public static final String DOMAIN_ADMIN = "admin";
     public static final String DOMAIN_PORTAL = "portal";
     public static final String DOMAIN_THIRD = "third";
@@ -94,8 +94,8 @@ public class EndpointPolicyService {
                 String packageName = handler.getBeanType().getPackageName();
                 String domain = resolveDomain(packageName);
 
-                // 播种白名单: 仅 admin / portal / third 三域 controller 包的端点入库;
-                // 域外端点 (/api/permitall/** 链层放行, 其余 /api/** 走认证档) 不入表
+                // 播种白名单: 仅 admin / biz 两域 controller 包的端点入库;
+                // 域外端点 (/permitall/** 链层放行, 三前缀之外不入链) 不入表
                 if (domain == null) {
                     continue;
                 }
@@ -153,7 +153,7 @@ public class EndpointPolicyService {
     }
 
     /**
-     * 由 controller 分包推导能力域; 播种白名单仅 admin / portal / third 三域,
+     * 由 controller 分包推导能力域; 播种白名单仅 admin / biz 两域 (permitall 链层放行不入表),
      * 域外 (含 permitall 包、平铺控制器、任意杂包) 返回 null 不入库。
      */
     private String resolveDomain(String packageName) {
@@ -167,7 +167,7 @@ public class EndpointPolicyService {
         String leaf = dot < 0 ? segment : segment.substring(0, dot);
         return switch (leaf) {
             case "admin" -> DOMAIN_ADMIN;
-            case "portal" -> DOMAIN_PORTAL;
+            case "biz" -> DOMAIN_PORTAL;
             case "third" -> DOMAIN_THIRD;
             default -> null;
         };

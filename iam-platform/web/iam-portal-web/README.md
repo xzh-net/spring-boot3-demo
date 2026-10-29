@@ -47,7 +47,7 @@ node server.js
 
 ## 客户端列表来源
 
-通过 `GET /api/clients` 调用 iam-portal-bff，iam-portal-bff 再携带用户 Bearer Token 调用资源中心的 `GET /api/public/clients/mine`，按应用授权过滤出当前人员可见客户端：
+通过 `GET /api/clients` 调用 iam-portal-bff，iam-portal-bff 再携带用户 Bearer Token 调用资源中心的 `GET /biz/clients/mine`，按应用授权过滤出当前人员可见客户端：
 
 - 跳过 `portal-app` 自身
 - 跳过设备码客户端（`device-app`）

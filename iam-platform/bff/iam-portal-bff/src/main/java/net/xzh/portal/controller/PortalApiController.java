@@ -22,7 +22,7 @@ import java.util.Map;
  * <ul>
  *   <li>GET /api/user/me — 获取当前登录用户信息</li>
  *   <li>GET /api/clients — 获取当前人员可见客户端列表 (携带用户 Token 调用资源中心
- *       PublicClientController /api/public/clients/mine, 按应用授权过滤)</li>
+ *       PublicClientController /biz/clients/mine, 按应用授权过滤)</li>
  * </ul>
  */
 @Slf4j
@@ -60,7 +60,7 @@ public class PortalApiController {
      * 获取当前人员可见客户端列表.
      * <p>
      * 携带当前登录用户 (portal-app) 的 Access Token 调用资源中心
-     * PublicClientController {@code GET /api/public/clients/mine}, 返回该用户
+     * PublicClientController {@code GET /biz/clients/mine}, 返回该用户
      * 按应用授权可见的应用/渠道卡片 (SSO 跳转目录)。
      */
     @GetMapping("/clients")

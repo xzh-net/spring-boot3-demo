@@ -44,14 +44,41 @@ iam-platform/
 
 ## 二、端口规划
 
+端口段约定：`8000~8009` 前端静态站 ｜ `8080~8089` BFF 与三方演示 ｜ `9000` 服务端核心。
+MySQL / Redis 在 `192.168.31.161`（库 `iam`、Redis db1），改地址见
+`server/iam-authorization-server/src/main/resources/application-{profile}.yml`；启动顺序见「四、快速启动」。
+
+| 服务 | 端口 | 入口 URL | 说明 | 备注（进去以后的主要逻辑） |
+|---|---|---|---|---|
+| **iam-authorization-server**<br>服务端（唯一 Java 服务） | 9000 | `http://localhost:9000` | 认证中心：登录页 + OAuth2/OIDC 协议端点 + 全部业务 API | 直接访问 `/` 或登录页直登，**自动并入门户登录流**（见下方速查③）。登录表单是管理/门户两条流**共用**的，靠签发准入闸按「客户端 × 角色」裁决：portal-app 只放行 PORTAL 用户、admin-app 只放行 ADMIN 用户。`/admin/**`、`/biz/**` 的权限码裁决也在此执行，管理页对其**只读**；另有免令牌测试口 `/permitall/time` |
+| **iam-admin-bff** | 8085 | `http://localhost:8085` | 管理端 BFF（OAuth2 Client: admin-app，授权码 + PKCE） | 未登录访问任意路径**自动发起登录**（无自有登录页，表单即 9000 那张），成功返回管理台。**仅管理员可进**：admin-app 持 `admin.full`（16 个管理码）与 ADMIN 角色有交集，普通用户无交集 → 9000 红条拒绝。`/admin/**` 透传 9000（Bearer 只在 BFF 服务端内存附加，token 不出后端）；`/api/current-user` 为 BFF 原生（读本地会话） |
+| **iam-admin-web** | 8001 | `http://localhost:8001` | 管理后台前端（node 静态 + 代理） | 未登录访问 → `/login` → 8085 → 9000 登录 → 成功**返回管理台**。**门户用户（user）不可登录**，原因同上：admin-app × PORTAL 角色无交集。页面：用户/角色/权限/客户端/授权管理/在线用户，外加只读「授权范围」「资源准入(48 行)」。node 将 `/admin/**` 与 `/api/**` 代理到 8085 |
+| **iam-portal-bff** | 8080 | `http://localhost:8080` | 门户 BFF（OAuth2 Client: portal-app，Confidential + PKCE） | 未登录自动发起登录，成功**返回已登录门户**。**仅普通用户可进**：portal-app 持 `portal.profile`（1 个码）与 PORTAL 角色有交集，admin 无交集 → 9000 红条拒绝。`/api/*` 为 BFF 原生（会话层）；可见应用列表由 BFF **服务端代调** 9000 `/biz/clients/mine` |
+| **iam-portal-web** | 8000 | `http://localhost:8000` | 门户前端（node 静态 + 代理） | 未登录：显示新闻动态/通知公告演示数据，登录入口在导航栏右上角。`/login` → 8080 → 9000 登录 → 成功**返回已登录门户**（应用中心卡片）。**管理员（admin）不可登录**，原因同上：portal-app × ADMIN 角色无交集。登录后点应用卡片即 SSO 跳对接应用；node 将 `/api/*` 代理到 8080 |
+| **iam-client-web-demo** | 8081 | `http://localhost:8081` | 三方演示：授权码 + PKCE（web-app） | 流程演示：登录 → code 换 token → 调 API → 内省 → 刷新/登出，页面可见真实令牌。web-app 持 `third.profile`（**空映射**）→ 任何账号都能登录（逃逸阀）但令牌 **0 个业务码**；调门户接口 `/biz/clients/mine` 一律 **403** —— fail-closed 现场 |
+| **iam-client-device-demo** | 8082 | `http://localhost:8082` | 三方演示：设备码（device-app） | RFC 8628 全流程：取码 → 本页 `/activate` 输入 user_code → 登录 + 同意 → 设备端轮询换票。device-app 为**公开客户端（无密钥）**，须用户同意后才发令牌 |
+| **iam-client-mobile-demo** | 8083 | `http://localhost:8083` | 三方演示：移动端 PKCE（mobile-app） | 公开客户端 PKCE 演示：页面**预生成授权链接**（已带 code_challenge），授权码换票。无密钥，靠 PKCE 防授权码拦截 |
+| MySQL | 3306 | `192.168.31.161` | 库 `iam`（16 表） | 种子唯一来源 `sql/iam.sql`；字典/准入表的写入语义见「五、核心架构」 |
+| Redis | 6379 | `192.168.31.161` | db1 | 9000 专用：SSO 会话、OAuth2 授权记录、令牌内省与客户端缓存 |
+
+### 登录逻辑速查（三条入口，同一道闸）
+
+三条路最终都汇到 9000 同一张登录表单、同一道签发准入闸（用户 RBAC 码 ∩ 客户端 scopes，无交集即拒）：
+
 ```text
-8000 ~ 8009   前端静态站段     portal-web=8000  admin-web=8001
-8080 ~ 8089   BFF 与演示段     portal-bff=8080  admin-bff=8085  demo=8081/8082/8083
-9000          服务端核心       iam-authorization-server（唯一服务，协议端点 + 管理/业务 API）
+① 管理台  8001 /login ──► 8085 (admin-app) ──► 9000 登录
+              admin ✔ 成功 ──► 返回管理台；user ✘ 拒（9000 红条 error=access_denied）
+
+② 门户    8000 /login ──► 8080 (portal-app) ──► 9000 登录
+              user  ✔ 成功 ──► 返回已登录门户；admin ✘ 拒（9000 红条）
+
+③ 直登 9000  http://localhost:9000/（或直接打开登录页）
+              ──► 自动并入门户流（同②）：user ✔ 落已登录门户；admin ✘ 拒
+              即 9000 默认归属门户；管理员唯一入口是 8001
 ```
 
-> 数据库 / Redis 默认指向 `192.168.31.161`（MySQL `iam` 库、Redis db1），在
-> `server/iam-authorization-server/src/main/resources/application-{profile}.yml` 中调整。
+三方演示（8081/8082/8083）不走「客户端 × 角色」约束——其客户端 scope 映射不到任何业务码，
+令牌一律 0 业务码，业务接口（`/biz/**`、`/admin/**`）调用一律 403：权限收敛在 API 层，而非登录层。
 
 ---
 
@@ -61,7 +88,7 @@ iam-platform/
 
 | 模块 | 端口 | 库 | 职责 |
 |---|---|---|---|
-| iam-authorization-server | 9000 | `iam` | OAuth2/OIDC 协议运行时（授权码、密码、设备码、刷新）+ 三域管理 API `/api/admin/**` + 门户 API `/api/public/**` + RBAC 角色权限 + 端点准入裁决 + 签发准入 |
+| iam-authorization-server | 9000 | `iam` | OAuth2/OIDC 协议运行时（授权码、密码、设备码、刷新）+ 管理 API `/admin/**` + 业务 API `/biz/**` + RBAC 角色权限 + 端点准入裁决 + 签发准入 |
 
 ### 体验面 / 前端 / 客户端示例
 
@@ -159,7 +186,7 @@ cd client/iam-client-mobile-demo && node server.js   # :8083
 | `oauth2_registered_client.scopes` | 管理端「客户端管理」页 | 标准 Spring 列作客户端↔scope 连接表 |
 
 > **新增一个受管控接口的三步**：`sys_permission` 加码（若有新码）→ 角色 / scope 绑定 → `iam_endpoint_policy` 种子加端点行写入权限码 → 重载 DB + 重启。
-> 控制器方法须位于 `controller.admin|portal|third` 包下才会被扫描入表，否则落认证档。
+> 控制器方法须位于 `controller.admin|biz` 包下才会被扫描入表，否则落认证档。
 
 ---
 
@@ -217,7 +244,7 @@ cd client/iam-client-mobile-demo && node server.js   # :8083
 3. **登录防爆破**：登录端点失败限流 + 账号临时锁定（历史改造清单 A1，始终未实现）。
 4. **敏感操作审计表**：记录谁、对哪个对象、改了什么、结果，覆盖用户/客户端/角色/权限/准入的写操作。
 5. **密码策略**：密码历史（禁止近期复用）+ 过期策略。
-6. **客户端密钥治理**：`client_secret` 明文（演示为 `123456`）与 BCrypt 哈希会经 `GET /api/admin/clients/{id}` 回显给调用方——建议对外掩码，密钥改由环境变量/密钥管理注入。
+6. **客户端密钥治理**：`client_secret` 明文（演示为 `123456`）与 BCrypt 哈希会经 `GET /admin/clients/{id}` 回显给调用方——建议对外掩码，密钥改由环境变量/密钥管理注入。
 7. **代码卫生**：孤儿权限码 `policy:write`（无任何端点引用）、`resolveDomain` 返回值只剩判空用途（应改 `isManagedPackage()`）、`AdminUserDataController` 的 `/users/{code}/data` 已无前端调用方（级联已本地化）、`sql/iam.sql` 内 13 行注释掉的 capability 死块与 `iam_client_policy` 遗留 DROP、BFF 配置键 `iam.resource-service-base-url`（值正确指向 9000，但键名仍引用已删除的 resource-service，应改名并同步 `ApiProxyController` 的 `@Value`）。
 8. **`iam_external_identity` 接通**：外部身份绑定（微信/企业微信/GitHub）仅建表、从未接通。
 9. **安全基线补强**：登录 CSRF 豁免（静态登录页无 token）改为可取 token；`maximumSessions(-1)` 改有限并发；OAuth 2.1 对齐（密码 grant 仅留演示、PKCE 已全量强制）。

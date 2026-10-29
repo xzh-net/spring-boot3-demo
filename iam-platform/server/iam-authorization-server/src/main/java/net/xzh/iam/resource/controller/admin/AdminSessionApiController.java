@@ -25,7 +25,7 @@ import net.xzh.iam.auth.vo.SsoSessionVO;
  */
 @Slf4j
 @RestController
-@RequestMapping("/api/admin/sessions")
+@RequestMapping("/admin/sessions")
 @RequiredArgsConstructor
 public class AdminSessionApiController {
 

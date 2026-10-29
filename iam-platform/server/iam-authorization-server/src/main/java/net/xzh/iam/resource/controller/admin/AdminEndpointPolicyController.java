@@ -21,7 +21,7 @@ import net.xzh.iam.resource.service.EndpointPolicyService;
  */
 @Slf4j
 @RestController
-@RequestMapping("/api/admin/endpoint-policies")
+@RequestMapping("/admin/endpoint-policies")
 @RequiredArgsConstructor
 public class AdminEndpointPolicyController {
 

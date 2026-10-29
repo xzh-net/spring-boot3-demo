@@ -108,7 +108,7 @@ import net.xzh.iam.resource.service.IssuanceAdmissionService;
  * <ul>
  * <li><b>Order(1) 本类</b> — 协议链：/oauth2/** + /login* + /consent + /logout + /userinfo + /.well-known/**</li>
  * <li><b>Order(2) 本类</b> — 设备验证链：/activate、/device-login（独立 SecurityContext Key）</li>
- * <li><b>Order(3) ResourceServerConfig</b> — 统一 API 链：/api/**（本地 RBAC 内省 + 表驱动准入 +
+ * <li><b>Order(3) ResourceServerConfig</b> — 统一 API 链：/admin/**、/biz/**、/permitall/**（本地 RBAC 内省 + 表驱动准入 +
  * JSON 401/403 + admin-client-ids 白名单）</li>
  * </ul>
  */

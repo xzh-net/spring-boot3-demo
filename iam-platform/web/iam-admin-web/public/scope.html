@@ -81,7 +81,7 @@
 <script>
 async function loadScopes() {
     let data;
-    try { data = await App.api('/api/admin/scopes') || []; }
+    try { data = await App.api('/admin/scopes') || []; }
     catch (e) { alert('加载授权范围失败: ' + e.message); return; }
     const tbody = document.getElementById('scopeTable');
     const empty = document.getElementById('emptyTip');
