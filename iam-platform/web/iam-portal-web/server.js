@@ -73,11 +73,12 @@ async function proxyToPortalServer(pathname, req, method = 'GET') {
 // ============================================================
 
 function layout(title, content, isLoggedIn = false) {
+    // 右侧区与管理后台导航栏保持一致: 登录/退出为纯文字链接, 登录态显示「👤 用户名」
     const logoutBtn = isLoggedIn
-        ? '<a href="/logout" style="background:rgba(255,255,255,0.2);color:#fff;border:1px solid rgba(255,255,255,0.35);padding:6px 16px;border-radius:6px;text-decoration:none;font-size:13px;">退出登录</a>'
+        ? '<a href="#" class="logout" id="logoutLink">退出登录</a>'
         : '';
     const loginBtn = !isLoggedIn
-        ? '<a href="/login" style="background:rgba(255,255,255,0.2);color:#fff;border:1px solid rgba(255,255,255,0.35);padding:6px 16px;border-radius:6px;text-decoration:none;font-size:13px;">登录</a>'
+        ? '<a href="/login" class="logout">登录</a>'
         : '';
     return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -92,7 +93,9 @@ function layout(title, content, isLoggedIn = false) {
         .navbar { background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: #fff; padding: 0 32px; height: 60px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 12px rgba(37,99,235,0.2); position: sticky; top: 0; z-index: 100; }
         .navbar .brand { font-size: 18px; font-weight: 700; }
         .navbar .nav-right { display: flex; align-items: center; gap: 16px; font-size: 14px; }
-        .navbar .user-info { opacity: 0.9; }
+        .navbar .user-info { color: #dbeafe; font-size: 13px; white-space: nowrap; }
+        .navbar .logout { color: #dbeafe; font-size: 13px; cursor: pointer; text-decoration: none; }
+        .navbar .logout:hover { background: rgba(255,255,255,0.15); color: #ffffff; border-radius: 6px; }
         .container { max-width: 1100px; margin: 0 auto; padding: 40px 24px 60px; }
         .page-title { margin-bottom: 32px; }
         .page-title h2 { font-size: 24px; margin-bottom: 6px; }
@@ -104,18 +107,28 @@ function layout(title, content, isLoggedIn = false) {
         .client-card h3 { font-size: 16px; margin-bottom: 6px; }
         .client-card p { color: #64748b; font-size: 13px; line-height: 1.6; }
         .client-card .meta { margin-top: 12px; font-size: 12px; color: #94a3b8; }
-        .login-card { background: #fff; border-radius: 12px; padding: 48px 40px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); text-align: center; max-width: 420px; margin: 80px auto; }
+        .login-card { background: #fff; border-radius: 12px; padding: 40px 40px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); text-align: center; max-width: 420px; margin: 48px auto 32px; }
         .login-card h2 { font-size: 22px; margin-bottom: 12px; }
         .login-card p { color: #64748b; margin-bottom: 24px; }
         .login-card .btn { display: inline-block; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; padding: 12px 36px; border-radius: 8px; text-decoration: none; font-size: 15px; font-weight: 500; }
         .login-card .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(37,99,235,0.35); }
         .empty { text-align: center; padding: 60px 20px; color: #94a3b8; }
         .loading { text-align: center; padding: 40px; color: #64748b; }
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 860px; margin: 0 auto; }
+        @media (max-width: 720px) { .info-grid { grid-template-columns: 1fr; } }
+        .info-panel { background: #fff; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); overflow: hidden; }
+        .info-panel-header { padding: 14px 20px; font-size: 15px; font-weight: 600; border-bottom: 1px solid #e2e8f0; background: #f8fafc; }
+        .info-list { list-style: none; padding: 6px 0; }
+        .info-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 20px; font-size: 13px; border-bottom: 1px dashed #f1f5f9; }
+        .info-list li:last-child { border-bottom: none; }
+        .info-list li a { color: #334155; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .info-list li a:hover { color: #2563eb; }
+        .info-list .date { color: #94a3b8; font-size: 12px; flex-shrink: 0; }
     </style>
 </head>
 <body>
     <div class="navbar">
-        <div class="brand">🔐 统一认证门户</div>
+        <div class="brand">🔐 员工门户</div>
         <div class="nav-right">
             ${isLoggedIn ? '<span class="user-info" id="userInfo"></span>' : ''}
             ${loginBtn}${logoutBtn}
@@ -123,7 +136,7 @@ function layout(title, content, isLoggedIn = false) {
     </div>
     <div class="container">${content}</div>
     <script>
-        // 异步加载用户信息
+        // 异步加载用户信息 (与管理后台一致: 👤 用户名 + title=邮箱)
         (async () => {
             try {
                 const res = await fetch('/api/user/me', { credentials: 'include' });
@@ -131,14 +144,51 @@ function layout(title, content, isLoggedIn = false) {
                     const data = await res.json();
                     if (data.authenticated) {
                         const el = document.getElementById('userInfo');
-                        if (el) el.textContent = '👤 ' + (data.username || data.subject);
+                        if (el) {
+                            el.textContent = '👤 ' + (data.nickname || data.username || data.subject);
+                            if (data.email) el.title = data.email;
+                        }
                     }
                 }
             } catch (e) { console.warn('获取用户信息失败:', e); }
         })();
+        // 退出登录: 与管理后台一致, 二次确认后跳转
+        const logoutLink = document.getElementById('logoutLink');
+        if (logoutLink) {
+            logoutLink.addEventListener('click', function (e) {
+                e.preventDefault();
+                if (confirm('确认退出登录？')) location.href = '/logout';
+            });
+        }
     </script>
 </body>
 </html>`;
+}
+
+// ============================================================
+// 未登录首页演示数据 (纯前端静态, 仅用于门户未登录态展示)
+// ============================================================
+
+const DEMO_NEWS = [
+    { title: '统一认证平台 2.0 正式发布：单服务单库 + 双维权限模型', date: '2026-10-28' },
+    { title: '平台新增设备码授权流程，支持物联网设备便捷接入', date: '2026-10-20' },
+    { title: 'PKCE 强制校验已覆盖全部授权码客户端', date: '2026-10-15' },
+    { title: '门户应用中心上线，支持按角色自动授权应用', date: '2026-10-08' },
+    { title: '管理后台改版：新增授权范围与资源准入只读视图', date: '2026-09-30' }
+];
+
+const DEMO_NOTICES = [
+    { title: '关于开展季度账号权限核查工作的通知', date: '2026-10-27' },
+    { title: '关于启用双因素认证的预通知', date: '2026-10-22' },
+    { title: '关于密码策略升级（历史口令不可复用）的通知', date: '2026-10-12' },
+    { title: '关于统一认证平台例行维护窗口安排的通知', date: '2026-10-05' },
+    { title: '关于第三方应用接入申请流程调整的通知', date: '2026-09-26' }
+];
+
+function demoListHtml(items) {
+    return '<ul class="info-list">' + items.map(it =>
+        `<li><a href="javascript:void(0)" title="${esc(it.title)}">${esc(it.title)}</a><span class="date">${esc(it.date)}</span></li>`
+    ).join('') + '</ul>';
 }
 
 // ============================================================
@@ -152,14 +202,20 @@ async function renderHome(req, res) {
     const isLoggedIn = meResp.statusCode === 200 && JSON.parse(meResp.body || '{}').authenticated;
 
     if (!isLoggedIn) {
-        // 未登录, 显示登录卡片
+        // 未登录, 仅展示新闻动态/通知公告演示数据 (左右两栏);
+        // 登录入口 = 导航栏右上角「登录」按钮
         const content = `
-            <div class="login-card">
-                <h2>🔐 统一认证门户</h2>
-                <p>请登录后访问应用中心</p>
-                <a href="/login" class="btn">前往登录</a>
+            <div class="info-grid" style="margin-top: 16px;">
+                <div class="info-panel">
+                    <div class="info-panel-header">📰 新闻动态</div>
+                    ${demoListHtml(DEMO_NEWS)}
+                </div>
+                <div class="info-panel">
+                    <div class="info-panel-header">📢 通知公告</div>
+                    ${demoListHtml(DEMO_NOTICES)}
+                </div>
             </div>`;
-        return layout('统一认证门户', content, false);
+        return layout('员工门户', content, false);
     }
 
     // 已登录, 加载当前人员可见客户端列表
