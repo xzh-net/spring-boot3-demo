@@ -45,7 +45,7 @@ iam-platform/
 ## 二、端口规划
 
 端口段约定：`8000~8009` 前端静态站 ｜ `8080~8089` BFF 与三方演示 ｜ `9000` 服务端核心。
-MySQL / Redis 在 `192.168.31.161`（库 `iam`、Redis db1），改地址见
+MySQL / Redis 在 `192.168.31.161`（库 `iam`；Redis 分库：db1=认证中心 9000 专用、db3=管理 BFF 8085 专用），改地址见
 `server/iam-authorization-server/src/main/resources/application-{profile}.yml`；启动顺序见「四、快速启动」。
 
 | 服务 | 端口 | 入口 URL | 说明 | 备注（进去以后的主要逻辑） |
@@ -59,7 +59,7 @@ MySQL / Redis 在 `192.168.31.161`（库 `iam`、Redis db1），改地址见
 | **iam-client-device-demo** | 8082 | `http://localhost:8082` | 三方演示：设备码（device-app） | RFC 8628 全流程：取码 → 本页 `/activate` 输入 user_code → 登录 + 同意 → 设备端轮询换票。device-app 为**公开客户端（无密钥）**，须用户同意后才发令牌 |
 | **iam-client-mobile-demo** | 8083 | `http://localhost:8083` | 三方演示：移动端 PKCE（mobile-app） | 公开客户端 PKCE 演示：页面**预生成授权链接**（已带 code_challenge），授权码换票。无密钥，靠 PKCE 防授权码拦截 |
 | MySQL | 3306 | `192.168.31.161` | 库 `iam`（16 表） | 种子唯一来源 `sql/iam.sql`；字典/准入表的写入语义见「五、核心架构」 |
-| Redis | 6379 | `192.168.31.161` | db1 | 9000 专用：SSO 会话、OAuth2 授权记录、令牌内省与客户端缓存 |
+| Redis | 6379 | `192.168.31.161` | **db1**=9000 专用：SSO 会话、OAuth2 授权记录、令牌内省与客户端缓存；**db3**=8085 专用：管理 BFF 会话与令牌（分库物理隔离，键前缀 oauth2:* / admin-bff:* 双保险） |
 
 ### 登录逻辑速查（三条入口，同一道闸）
 
@@ -196,6 +196,7 @@ cd client/iam-client-mobile-demo && node server.js   # :8083
 2. **双维正交**：用户维（角色→权限码，细粒度）与客户端维（scope→权限码，粗粒度）收敛到同一张 `sys_permission` 字典后取交集，不新建第二权威。
 3. **字典演进走 SQL 种子**：`sys_scope` 等只读字典不提供页面写入口，避免"页面"与"种子"双演进路径打架。
 4. **已退役的旧机制**（本轮移除，勿再引用）：`iam_client_policy`（登录边界策略）、`AuthServerProperties`（客户端白名单）、`ADMIN_SERVICE_TOKEN`/`PORTAL_SERVICE_TOKEN`（粗档常量与 M2M 分支）、`sys_user.user_label`（标签列与降级猜测）。
+5. **新端点由启动自扫描自动入库**（2026-11-02 裁定）：`iam_endpoint_policy` 无页面写入口，扫描发现新端点即以 `AUTHENTICATED` 宽松档补行（不剪除、不回写），精确权限码由种子提供。**配套操作纪律：新增端点后必须先补种子（`sql/iam.sql`）再开放调用**——种子未配码期间该端点为「持有效令牌即可」的宽松窗口；如未来出现实际安全事件可重议 `status=0` 默认拒绝方案。
 
 ---
 
@@ -240,7 +241,7 @@ cd client/iam-client-mobile-demo && node server.js   # :8083
 ## 九、待办清单
 
 1. **YAML 配置分类**：整理当前项目存在的硬编码，按 `application-auth.yaml` / `application-resource.yaml` 的格式，拆分到不同的配置文件中。
-2. **新端点 fail-closed 收口**：`iam_endpoint_policy` 扫描默认值由 `AUTHENTICATED` 改为 `status=0`（新端点默认拒绝），人工确认后再启用——消除「已入表但种子未配码」期间的宽松窗口（当前无页面可收紧，只能改种子）。
+2. ~~新端点 fail-closed 收口~~ **已裁定关闭（2026-11-02）**：维持「启动自扫描自动添加（`AUTHENTICATED` 宽松档）+ 种子配精确权限码」的现行模式，不改为 `status=0`。新端点的宽松窗口由操作纪律兜底：**新增端点后先补种子再开放调用**（见「六、关键设计裁定」第 5 条）。
 3. **登录防爆破**：登录端点失败限流 + 账号临时锁定（历史改造清单 A1，始终未实现）。
 4. **敏感操作审计表**：记录谁、对哪个对象、改了什么、结果，覆盖用户/客户端/角色/权限/准入的写操作。
 5. **密码策略**：密码历史（禁止近期复用）+ 过期策略。

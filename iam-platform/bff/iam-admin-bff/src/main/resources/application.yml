@@ -24,6 +24,27 @@ spring:
           iam:
             issuer-uri: http://localhost:9000
 
+  # ===== Redis (Spring Session 存储) =====
+  # 【db 分配】db1=认证中心(9000)专用 | db2=其他项目(sessionreg:all) | db3=管理BFF(本服务)专用
+  #   物理分库避免两应用键混放导致的误解与运维误清 (FLUSHDB 会连坐同库全部键);
+  #   namespace 作第二层防护: 9000 用 oauth2:session, 本服务用 admin-bff:session
+  data:
+    redis:
+      host: 192.168.31.161
+      port: 6379
+      password:
+      database: 3
+
+  # ===== Spring Session (HttpSession + token 持久化到 Redis) =====
+  # 生产化三件套之一: 重启不丢会话/token、多实例共享。
+  # 注: Boot 3 已无 spring.session.store-type 属性, 靠 classpath 自动检测 Redis 存储;
+  # Cookie 改名 (ADMIN_SERVER_SESSION) 由 SessionConfig 的 DefaultCookieSerializer 完成 —
+  #   Spring Session 默认 Cookie 名为 SESSION, 与认证中心(9000)在 localhost 共域会互相覆盖。
+  session:
+    timeout: 30m
+    redis:
+      namespace: "admin-bff:session"
+
 # ===== 管理后台服务自定义配置 =====
 iam:
   admin-web-url: http://localhost:8001
