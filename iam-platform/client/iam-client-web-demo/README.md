@@ -1,6 +1,6 @@
 # OAuth2 授权码登录演示 (Confidential Client)
 
-传统 Web 应用接入示例，演示授权码模式 + 密码模式。全程页面操作，直观可视。
+传统 Web 应用接入示例，演示授权码模式 + PKCE。全程页面操作，直观可视。
 
 - 端口：`8081`
 - 依赖：零依赖，仅 Node.js 内置模块
@@ -36,7 +36,7 @@ node server.js
 
 | 参数 | 值 |
 |------|------|
-| client_id | `web-app` |
+| client_id | `oa-web-app` |
 | 认证方式 | `client_secret_basic`, `client_secret_post` (Confidential Client) |
 | 授权类型 | `authorization_code`, `refresh_token`, `password` |
 | scopes | `openid profile email read write` |
@@ -57,7 +57,7 @@ node server.js
 
 ## SSO 返回门户机制
 
-从 web-app 返回门户时，通过 `/return-to-portal` 端点实现 SSO：
+从 oa-web-app 返回门户时，通过 `/return-to-portal` 端点实现 SSO：
 
 1. 构造 `prompt=none` 静默授权 URL（client_id=portal-app）
 2. 跳转到认证中心 `/oauth2/authorize`

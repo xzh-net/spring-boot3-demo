@@ -1,4 +1,4 @@
-/**
+﻿/**
  * OAuth2 授权码登录演示
  * ------------------------------------
  * 最精简的授权码流程演示, 全程页面操作, 直观可视:
@@ -18,7 +18,7 @@ const crypto = require('crypto');
 const PORT = 8081;
 const AUTH_SERVER = 'http://localhost:9000';
 const PORTAL_URL = 'http://localhost:8000';
-const CLIENT_ID = 'web-app';
+const CLIENT_ID = 'oa-web-app';
 const CLIENT_SECRET = '123456';
 const REDIRECT_URI = 'http://localhost:8081/callback';
 
@@ -34,7 +34,7 @@ function _generatePortalSsoState() {
 const _portalSsoStates = new Set();
 
 // PKCE (RFC 7636): state → code_verifier (一次性, 换令牌后即删)
-// web-app 已设 requireProofKey=true, 发码必须带 code_challenge, 换票必须回传 code_verifier
+// oa-web-app 已设 requireProofKey=true, 发码必须带 code_challenge, 换票必须回传 code_verifier
 const _pkceVerifiers = new Map();
 
 /** RFC 7636 §4.6: code_challenge = base64url(sha256(ascii(code_verifier))) */
@@ -264,12 +264,27 @@ async function handleLogout(req, res) {
 // 页面渲染
 // ============================================================
 
-function layout(title, content, isLoggedIn = false, portalAuthUrl = null) {
-    // 设计文档 §6: "返回门户" 先打本应用 /return-to-portal 端点, 由服务端构造 prompt=none 静默授权 URL
+function layout(title, content, isLoggedIn = false, portalAuthUrl = null, user = null, active = '') {
+    // 返回门户 / 退出登录: 与 8000 门户顶栏一致的纯文字链接样式 (gap 16px, 13px, hover 淡底)
     const portalBtn = isLoggedIn
-        ? `<a href="/return-to-portal" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.35);padding:6px 14px;border-radius:6px;text-decoration:none;font-size:13px;margin-right:12px;">🏠 返回门户</a>`
+        ? `<a href="/return-to-portal">🏠 返回门户</a>`
         : '';
-    const logoutBtn = isLoggedIn ? '<a href="/logout" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.35);padding:6px 14px;border-radius:6px;text-decoration:none;font-size:13px;">退出登录</a>' : '';
+    // 退出登录: 纯文字链接 (⊗ 小圆圈关闭图标)
+    const logoutBtn = isLoggedIn ? '<a href="/logout" class="logout">⊗ 退出登录</a>' : '';
+    // 顶部当前用户 (返回门户之后、退出登录之前, 13px #dbeafe 同门户)
+    const userChip = user
+        ? `<span class="userchip">👤 ${esc(user)}</span>`
+        : '';
+    // 全局功能标签栏: 每个页面完全一致的四个入口 (替代各页差异化的底部大按钮), 当前页高亮
+    const TABS = [
+        ['/userinfo-demo', '👤 查询用户信息', 'userinfo'],
+        ['/api-demo', '📋 调用应用列表(三方受限)', 'api'],
+        ['/refresh-demo', '🔄 刷新 Token', 'refresh'],
+        ['/introspect-demo', '🔍 验证 Token', 'introspect'],
+        ['/', '🔁 重新授权', 'restart']
+    ];
+    const tabbar = `<div class="tabbar">` + TABS.map(t =>
+        `<a href="${t[0]}" class="tab${active === t[2] ? ' on' : ''}">${t[1]}</a>`).join('') + `</div>`;
     return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -279,14 +294,27 @@ function layout(title, content, isLoggedIn = false, portalAuthUrl = null) {
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: -apple-system, "Segoe UI", sans-serif; background: #f0f2f5; color: #1e293b; min-height: 100vh; }
-        .nav { background: linear-gradient(135deg, #1e3a5f, #2563eb); color: #fff; padding: 0 24px; height: 56px; display: flex; align-items: center; }
+        .nav { background: linear-gradient(135deg, #1e3a5f, #2563eb); color: #fff; padding: 0 24px; height: 56px; display: flex; align-items: center; position: sticky; top: 0; z-index: 30; }
         .nav .brand { font-weight: 700; font-size: 16px; }
         .nav a { color: #dbeafe; text-decoration: none; margin-left: 24px; font-size: 14px; }
-        .nav .right { margin-left: auto; display: flex; align-items: center; }
+        /* 右侧组: 与 8000 门户顶栏对齐 (gap 16px, 文字 13px, hover 淡底圆角) */
+        .nav .right { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+        .nav .right a { margin-left: 0; color: #dbeafe; font-size: 13px; white-space: nowrap; padding: 0; border-radius: 6px; }
+        .nav .right a:hover { background: rgba(255,255,255,0.15); color: #ffffff; }
+        .nav .userchip { color: #dbeafe; font-size: 13px; white-space: nowrap; }
+        /* 全局功能标签栏 (置顶第二行, 所有页面一致) */
+        .tabbar { position: sticky; top: 56px; z-index: 20; background: #ffffff; border-bottom: 1px solid #e2e8f0;
+                  display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; padding: 10px 24px;
+                  box-shadow: 0 2px 8px rgba(15,23,42,0.06); }
+        .tab { font-size: 13px; color: #475569; background: #f1f5f9; border: 1px solid #e2e8f0; padding: 7px 18px;
+               border-radius: 999px; text-decoration: none; transition: all 0.15s; white-space: nowrap; }
+        .tab:hover { color: #2563eb; border-color: #bfdbfe; background: #eff6ff; }
+        .tab.on { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; border-color: transparent;
+                  box-shadow: 0 4px 10px rgba(37,99,235,0.3); font-weight: 500; }
         .container { max-width: 860px; margin: 24px auto; padding: 0 24px; }
         .card { background: #fff; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); padding: 28px; margin-bottom: 18px; }
         h1 { font-size: 22px; color: #1e3a5f; margin-bottom: 6px; }
-        h2 { font-size: 16px; color: #1e3a5f; margin-bottom: 12px; }
+        h2 { font-size: 15px; color: #1e3a5f; margin-bottom: 12px; font-weight: 600; padding-left: 9px; border-left: 3px solid #2563eb; }
         .sub { color: #64748b; font-size: 13px; margin-bottom: 20px; }
         .btn { display: inline-block; padding: 10px 28px; border-radius: 8px; border: none; cursor: pointer; font-size: 14px; font-weight: 500; text-decoration: none; transition: all 0.2s; }
         .btn-primary { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; }
@@ -304,10 +332,17 @@ function layout(title, content, isLoggedIn = false, portalAuthUrl = null) {
         .token-box label { font-size: 12px; color: #64748b; font-weight: 500; }
         .token-box .val { font-family: "Cascadia Code", Consolas, monospace; font-size: 12px; color: #1e293b; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 12px; word-break: break-all; margin-top: 4px; }
         .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+        /* 页内情境按钮 (错误页 等): 位置不变, 大小与顶部功能栏胶囊对齐 */
+        .actions .btn { padding: 7px 18px; border-radius: 999px; font-size: 13px; font-weight: 400;
+                        background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; box-shadow: none; transform: none; }
+        .actions .btn:hover { border-color: #2563eb; color: #2563eb; transform: none; box-shadow: none; }
+        .actions .btn-primary { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; border-color: transparent; }
+        .actions .btn-primary:hover { color: #fff; border-color: transparent; transform: none; box-shadow: 0 4px 10px rgba(37,99,235,0.3); }
         .info-table { width: 100%; font-size: 13px; }
         .info-table td { padding: 6px 0; }
-        .info-table td:first-child { color: #94a3b8; width: 120px; }
+        .info-table td:first-child { color: #94a3b8; width: 150px; }
         .sso-info { background: linear-gradient(135deg, #f0fdf4, #ecfdf5); border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; font-size: 13px; color: #166534; }
+        .col-sub { font-size: 12px; color: #94a3b8; margin: -4px 0 10px; }
     </style>
 </head>
 <body>
@@ -316,12 +351,23 @@ function layout(title, content, isLoggedIn = false, portalAuthUrl = null) {
         <a href="/">首页</a>
         <div class="right">
             ${portalBtn}
+            ${userChip}
             ${logoutBtn}
         </div>
     </div>
+    ${tabbar}
     <div class="container">${content}</div>
 </body>
 </html>`;
+}
+
+/** 从会话 id_token 解出当前登录账号 (preferred_username, 兜底 sub) */
+function sessionUser(session) {
+    if (!session || !session.tokens || !session.tokens.id_token) return null;
+    try {
+        const p = JSON.parse(Buffer.from(session.tokens.id_token.split('.')[1], 'base64').toString());
+        return p.preferred_username || p.sub || null;
+    } catch { return null; }
 }
 
 // ============================================================
@@ -359,7 +405,7 @@ async function renderIntrospectDemo(req, res) {
     try {
         result = await introspectToken(session.tokens.access_token, 'access_token');
     } catch (e) {
-        return layout('请求失败', `<div class="card"><h1>⚠️ 请求失败</h1><pre>${esc(e.message)}</pre><div class="actions"><a href="/" class="btn btn-outline">返回</a></div></div>`, true, portalAuthUrl);
+        return layout('请求失败', `<div class="card"><h1>⚠️ 请求失败</h1><pre>${esc(e.message)}</pre><div class="actions"><a href="/" class="btn btn-outline">返回</a></div></div>`, true, portalAuthUrl, sessionUser(session), 'introspect');
     }
 
     // RFC 7662: introspect 端点在 token 无效时返回 200 + active=false (而非 401)
@@ -382,28 +428,9 @@ async function renderIntrospectDemo(req, res) {
         <div class="card">
             <h1>${ok ? '✅' : '❌'} Token 内省 — HTTP ${result.status}</h1>
             <div class="sub">调用 /oauth2/introspect 获取 access_token 元数据 (RFC 7662)</div>
-            ${ok ? `
-            <table class="info-table">
-                <tr><td>active</td><td>${result.data.active ? '✅ 有效' : '❌ 已失效'}</td></tr>
-                ${result.data.sub ? `<tr><td>sub</td><td>${esc(result.data.sub)}</td></tr>` : ''}
-                ${result.data.username ? `<tr><td>username</td><td>${esc(result.data.username)}</td></tr>` : ''}
-                ${result.data.client_id ? `<tr><td>client_id</td><td>${esc(result.data.client_id)}</td></tr>` : ''}
-                ${result.data.iss ? `<tr><td>iss</td><td>${esc(result.data.iss)}</td></tr>` : ''}
-                ${result.data.aud ? `<tr><td>aud</td><td>${esc(result.data.aud)}</td></tr>` : ''}
-                ${result.data.scope ? `<tr><td>scope</td><td>${esc(result.data.scope)}</td></tr>` : ''}
-                ${result.data.token_type ? `<tr><td>token_type</td><td>${esc(result.data.token_type)}</td></tr>` : ''}
-                ${result.data.exp ? `<tr><td>exp</td><td>${esc(new Date(result.data.exp * 1000).toLocaleString())}</td></tr>` : ''}
-                ${result.data.iat ? `<tr><td>iat</td><td>${esc(new Date(result.data.iat * 1000).toLocaleString())}</td></tr>` : ''}
-                ${result.data.nbf ? `<tr><td>nbf</td><td>${esc(new Date(result.data.nbf * 1000).toLocaleString())}</td></tr>` : ''}
-            </table>
-            ` : `<pre>${esc(bodyDisplay)}</pre>`}
-            <div class="actions">
-                <a href="/userinfo-demo" class="btn btn-outline">👤 查询用户信息</a>
-                <a href="/api-demo" class="btn btn-outline">📋 调用应用列表(三方受限)</a>
-                <a href="/refresh-demo" class="btn btn-outline">🔄 刷新 Token</a>
-            </div>
+            <pre>${esc(bodyDisplay)}</pre>
         </div>
-    `, true, portalAuthUrl);
+    `, true, portalAuthUrl, sessionUser(session), 'introspect');
 }
 
 /** 回调页 — 换 token 并展示 */
@@ -419,12 +446,12 @@ async function renderCallback(query, res) {
                 </div>
                 <div class="actions"><a href="/" class="btn btn-outline">返回重试</a></div>
             </div>
-        `);
+        `, false, null, null, 'restart');
     }
 
     const code = query.code;
     if (!code) {
-        return layout('错误', `<div class="card"><h1>⚠️ 未收到授权码</h1><div class="actions"><a href="/" class="btn btn-outline">返回</a></div></div>`);
+        return layout('错误', `<div class="card"><h1>⚠️ 未收到授权码</h1><div class="actions"><a href="/" class="btn btn-outline">返回</a></div></div>`, false, null, null, 'restart');
     }
 
     // 用 code 换 token
@@ -438,7 +465,7 @@ async function renderCallback(query, res) {
                 <pre>${esc(e.message)}</pre>
                 <div class="actions"><a href="/" class="btn btn-outline">返回</a></div>
             </div>
-        `);
+        `, false, null, null, 'restart');
     }
 
     if (tokenResult.status !== 200) {
@@ -451,9 +478,8 @@ async function renderCallback(query, res) {
                 <h1>⚠️ Token 交换失败 (HTTP ${tokenResult.status})</h1>
                 ${hint}
                 <pre>${esc(JSON.stringify(tokenResult.data, null, 2))}</pre>
-                <div class="actions"><a href="/" class="btn btn-primary">重新授权登录</a><a href="/" class="btn btn-outline">返回</a></div>
             </div>
-        `);
+        `, false, null, null, 'restart');
     }
 
     const t = tokenResult.data;
@@ -478,7 +504,7 @@ async function renderCallback(query, res) {
     return layout('授权成功', `
         <div class="card">
             <h1>✅ 授权成功</h1>
-            <div class="sub">已通过授权码换取 Token, 可使用下方按钮访问受保护资源</div>
+            <div class="sub">已通过授权码换取 Token, 可使用顶部功能栏访问受保护资源</div>
 
             <div class="flow">
                 <div class="flow-step done">① 发起授权</div>
@@ -497,7 +523,7 @@ async function renderCallback(query, res) {
 
             ${idTokenPayload ? `
             <h2 style="margin-top:20px;">用户身份信息 (id_token 解码)</h2>
-            <div class="sub" style="font-size:12px;color:#94a3b8;margin-bottom:8px;">id_token 用于客户端识别用户身份, access_token 仅用于调用资源 API</div>
+            <div class="col-sub">id_token 用于客户端识别用户身份, access_token 仅用于调用资源 API</div>
             <table class="info-table">
                 <tr><td>sub (用户唯一标识)</td><td>${esc(idTokenPayload.sub)}</td></tr>
                 <tr><td>preferred_username</td><td>${esc(idTokenPayload.preferred_username)}</td></tr>
@@ -505,15 +531,8 @@ async function renderCallback(query, res) {
                 <tr><td>aud (受众)</td><td>${esc(idTokenPayload.aud)}</td></tr>
                 <tr><td>exp (过期)</td><td>${esc(new Date(idTokenPayload.exp * 1000).toLocaleString())}</td></tr>
             </table>` : ''}
-
-            <div class="actions">
-                <a href="/userinfo-demo" class="btn btn-outline">👤 查询用户信息</a>
-                <a href="/api-demo" class="btn btn-outline">📋 调用应用列表(三方受限)</a>
-                <a href="/refresh-demo" class="btn btn-outline">🔄 刷新 Token</a>
-                <a href="/introspect-demo" class="btn btn-outline">🔍 验证 Token</a>
-            </div>
         </div>
-    `, true);
+    `, true, null, idTokenPayload ? (idTokenPayload.preferred_username || idTokenPayload.sub) : null, 'restart');
 }
 
 /** 资源 API 演示 */
@@ -534,7 +553,7 @@ async function renderApiDemo(req, res) {
     try {
         result = await callResourceServer('/biz/clients/mine', session.tokens.access_token);
     } catch (e) {
-        return layout('API 调用失败', `<div class="card"><h1>⚠️ 请求失败</h1><pre>${esc(e.message)}</pre></div>`, true, portalAuthUrl);
+        return layout('API 调用失败', `<div class="card"><h1>⚠️ 请求失败</h1><pre>${esc(e.message)}</pre></div>`, true, portalAuthUrl, sessionUser(session), 'api');
     }
 
     if (result.status === 401) {
@@ -564,14 +583,8 @@ Authorization: Bearer ${esc(session.tokens.access_token.substring(0, 40))}...</p
 
             <h2 style="margin-top:16px;">响应</h2>
             <pre>${esc(bodyDisplay)}</pre>
-
-            <div class="actions">
-                <a href="/userinfo-demo" class="btn btn-outline">👤 查询用户信息</a>
-                <a href="/refresh-demo" class="btn btn-outline">🔄 刷新 Token</a>
-                <a href="/introspect-demo" class="btn btn-outline">🔍 验证 Token</a>
-            </div>
         </div>
-    `, true, portalAuthUrl);
+    `, true, portalAuthUrl, sessionUser(session), 'api');
 }
 
 /** UserInfo 演示 */
@@ -592,7 +605,7 @@ async function renderUserinfoDemo(req, res) {
     try {
         result = await callResourceServer('/userinfo', session.tokens.access_token);
     } catch (e) {
-        return layout('请求失败', `<div class="card"><h1>⚠️ 请求失败</h1><pre>${esc(e.message)}</pre></div>`, true, portalAuthUrl);
+        return layout('请求失败', `<div class="card"><h1>⚠️ 请求失败</h1><pre>${esc(e.message)}</pre></div>`, true, portalAuthUrl, sessionUser(session), 'userinfo');
     }
 
     if (result.status === 401) {
@@ -616,13 +629,8 @@ async function renderUserinfoDemo(req, res) {
             <h1>${ok ? '✅' : '❌'} /userinfo — HTTP ${result.status}</h1>
             <div class="sub">OIDC UserInfo 端点, 返回用户基本信息</div>
             <pre>${esc(bodyDisplay)}</pre>
-            <div class="actions">
-                <a href="/api-demo" class="btn btn-outline">📋 调用应用列表(三方受限)</a>
-                <a href="/refresh-demo" class="btn btn-outline">🔄 刷新 Token</a>
-                <a href="/introspect-demo" class="btn btn-outline">🔍 验证 Token</a>
-            </div>
         </div>
-    `, true, portalAuthUrl);
+    `, true, portalAuthUrl, sessionUser(session), 'userinfo');
 }
 
 /** 刷新 token 演示 */
@@ -643,7 +651,7 @@ async function renderRefreshDemo(req, res) {
     try {
         result = await refreshAccessToken(session.tokens.refresh_token);
     } catch (e) {
-        return layout('刷新失败', `<div class="card"><h1>⚠️ 请求失败</h1><pre>${esc(e.message)}</pre></div>`, true, portalAuthUrl);
+        return layout('刷新失败', `<div class="card"><h1>⚠️ 请求失败</h1><pre>${esc(e.message)}</pre></div>`, true, portalAuthUrl, sessionUser(session), 'refresh');
     }
 
     // RFC 6749 §5.2: token 端点错误返回 400 (invalid_grant), 401 (client 认证失败) 等
@@ -677,13 +685,8 @@ async function renderRefreshDemo(req, res) {
             <h1>${ok ? '✅' : '❌'} Token 刷新 — HTTP ${result.status}</h1>
             <div class="sub">用 refresh_token 换取新的 access_token</div>
             <pre>${esc(bodyDisplay)}</pre>
-            <div class="actions">
-                <a href="/userinfo-demo" class="btn btn-outline">👤 查询用户信息</a>
-                <a href="/api-demo" class="btn btn-outline">📋 调用应用列表(三方受限)</a>
-                <a href="/introspect-demo" class="btn btn-outline">🔍 验证 Token</a>
-            </div>
         </div>
-    `, true, portalAuthUrl);
+    `, true, portalAuthUrl, sessionUser(session), 'refresh');
 }
 
 // ========== 设计文档 §6-7: Web 应用 A → 门户 的 prompt=none 静默 SSO 回流 ==========
@@ -701,7 +704,7 @@ function handleReturnToPortal(req, res) {
 
 /**
  * 门户 SSO 授权回调端点 (/portal-sso-callback).
- * 与 mobile-app 的 handlePortalSsoCallback 逻辑一致:
+ * 返回门户 prompt=none 静默回流的标准处理 (H5 同款镜像):
  *   - code 存在: SAS SSO Session 有效 → 302 到门户首页 (门户自己完成剩余 OAuth2 流程, 依然无感)
  *   - error=login_required: SSO Session 失效 → 302 到门户 /login 触发正常登录
  *   - 其他错误 → 跳门户首页
@@ -713,13 +716,13 @@ function handlePortalSsoCallback(query, res) {
     let redirectTarget = PORTAL_URL;
     if (query.error === 'login_required') {
         // 设计文档 §7: 无 SAS Session → error=login_required → 转门户正常登录
-        console.log('[web-app portal-sso] 认证中心无 SSO Session, 返回 login_required, 转门户正常登录');
+        console.log('[oa-web-app portal-sso] 认证中心无 SSO Session, 返回 login_required, 转门户正常登录');
         redirectTarget = PORTAL_URL + '/login';
     } else if (query.code) {
         // 设计文档 §7: 有 SAS Session → code 返回 → 用户无感进入门户
-        console.log('[web-app portal-sso] 认证中心 SSO Session 有效, 获得 code, 转门户');
+        console.log('[oa-web-app portal-sso] 认证中心 SSO Session 有效, 获得 code, 转门户');
     } else if (query.error) {
-        console.log('[web-app portal-sso] 授权失败 error=%s desc=%s, 转门户首页', query.error, query.error_description);
+        console.log('[oa-web-app portal-sso] 授权失败 error=%s desc=%s, 转门户首页', query.error, query.error_description);
     }
 
     res.writeHead(302, {
@@ -787,7 +790,7 @@ const server = http.createServer(async (req, res) => {
     } catch (e) {
         if (!res.headersSent) {
             res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
-            res.end(layout('服务器错误', `<div class="card"><h1>⚠️ 服务器错误</h1><pre>${esc(e.message)}</pre></div>`));
+            res.end(layout('服务器错误', `<div class="card"><h1>⚠️ 服务器错误</h1><pre>${esc(e.message)}</pre></div>`, false, null, null, 'restart'));
         }
     }
 });

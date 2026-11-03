@@ -79,7 +79,7 @@
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">
                     <div class="client-card">
                         <div class="client-name">
-                            web-app
+                            oa-web-app
                             <span class="tag blue" style="margin-left:4px;">Web 应用</span>
                         </div>
                         <div class="client-desc">传统服务端渲染应用、Web SPA</div>
@@ -127,6 +127,7 @@
                         <div class="client-name">
                             mobile-app
                             <span class="tag purple" style="margin-left:4px;">Public Client</span>
+                            <span class="tag gray" style="margin-left:4px;">预留</span>
                         </div>
                         <div class="client-desc">原生移动 App (iOS/Android) / 无后端纯前端 SPA</div>
                         <div class="client-features">
@@ -137,8 +138,7 @@
                             ✅ Access Token TTL 2h
                         </div>
                         <div class="client-meta">
-                            redirect: com.example.mobileapp://oauth2/redirect<br>
-                            redirect: http://localhost:8083/callback (SPA)
+                            redirect: com.example.mobileapp://oauth2/redirect (原生 scheme, 预留)
                         </div>
                         <div class="client-openid supported">
                             ✅ 注册 scope: <code>openid,profile,email,read,write</code><br>
@@ -218,7 +218,7 @@
 
                 <p style="margin-top:14px; font-weight:600; color:#1e293b;">openid scope 使用示例：</p>
                 <pre>// 授权请求时必须带 openid
-GET /oauth2/authorize?response_type=code&client_id=web-app
+GET /oauth2/authorize?response_type=code&client_id=oa-web-app
     &redirect_uri=http://localhost:8081/callback
     &scope=openid profile email read write   ← openid 必须在此处
     &state=demo

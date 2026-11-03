@@ -29,7 +29,7 @@ import net.xzh.iam.resource.service.PermissionService;
  * 令牌业务码由自省层双维交集承担。
  * <p>
  * 命名说明: 历史上曾按「门户 / 管理端」双服务各配一个 UserDetailsService, 单库合并后只剩本类
- * 一个统一 IdP (服务 admin-app / portal-app / web-app / device-app / mobile-app 全部客户端),
+ * 一个统一 IdP (服务 admin-app / portal-app / oa-web-app / device-app / mobile-app 全部客户端),
  * 故由 PortalUserDetailsService 更名 PlatformUserDetailsService, 避免与 portal-app / portal 域 /
  * PORTAL 角色 / portal.profile scope 等无关的 portal 概念混淆。
  *

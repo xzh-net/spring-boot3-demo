@@ -12,8 +12,10 @@ public class OnlineUserVO {
 
     /** 用户 ID (sys_user.id) */
     private Long userId;
-    /** 用户名 */
+    /** 登录账号 (sys_user.username, 如 admin/user — 前端展示用) */
     private String username;
+    /** 业务用户编码 user_code (u_xxx — 会话/令牌撤销类 API 的 principal 参数) */
+    private String userCode;
     /** 昵称 */
     private String nickname;
     /** 是否启用 */

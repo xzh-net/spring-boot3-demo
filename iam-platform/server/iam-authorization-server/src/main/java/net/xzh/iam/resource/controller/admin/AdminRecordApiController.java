@@ -1,6 +1,8 @@
 package net.xzh.iam.resource.controller.admin;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -21,8 +23,10 @@ import lombok.extern.slf4j.Slf4j;
 import net.xzh.iam.common.Result;
 import net.xzh.iam.auth.entity.OAuth2AuthorizationConsentEntity;
 import net.xzh.iam.auth.entity.OAuth2AuthorizationRecordEntity;
+import net.xzh.iam.auth.entity.SysUser;
 import net.xzh.iam.auth.mapper.OAuth2AuthorizationConsentMapper;
 import net.xzh.iam.auth.mapper.OAuth2AuthorizationRecordMapper;
+import net.xzh.iam.auth.mapper.SysUserMapper;
 import net.xzh.iam.auth.service.AuthSessionService;
 
 /**
@@ -44,13 +48,18 @@ public class AdminRecordApiController {
     private final OAuth2AuthorizationConsentService consentService;
     private final AuthSessionService authSessionService;
     private final RegisteredClientRepository clientRepository;
+    private final SysUserMapper sysUserMapper;
 
     @GetMapping("/consents")
     public Result<List<OAuth2AuthorizationConsentEntity>> consentList() {
         List<OAuth2AuthorizationConsentEntity> list = consentMapper.listAll();
+        Map<String, String> usernameMap = resolveUsernames(
+                list.stream().map(OAuth2AuthorizationConsentEntity::getPrincipalName).collect(Collectors.toList()));
         for (OAuth2AuthorizationConsentEntity c : list) {
             c.setClientName(resolveClientName(c.getRegisteredClientId()));
             c.setGrantTypes(resolveGrantTypes(c.getRegisteredClientId(), c.getPrincipalName()));
+            // 展示用登录账号 (user_code 反查 sys_user.username); principalName 保持 user_code 供 API 参数
+            c.setUsername(usernameMap.getOrDefault(c.getPrincipalName(), c.getPrincipalName()));
         }
         return Result.ok(list);
     }
@@ -68,10 +77,14 @@ public class AdminRecordApiController {
         }
         qw.orderByDesc("grant_time");
         List<OAuth2AuthorizationRecordEntity> records = recordMapper.selectList(qw);
+        Map<String, String> usernameMap = resolveUsernames(
+                records.stream().map(OAuth2AuthorizationRecordEntity::getPrincipalName).collect(Collectors.toList()));
         for (OAuth2AuthorizationRecordEntity r : records) {
             if (r.getClientName() == null || r.getClientName().isEmpty()) {
                 r.setClientName(resolveClientName(r.getRegisteredClientId()));
             }
+            // 展示用登录账号 (user_code 反查 sys_user.username); principalName 保持 user_code 供 API 参数
+            r.setUsername(usernameMap.getOrDefault(r.getPrincipalName(), r.getPrincipalName()));
         }
         return Result.ok(records);
     }
@@ -104,6 +117,31 @@ public class AdminRecordApiController {
             return client != null ? client.getClientName() : clientId;
         } catch (Exception e) {
             return clientId;
+        }
+    }
+
+    /**
+     * 按 user_code 批量反查登录账号 (sys_user.username), 供管理端展示。
+     * principalName 全系统兼任 API 参数 (撤销/查询按 user_code 工作), 此处只做展示层映射, 不改 API 侧取值。
+     */
+    private Map<String, String> resolveUsernames(Collection<String> userCodes) {
+        List<String> codes = userCodes.stream()
+                .filter(c -> c != null && !c.isBlank())
+                .distinct()
+                .collect(Collectors.toList());
+        if (codes.isEmpty()) {
+            return Map.of();
+        }
+        try {
+            return sysUserMapper.selectList(new QueryWrapper<SysUser>()
+                            .select("user_code", "username")
+                            .in("user_code", codes))
+                    .stream()
+                    .filter(u -> u.getUserCode() != null && u.getUsername() != null)
+                    .collect(Collectors.toMap(SysUser::getUserCode, SysUser::getUsername, (a, b) -> a));
+        } catch (Exception e) {
+            log.warn("反查登录账号失败 (回退 principalName 显示): {}", e.getMessage());
+            return Map.of();
         }
     }
 

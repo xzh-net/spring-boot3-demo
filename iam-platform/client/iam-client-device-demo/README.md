@@ -85,7 +85,7 @@ node server.js
 
 ## 与其他客户端的差异
 
-| 特性 | web-app / mobile-app | device-app |
+| 特性 | oa-web-app / oa-h5-app | device-app |
 |------|----------------------|-------------|
 | 授权入口 | `/oauth2/authorize` | `/oauth2/device/code` |
 | 用户交互 | 浏览器直接登录 | 在其他设备上输入 user_code |

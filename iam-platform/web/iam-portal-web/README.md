@@ -47,11 +47,11 @@ node server.js
 
 ## 客户端列表来源
 
-通过 `GET /api/clients` 调用 iam-portal-bff，iam-portal-bff 再携带用户 Bearer Token 调用资源中心的 `GET /biz/clients/mine`，按应用授权过滤出当前人员可见客户端：
+通过 `GET /api/clients` 调用 iam-portal-bff，iam-portal-bff 再携带用户 Bearer Token 调用资源中心的 `GET /biz/clients/mine`，按应用授权过滤出当前人员可见卡片：
 
-- 跳过 `portal-app` 自身
-- 跳过设备码客户端（`device-app`）
-- 仅返回支持授权码模式的客户端（`web-app` / `mobile-app`）
+- 按 `iam_application.visible` + `iam_app_authorization` 过滤（仅授权可见的应用需有有效授权）
+- 卡片按 `iam_application_channel` 渠道生成（OA Web / OA H5 / 设备终端 / 原生APP 占位）
+- 占位渠道（`access_url` 为空）只展示不可点击，且不暴露 client_id
 
 每个客户端卡片点击后跳转客户端首页（**不直接生成授权 URL**），由客户端自行检测 session 并决定是否发起授权流程。
 

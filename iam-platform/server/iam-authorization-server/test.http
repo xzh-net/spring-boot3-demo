@@ -44,9 +44,10 @@ Content-Type: application/x-www-form-urlencoded
 grant_type=authorization_code&code={{adminCode}}&redirect_uri=http://localhost:8085/login/oauth2/code/admin-app
 
 
-# ---- 2. 获取 admin-app 令牌 (密码模式入口: admin 用户, 供后续能力验证) ----
-# 说明: admin-app 注册的授权类型不包含 password, 此处用密码模式仅为快速取得 admin 业务用户令牌;
-#       标准流程仍推荐授权码模式 (第 1.3/1.4 节)。
+# ---- 2. 【已停用】密码模式示例 (仅作协议格式参考) ----
+# 说明: Provider 校验客户端 authorization_grant_types 必须含 password, 否则返回 unauthorized_client;
+#       2026-11-03 起所有客户端均已去掉 password 授权, 本请求预期被拒。
+#       取 admin 令牌请改用第 1 节授权码 + PKCE 流程。
 
 ### 2.1 admin 密码换 token (填入 {{adminToken}})
 POST {{authBaseUrl}}/oauth2/token

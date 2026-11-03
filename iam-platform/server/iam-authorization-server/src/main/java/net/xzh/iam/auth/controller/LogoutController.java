@@ -86,7 +86,7 @@ public class LogoutController {
         // 4. 重定向到登出后跳转地址
         // 兼容两种参数名:
         //   - post_logout_redirect_uri: OIDC RP-Initiated Logout 标准参数 (iam-portal-bff 使用)
-        //   - redirect: 各客户端应用 (iam-client-web-demo / mobile-app) 的自定义参数
+        //   - redirect: 各客户端应用 (iam-client-web-demo 等) 的自定义参数
         String postLogoutRedirectUri = request.getParameter("post_logout_redirect_uri");
         String redirectParam = request.getParameter("redirect");
         String state = request.getParameter("state");

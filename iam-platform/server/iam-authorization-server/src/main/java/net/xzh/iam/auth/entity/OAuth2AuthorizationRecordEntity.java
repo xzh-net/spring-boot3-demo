@@ -3,6 +3,7 @@ package net.xzh.iam.auth.entity;
 import java.time.LocalDateTime;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 
@@ -42,4 +43,8 @@ public class OAuth2AuthorizationRecordEntity {
 
     /** 授权类型: authorization_code / urn:ietf:params:oauth:grant-type:device_code / password 等 (原始 grant_type 值) */
     private String grantType;
+
+    /** 非数据库字段, 仅用于管理端展示登录账号 (sys_user.username, 由 controller 按 user_code 反查填充; 查不到回退 principalName) */
+    @TableField(exist = false)
+    private String username;
 }

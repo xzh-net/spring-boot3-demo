@@ -25,7 +25,11 @@ public class CurrentUserController {
             return result;
         }
         result.put("authenticated", true);
-        result.put("username", oidcUser.getName());
+        // 登录账号 (preferred_username); 兜底 sub (user_code)。userCode 单独给, 供需要编码的场景
+        result.put("username", oidcUser.getPreferredUsername() != null
+                ? oidcUser.getPreferredUsername()
+                : oidcUser.getName());
+        result.put("userCode", oidcUser.getName());
         result.put("nickname", oidcUser.getAttribute("nickname"));
         result.put("email", oidcUser.getAttribute("email"));
         result.put("roles", oidcUser.getAttribute("roles"));

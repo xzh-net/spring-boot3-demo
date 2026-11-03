@@ -1,4 +1,4 @@
-/**
+﻿/**
  * OAuth2 设备码授权演示
  * ------------------------------------
  * 设备码流程 (RFC 8628), 适合无浏览器或输入受限的设备:
@@ -220,13 +220,36 @@ function stopPolling(sessionId) {
 // 页面渲染 (与授权码 Demo 一致的样式)
 // ============================================================
 
-function layout(title, content, isLoggedIn = false) {
+/** 从会话 id_token 解当前登录账号 (preferred_username, 兜底 sub) */
+function sessUser(session) {
+    if (!session || !session.tokens || !session.tokens.id_token) return null;
+    try {
+        const p = JSON.parse(Buffer.from(session.tokens.id_token.split('.')[1], 'base64').toString());
+        return p.preferred_username || p.sub || null;
+    } catch { return null; }
+}
+
+function layout(title, content, isLoggedIn = false, user = null, active = '') {
+    // 顶栏: 与 8000 门户 / 8081 演示对齐 (纯文字 13px gap16, hover 淡底)
     const portalBtn = isLoggedIn
-        ? `<a href="${PORTAL_URL}" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.35);padding:6px 14px;border-radius:6px;text-decoration:none;font-size:13px;margin-right:12px;">🏠 返回门户</a>`
+        ? `<a href="${PORTAL_URL}">🏠 返回门户</a>`
         : '';
     const logoutBtn = isLoggedIn
-        ? '<a href="/logout" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.35);padding:6px 14px;border-radius:6px;text-decoration:none;font-size:13px;">退出登录</a>'
+        ? '<a href="/logout" class="logout">⊗ 退出登录</a>'
         : '';
+    const userChip = user
+        ? `<span class="userchip">👤 ${esc(user)}</span>`
+        : '';
+    // 全局功能标签栏: 每页一致的四个入口, 当前页高亮 (替代各页差异化底部大按钮)
+    const TABS = [
+        ['/userinfo-demo', '👤 查询用户信息', 'userinfo'],
+        ['/api-demo', '📋 调用应用列表(三方受限)', 'api'],
+        ['/refresh-demo', '🔄 刷新 Token', 'refresh'],
+        ['/introspect-demo', '🔍 验证 Token', 'introspect'],
+        ['/start', '🔁 重新授权', 'restart']
+    ];
+    const tabbar = `<div class="tabbar">` + TABS.map(t =>
+        `<a href="${t[0]}" class="tab${active === t[2] ? ' on' : ''}">${t[1]}</a>`).join('') + `</div>`;
     return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -236,14 +259,27 @@ function layout(title, content, isLoggedIn = false) {
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: -apple-system, "Segoe UI", sans-serif; background: #f0f2f5; color: #1e293b; min-height: 100vh; }
-        .nav { background: linear-gradient(135deg, #1e3a5f, #2563eb); color: #fff; padding: 0 24px; height: 56px; display: flex; align-items: center; }
+        .nav { background: linear-gradient(135deg, #1e3a5f, #2563eb); color: #fff; padding: 0 24px; height: 56px; display: flex; align-items: center; position: sticky; top: 0; z-index: 30; }
         .nav .brand { font-weight: 700; font-size: 16px; }
         .nav a { color: #dbeafe; text-decoration: none; margin-left: 24px; font-size: 14px; }
-        .nav .right { margin-left: auto; display: flex; align-items: center; }
+        /* 右侧组: 与 8000 门户顶栏对齐 (gap 16px, 13px, hover 淡底圆角) */
+        .nav .right { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+        .nav .right a { margin-left: 0; color: #dbeafe; font-size: 13px; white-space: nowrap; padding: 0; border-radius: 6px; }
+        .nav .right a:hover { background: rgba(255,255,255,0.15); color: #ffffff; }
+        .nav .userchip { color: #dbeafe; font-size: 13px; white-space: nowrap; }
+        /* 全局功能标签栏 (置顶第二行, 所有页面一致) */
+        .tabbar { position: sticky; top: 56px; z-index: 20; background: #ffffff; border-bottom: 1px solid #e2e8f0;
+                  display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; padding: 10px 24px;
+                  box-shadow: 0 2px 8px rgba(15,23,42,0.06); }
+        .tab { font-size: 13px; color: #475569; background: #f1f5f9; border: 1px solid #e2e8f0; padding: 7px 18px;
+               border-radius: 999px; text-decoration: none; transition: all 0.15s; white-space: nowrap; }
+        .tab:hover { color: #2563eb; border-color: #bfdbfe; background: #eff6ff; }
+        .tab.on { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; border-color: transparent;
+                  box-shadow: 0 4px 10px rgba(37,99,235,0.3); font-weight: 500; }
         .container { max-width: 860px; margin: 24px auto; padding: 0 24px; }
         .card { background: #fff; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); padding: 28px; margin-bottom: 18px; }
         h1 { font-size: 22px; color: #1e3a5f; margin-bottom: 6px; }
-        h2 { font-size: 16px; color: #1e3a5f; margin-bottom: 12px; }
+        h2 { font-size: 15px; color: #1e3a5f; margin-bottom: 12px; font-weight: 600; padding-left: 9px; border-left: 3px solid #2563eb; }
         .sub { color: #64748b; font-size: 13px; margin-bottom: 20px; }
         .btn { display: inline-block; padding: 10px 28px; border-radius: 8px; border: none; cursor: pointer; font-size: 14px; font-weight: 500; text-decoration: none; transition: all 0.2s; }
         .btn-primary { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; }
@@ -258,9 +294,15 @@ function layout(title, content, isLoggedIn = false) {
         .flow-step.todo { background: #f1f5f9; color: #94a3b8; }
         .flow-arrow { color: #cbd5e1; font-size: 18px; }
         .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+        /* 页内情境按钮: 位置不变, 大小与顶部功能栏胶囊对齐 */
+        .actions .btn { padding: 7px 18px; border-radius: 999px; font-size: 13px; font-weight: 400;
+                        background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; box-shadow: none; transform: none; }
+        .actions .btn:hover { border-color: #2563eb; color: #2563eb; transform: none; box-shadow: none; }
+        .actions .btn-primary { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; border-color: transparent; }
+        .actions .btn-primary:hover { color: #fff; border-color: transparent; transform: none; box-shadow: 0 4px 10px rgba(37,99,235,0.3); }
         .info-table { width: 100%; font-size: 13px; }
         .info-table td { padding: 6px 0; }
-        .info-table td:first-child { color: #94a3b8; width: 160px; }
+        .info-table td:first-child { color: #94a3b8; width: 150px; }
         .code-display { text-align: center; padding: 28px; background: linear-gradient(135deg, #eff6ff, #dbeafe); border-radius: 12px; margin: 16px 0; border: 1px solid #bfdbfe; }
         .code-display .label { font-size: 13px; color: #64748b; margin-bottom: 8px; }
         .code-display .code { font-size: 42px; font-weight: 800; letter-spacing: 12px; color: #1e3a5f; font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
@@ -281,9 +323,11 @@ function layout(title, content, isLoggedIn = false) {
         <a href="/">首页</a>
         <div class="right">
             ${portalBtn}
+            ${userChip}
             ${logoutBtn}
         </div>
     </div>
+    ${tabbar}
     <div class="container">${content}</div>
 </body>
 </html>`;
@@ -326,16 +370,9 @@ async function renderHome(req, res) {
                 <h2>Token 响应</h2>
                 <pre>${esc(JSON.stringify(tokens, null, 2))}</pre>`}
 
-                <div class="actions">
-                    <a href="/userinfo-demo" class="btn btn-outline">👤 查询用户信息</a>
-                    <a href="/api-demo" class="btn btn-outline">📋 调用应用列表(三方受限)</a>
-                    <a href="/refresh-demo" class="btn btn-outline">🔄 刷新 Token</a>
-                    <a href="/introspect-demo" class="btn btn-outline">🔍 验证 Token</a>
-                    <a href="/start" class="btn btn-outline">🔄 重新授权</a>
-                </div>
             </div>
         `;
-        return layout('OAuth2 设备码演示', content, true);
+        return layout('OAuth2 设备码演示', content, true, idTokenPayload ? (idTokenPayload.preferred_username || idTokenPayload.sub) : null, 'restart');
     }
 
     // 未登录 / session 失效 → 直接发起设备码授权, 跳转到等待授权页
@@ -354,8 +391,10 @@ async function renderHome(req, res) {
 async function renderIntrospectDemo(req, res) {
     const session = getSessionTokens(req);
     if (!session || !session.tokens) {
+        // 设备码进行中 (pending 尚无 token) → 回设备页继续等待, 不重置授权流程
+        const dest = session && session.status === 'pending' ? '/device' : '/start';
         res.writeHead(302, {
-            'Location': '/start',
+            'Location': dest,
             'Cache-Control': 'no-cache, no-store, must-revalidate'
         });
         res.end();
@@ -366,7 +405,7 @@ async function renderIntrospectDemo(req, res) {
     try {
         result = await introspectToken(session.tokens.access_token, 'access_token');
     } catch (e) {
-        return layout('请求失败', `<div class="card"><h1>⚠️ 请求失败</h1><pre>${esc(e.message)}</pre><div class="actions"><a href="/" class="btn btn-outline">返回</a></div></div>`);
+        return layout('请求失败', `<div class="card"><h1>⚠️ 请求失败</h1><pre>${esc(e.message)}</pre><div class="actions"><a href="/" class="btn btn-outline">返回</a></div></div>`, true, sessUser(session), 'introspect');
     }
 
     // RFC 7662: introspect 端点在 token 无效时返回 200 + active=false (而非 401)
@@ -389,29 +428,9 @@ async function renderIntrospectDemo(req, res) {
         <div class="card">
             <h1>${ok ? '✅' : '❌'} Token 内省 — HTTP ${result.status}</h1>
             <div class="sub">调用 /oauth2/introspect 获取 access_token 元数据 (RFC 7662)</div>
-            ${ok && result.data.active ? `
-            <table class="info-table">
-                <tr><td>active</td><td>${result.data.active ? '✅ 有效' : '❌ 已失效'}</td></tr>
-                ${result.data.sub ? `<tr><td>sub</td><td>${esc(result.data.sub)}</td></tr>` : ''}
-                ${result.data.username ? `<tr><td>username</td><td>${esc(result.data.username)}</td></tr>` : ''}
-                ${result.data.client_id ? `<tr><td>client_id</td><td>${esc(result.data.client_id)}</td></tr>` : ''}
-                ${result.data.iss ? `<tr><td>iss</td><td>${esc(result.data.iss)}</td></tr>` : ''}
-                ${result.data.aud ? `<tr><td>aud</td><td>${esc(result.data.aud)}</td></tr>` : ''}
-                ${result.data.scope ? `<tr><td>scope</td><td>${esc(result.data.scope)}</td></tr>` : ''}
-                ${result.data.token_type ? `<tr><td>token_type</td><td>${esc(result.data.token_type)}</td></tr>` : ''}
-                ${result.data.exp ? `<tr><td>exp</td><td>${esc(new Date(result.data.exp * 1000).toLocaleString())}</td></tr>` : ''}
-                ${result.data.iat ? `<tr><td>iat</td><td>${esc(new Date(result.data.iat * 1000).toLocaleString())}</td></tr>` : ''}
-                ${result.data.nbf ? `<tr><td>nbf</td><td>${esc(new Date(result.data.nbf * 1000).toLocaleString())}</td></tr>` : ''}
-            </table>
-            ` : `<pre>${esc(bodyDisplay)}</pre>`}
-            <div class="actions">
-                <a href="/userinfo-demo" class="btn btn-outline">👤 查询用户信息</a>
-                <a href="/api-demo" class="btn btn-outline">📋 调用应用列表(三方受限)</a>
-                <a href="/refresh-demo" class="btn btn-outline">🔄 刷新 Token</a>
-                <a href="/start" class="btn btn-outline">🔄 重新授权</a>
-            </div>
+            <pre>${esc(bodyDisplay)}</pre>
         </div>
-    `, true);
+    `, true, sessUser(session), 'introspect');
 }
 
 /** 设备码展示 + 轮询状态页 */
@@ -446,15 +465,8 @@ function renderDevicePage(session) {
                     <tr><td>exp (过期)</td><td>${esc(new Date(idTokenPayload.exp * 1000).toLocaleString())}</td></tr>
                 </table>` : ''}
 
-                <div class="actions">
-                    <a href="/userinfo-demo" class="btn btn-outline">👤 查询用户信息</a>
-                    <a href="/api-demo" class="btn btn-outline">📋 调用应用列表(三方受限)</a>
-                    <a href="/refresh-demo" class="btn btn-outline">🔄 刷新 Token</a>
-                    <a href="/introspect-demo" class="btn btn-outline">🔍 验证 Token</a>
-                    <a href="/start" class="btn btn-outline">🔄 重新授权</a>
-                </div>
             </div>
-        `, true);
+        `, true, idTokenPayload ? (idTokenPayload.preferred_username || idTokenPayload.sub) : null, 'restart');
     }
 
     let statusBadge = '';
@@ -475,7 +487,7 @@ function renderDevicePage(session) {
                 : verifyUri;
         statusMsg = `<div class="hint-box">
             <div class="hint-label">📌 操作指引 (二选一)</div>
-            <div>过期时间: <strong>${expireSeconds}</strong> 秒后。本页面会自动轮询, 授权成功后自动刷新</div>
+            <div>过期时间: <strong>${expireSeconds}</strong> 秒后 · 每 <strong>${session.interval || 5}</strong> 秒自动轮询刷新, 授权成功后自动完成</div>
             <div style="margin-top:8px;">方式一: 点击完整链接 (自动填入用户码)</div>
             <div><a href="${esc(verifyUriWithCode)}" target="_blank" style="color:#2563eb;font-weight:600;text-decoration:none;word-break:break-all;">${esc(verifyUriWithCode)}</a></div>
             <div style="margin-top:8px;">方式二: 访问链接后手动输入用户码</div>
@@ -517,22 +529,20 @@ function renderDevicePage(session) {
                 <div id="copyTip" style="display:none;margin-top:6px;font-size:12px;color:#16a34a;font-weight:500;">✅ 已复制到剪贴板</div>
             </div>
             ${statusMsg}
-            <div class="actions">
-                ${session.status === 'pending' ? '<span style="font-size:13px;color:#94a3b8;line-height:38px;">🔄 每5秒自动刷新...</span>' : ''}
-                <a href="/start" class="btn btn-outline">🔄 重新授权</a>
-            </div>
         </div>
         ${refreshScript}
         ${copyScript}
-    `, false);
+    `, false, null, 'restart');
 }
 
 /** API 调用演示 */
 async function renderApiDemo(req, res) {
     const session = getSessionTokens(req);
     if (!session || !session.tokens) {
+        // 设备码进行中 (pending 尚无 token) → 回设备页继续等待, 不重置授权流程
+        const dest = session && session.status === 'pending' ? '/device' : '/start';
         res.writeHead(302, {
-            'Location': '/start',
+            'Location': dest,
             'Cache-Control': 'no-cache, no-store, must-revalidate'
         });
         res.end();
@@ -544,7 +554,7 @@ async function renderApiDemo(req, res) {
     try {
         result = await callResourceServer('/biz/clients/mine', accessToken);
     } catch (e) {
-        return layout('请求失败', `<div class="card"><h1>⚠️ 请求失败</h1><pre>${esc(e.message)}</pre><div class="actions"><a href="/start" class="btn btn-outline">重新授权</a></div></div>`);
+        return layout('请求失败', `<div class="card"><h1>⚠️ 请求失败</h1><pre>${esc(e.message)}</pre></div>`, true, sessUser(session), 'api');
     }
 
     if (result.status === 401) {
@@ -574,22 +584,18 @@ Authorization: Bearer ${esc(accessToken.substring(0, 40))}...</pre>
             <h2 style="margin-top:16px;">响应</h2>
             <pre>${esc(bodyDisplay)}</pre>
 
-            <div class="actions">
-                <a href="/userinfo-demo" class="btn btn-outline">👤 查询用户信息</a>
-                <a href="/refresh-demo" class="btn btn-outline">🔄 刷新 Token</a>
-                <a href="/introspect-demo" class="btn btn-outline">🔍 验证 Token</a>
-                <a href="/start" class="btn btn-outline">🔄 重新授权</a>
-            </div>
         </div>
-    `, true);
+    `, true, sessUser(session), 'api');
 }
 
 /** UserInfo 演示 */
 async function renderUserinfoDemo(req, res) {
     const session = getSessionTokens(req);
     if (!session || !session.tokens) {
+        // 设备码进行中 (pending 尚无 token) → 回设备页继续等待, 不重置授权流程
+        const dest = session && session.status === 'pending' ? '/device' : '/start';
         res.writeHead(302, {
-            'Location': '/start',
+            'Location': dest,
             'Cache-Control': 'no-cache, no-store, must-revalidate'
         });
         res.end();
@@ -601,7 +607,7 @@ async function renderUserinfoDemo(req, res) {
     try {
         result = await callResourceServer('/userinfo', accessToken);
     } catch (e) {
-        return layout('请求失败', `<div class="card"><h1>⚠️ 请求失败</h1><pre>${esc(e.message)}</pre><div class="actions"><a href="/start" class="btn btn-outline">重新授权</a></div></div>`);
+        return layout('请求失败', `<div class="card"><h1>⚠️ 请求失败</h1><pre>${esc(e.message)}</pre></div>`, true, sessUser(session), 'userinfo');
     }
 
     if (result.status === 401) {
@@ -624,22 +630,18 @@ async function renderUserinfoDemo(req, res) {
             <h1>${ok ? '✅' : '❌'} /userinfo — HTTP ${result.status}</h1>
             <div class="sub">OIDC UserInfo 端点, 返回用户基本信息</div>
             <pre>${esc(bodyDisplay)}</pre>
-            <div class="actions">
-                <a href="/api-demo" class="btn btn-outline">📋 调用应用列表(三方受限)</a>
-                <a href="/refresh-demo" class="btn btn-outline">🔄 刷新 Token</a>
-                <a href="/introspect-demo" class="btn btn-outline">🔍 验证 Token</a>
-                <a href="/start" class="btn btn-outline">🔄 重新授权</a>
-            </div>
         </div>
-    `, true);
+    `, true, sessUser(session), 'userinfo');
 }
 
 /** 刷新 token 演示 */
 async function renderRefreshDemo(req, res) {
     const session = getSessionTokens(req);
     if (!session || !session.tokens) {
+        // 设备码进行中 (pending 尚无 token) → 回设备页继续等待, 不重置授权流程
+        const dest = session && session.status === 'pending' ? '/device' : '/start';
         res.writeHead(302, {
-            'Location': '/start',
+            'Location': dest,
             'Cache-Control': 'no-cache, no-store, must-revalidate'
         });
         res.end();
@@ -650,7 +652,7 @@ async function renderRefreshDemo(req, res) {
     try {
         result = await refreshAccessToken(session.tokens.refresh_token);
     } catch (e) {
-        return layout('刷新失败', `<div class="card"><h1>⚠️ 请求失败</h1><pre>${esc(e.message)}</pre><div class="actions"><a href="/start" class="btn btn-outline">重新授权</a></div></div>`);
+        return layout('刷新失败', `<div class="card"><h1>⚠️ 请求失败</h1><pre>${esc(e.message)}</pre></div>`, true, sessUser(session), 'refresh');
     }
 
     if (result.status !== 200) {
@@ -689,13 +691,7 @@ async function renderRefreshDemo(req, res) {
             <div class="actions">
                 <a href="/api-demo" class="btn btn-primary">📋 用新 Token 调 API</a>
             </div>` : ''}
-            <div class="actions">
-                <a href="/userinfo-demo" class="btn btn-outline">👤 查询用户信息</a>
-                <a href="/api-demo" class="btn btn-outline">📋 调用应用列表(三方受限)</a>
-                <a href="/introspect-demo" class="btn btn-outline">🔍 验证 Token</a>
-                <a href="/start" class="btn btn-outline">🔄 重新授权</a>
-            </div>
-    `, true);
+    `, true, sessUser(session), 'refresh');
 }
 
 // ============================================================
@@ -720,11 +716,11 @@ const server = http.createServer(async (req, res) => {
                 try {
                     result = await requestDeviceAuthorization();
                 } catch (e) {
-                    html = layout('请求失败', `<div class="card"><h1>⚠️ 无法连接授权服务器</h1><pre>${esc(e.message)}</pre><div class="actions"><a href="/" class="btn btn-outline">返回首页</a></div></div>`);
+                    html = layout('请求失败', `<div class="card"><h1>⚠️ 无法连接授权服务器</h1><pre>${esc(e.message)}</pre><div class="actions"><a href="/" class="btn btn-outline">返回首页</a></div></div>`, false, null, 'restart');
                     break;
                 }
                 if (result.status !== 200) {
-                    html = layout('请求失败', `<div class="card"><h1>⚠️ 设备码请求失败 (HTTP ${result.status})</h1><pre>${esc(JSON.stringify(result.data, null, 2))}</pre><div class="actions"><a href="/" class="btn btn-outline">返回首页</a></div></div>`);
+                    html = layout('请求失败', `<div class="card"><h1>⚠️ 设备码请求失败 (HTTP ${result.status})</h1><pre>${esc(JSON.stringify(result.data, null, 2))}</pre><div class="actions"><a href="/" class="btn btn-outline">返回首页</a></div></div>`, false, null, 'restart');
                     break;
                 }
 
@@ -813,7 +809,7 @@ const server = http.createServer(async (req, res) => {
     } catch (e) {
         if (!res.headersSent) {
             res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
-            res.end(layout('服务器错误', `<div class="card"><h1>⚠️ 服务器错误</h1><pre>${esc(e.message)}</pre></div>`));
+            res.end(layout('服务器错误', `<div class="card"><h1>⚠️ 服务器错误</h1><pre>${esc(e.message)}</pre></div>`, false, null, 'restart'));
         }
     }
 });

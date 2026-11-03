@@ -311,7 +311,8 @@ public class AuthSessionService {
             }
 
             OnlineUserVO vo = new OnlineUserVO();
-            vo.setUsername(principal);
+            vo.setUsername(user.getUsername()); // 登录账号 (admin/user), 前端展示用
+            vo.setUserCode(principal);          // user_code (u_xxx), 撤销令牌等 API 的 principal 参数
             vo.setUserId(user.getId());
             vo.setNickname(user.getNickname());
             vo.setEnabled(user.getEnabled());

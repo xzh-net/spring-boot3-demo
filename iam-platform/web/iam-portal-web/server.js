@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 门户前端应用 (iam-portal-web)
  * ------------------------------------
  * 纯前端服务, 不持有 client_secret, 通过调用 iam-portal-bff (8080) 后端 API 获取:
@@ -75,7 +75,7 @@ async function proxyToPortalServer(pathname, req, method = 'GET') {
 function layout(title, content, isLoggedIn = false) {
     // 右侧区与管理后台导航栏保持一致: 登录/退出为纯文字链接, 登录态显示「👤 用户名」
     const logoutBtn = isLoggedIn
-        ? '<a href="#" class="logout" id="logoutLink">退出登录</a>'
+        ? '<a href="#" class="logout" id="logoutLink">⊗ 退出登录</a>'
         : '';
     const loginBtn = !isLoggedIn
         ? '<a href="/login" class="logout">登录</a>'
@@ -230,16 +230,25 @@ async function renderHome(req, res) {
                     const iconHtml = c.icon
                         ? `<img src="${esc(c.icon)}" style="width:36px;height:36px;border-radius:8px;object-fit:contain;margin-bottom:12px;" alt="">`
                         : `<div class="icon">${typeEmoji[c.type] || '📋'}</div>`;
-                    const link = c.ssoUrl || '#';
                     const metaParts = [];
                     if (c.channelName) metaParts.push(`渠道: ${esc(c.channelName)}`);
                     if (c.isDefault === 1) metaParts.push('默认');
+                    const icon2 = iconHtml;
+                    const head2 = `<h3>${esc(c.name || c.appCode || '未命名应用')}</h3><p>${esc(c.description || '')}</p>`;
+                    // 占位渠道 (access_url 为空): 样例数据仅展示, 点击无效, 不暴露 client_id (D3)
+                    if (!c.ssoUrl) {
+                        metaParts.push('占位示例 · 敬请期待');
+                        return `<div class="client-card" style="opacity:.6;cursor:not-allowed;" title="样例数据, 真实客户端对接后再开放">
+                        ${icon2}
+                        ${head2}
+                        <div class="meta">${metaParts.join(' · ')}</div>
+                    </div>`;
+                    }
                     if (c.clientId) metaParts.push(`client_id: ${esc(c.clientId)}`);
-                    return `<a href="${esc(link)}" class="client-card">
-                        ${iconHtml}
-                        <h3>${esc(c.name || c.appCode || '未命名应用')}</h3>
-                        <p>${esc(c.description || '')}</p>
-                        <div class="meta">${metaParts.join(' · ') || esc(c.type || 'web')}</div>
+                    return `<a href="${esc(c.ssoUrl)}" class="client-card">
+                        ${icon2}
+                        ${head2}
+                        <div class="meta">${metaParts.join(' · ')}</div>
                     </a>`;
                 }).join('') + '</div>';
             } else {

@@ -321,7 +321,7 @@ public final class RedisOAuth2AuthorizationService implements OAuth2Authorizatio
             if (StringUtils.hasText(principalName)) {
                 // 注意: SetOperations.remove(key, member) 返回的是"被删除的成员数"(0或1),
                 // 不是 Set 的剩余大小. 不能用它判断 Set 是否为空.
-                // 并发场景下 (web-app 用 Promise.all 同时 revoke access_token + refresh_token),
+                // 并发场景下 (oa-web-app 用 Promise.all 同时 revoke access_token + refresh_token),
                 // 两个线程会同时 remove 同一个 authId, 第二个线程 srem 返回 0 (成员已不存在),
                 // 若误判为 "Set 已空" 会 delete 整个 key, 导致该用户其他会话的索引丢失.
                 redisTemplate.opsForSet().remove(USER_INDEX_PREFIX + principalName, id);

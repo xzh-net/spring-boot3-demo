@@ -1,4 +1,4 @@
-/* ============================================================
+﻿/* ============================================================
  * iam-admin-web 全局通用脚本
  * ------------------------------------------------------------
  * App.guard()         登录守卫: 未登录 → /login; 非管理端(异常兜底) → /logout
@@ -20,13 +20,6 @@ window.App = (() => {
     function fmtTime(t) {
         if (!t) return '-';
         return String(t).replace('T', ' ').substring(0, 19);
-    }
-
-    /** 登录名脱敏: 仅显示后 5 位, 前缀用 *** */
-    function maskUser(u) {
-        const name = (u && u.username) || (u && u.nickname) || '';
-        if (!name) return '';
-        return '***' + String(name).slice(-5);
     }
 
     /**
@@ -105,7 +98,7 @@ window.App = (() => {
         if (!el) return;
         el.classList.add('navbar');
         const userLabel = (user && (user.username || user.nickname))
-            ? `<span style="color:#dbeafe;font-size:13px;white-space:nowrap;margin-right:14px;" title="${esc(user.email || '')}">👤 ${esc(maskUser(user))}</span>`
+            ? `<span style="color:#dbeafe;font-size:13px;white-space:nowrap;" title="${esc(user.email || '')}">👤 ${esc(user.username || user.nickname)}</span>`
             : '';
         el.innerHTML =
             `<div class="brand">🚀 统一认证中心</div>` +
@@ -115,7 +108,7 @@ window.App = (() => {
             }).join('') +
             `<div class="spacer"></div>` +
             userLabel +
-            `<a href="#" class="logout" id="logoutLink">退出登录</a>`;
+            `<a href="#" class="logout" id="logoutLink" style="padding:0;margin-left:4px;font-size:13px;color:#dbeafe;text-decoration:none;">⊗ 退出登录</a>`;
         const logout = document.getElementById('logoutLink');
         if (logout) {
             logout.addEventListener('click', function (e) {
@@ -125,5 +118,5 @@ window.App = (() => {
         }
     }
 
-    return { LOGIN_URL, esc, fmtTime, maskUser, api, guard, renderNavbar };
+    return { LOGIN_URL, esc, fmtTime, api, guard, renderNavbar };
 })();

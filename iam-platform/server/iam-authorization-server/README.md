@@ -30,8 +30,8 @@ User (用户)
   └─ SSO Session (一次认证产生的统一登录会话)
        └─ Client Session (该 SSO Session 使用过的客户端)
             ├─ Portal
-            ├─ Web-App
-            └─ Mobile-App
+            ├─ OA-Web-App
+            └─ OA-H5-App
 ```
 
 ### 管理 API
@@ -162,9 +162,9 @@ net.xzh.iam                              # 合并单服务根包 (common / auth 
 | 接入方 | client_id | 模式 | 参考演示 |
 |--------|-----------|------|---------|
 | 门户（前后端分离） | `portal-app` | 授权码 + PKCE | [web/iam-portal-web](../../web/iam-portal-web) + [bff/iam-portal-bff](../../bff/iam-portal-bff) |
-| 传统 Web 应用（有后端） | `web-app` | 授权码 / 密码 | [client/iam-client-web-demo](../../client/iam-client-web-demo/README.md) |
+| 传统 Web 应用（有后端） | `oa-web-app` | 授权码 | [client/iam-client-web-demo](../../client/iam-client-web-demo/README.md) |
 | 输入受限设备（TV/IoT/CLI） | `device-app` | 设备码 (RFC 8628) | [client/iam-client-device-demo](../../client/iam-client-device-demo/README.md) |
-| 原生 App / SPA（无后端） | `mobile-app` | 授权码 + PKCE | [client/iam-client-mobile-demo](../../client/iam-client-mobile-demo/README.md) |
+| 原生 App / SPA（预留） | `mobile-app` | 授权码 + PKCE | 预留：真实原生对接时再补演示（client 行已含自定义 scheme 回调 `com.example.mobileapp://oauth2/redirect`） |
 
 ### 通用接入步骤
 
@@ -214,7 +214,7 @@ net.xzh.iam                              # 合并单服务根包 (common / auth 
 |-----------|------|---------|---------|
 | `portal-app` | 授权码 + PKCE | client_secret_basic | 门户 BFF |
 | `admin-app` | 授权码 | client_secret_basic | 管理后台 BFF (8085) |
-| `web-app` | 授权码 / 密码 | client_secret_basic | 传统 Web 应用 |
+| `oa-web-app` | 授权码 | client_secret_basic | 传统 Web 应用 |
 | `device-app` | 设备码 | none | 电视 / IoT / CLI |
 | `mobile-app` | 授权码 + PKCE | none | 原生 App / SPA |
 | ~~`service-app`~~ | — | — | **已退役**（client_credentials 测试账号；test.http 第二部分负例一并移除） |

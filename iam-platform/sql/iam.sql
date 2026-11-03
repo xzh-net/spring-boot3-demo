@@ -99,10 +99,11 @@ CREATE TABLE `oauth2_registered_client`  (
 -- 阶段 4: resource-server 客户端退役 (原跨服务 ServiceTokenProvider/InternalUserDataClient 凭证,
 -- 远程调用与 internal 域控制器删除后无消费方; 服务令牌判定改由 grant_type=client_credentials 覆盖)
 INSERT INTO `oauth2_registered_client` VALUES ('2', 'admin-app', '2026-08-13 12:00:00', '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e', NULL, '管理后台', 'client_secret_basic', 'refresh_token,authorization_code', 'http://localhost:8085/login/oauth2/code/admin-app', 'http://localhost:8001/logged-out', 'openid,profile,read,write,admin.full', '{"requireProofKey":true,"requireAuthorizationConsent":false}', '{"accessTokenFormat":"reference","authorizationCodeTimeToLive":"PT5M","accessTokenTimeToLive":"PT2H","reuseRefreshTokens":false,"refreshTokenTimeToLive":"PT12H"}');
-INSERT INTO `oauth2_registered_client` VALUES ('3', 'portal-app', '2026-08-11 20:00:08', '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e', NULL, '门户应用 (SSO)', 'client_secret_basic', 'refresh_token,authorization_code', 'http://localhost:8083/portal-sso-callback,http://localhost:8081/portal-sso-callback,http://localhost:8080/login/oauth2/code/portal-app-oidc', 'http://localhost:8000/logged-out,http://localhost:8081/logged-out', 'openid,profile,email,portal.profile', '{"requireProofKey":true,"requireAuthorizationConsent":false}', '{"accessTokenFormat":"reference","authorizationCodeTimeToLive":"PT5M","accessTokenTimeToLive":"PT2H","reuseRefreshTokens":false,"refreshTokenTimeToLive":"PT12H"}');
-INSERT INTO `oauth2_registered_client` VALUES ('4', 'web-app', '2026-08-11 20:00:08', '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e', NULL, 'Web 应用客户端', 'client_secret_basic,client_secret_post', 'authorization_code,refresh_token,password', 'http://localhost:8081/callback,http://127.0.0.1:8081/callback', 'http://localhost:8081/logout', 'openid,profile,email,read,write,third.profile', '{"requireProofKey":true,"requireAuthorizationConsent":true}', '{"accessTokenFormat":"REFERENCE","accessTokenTimeToLive":"PT2H","reuseRefreshTokens":false,"refreshTokenTimeToLive":"PT12H","idTokenSignatureAlgorithm":"RS256"}');
-INSERT INTO `oauth2_registered_client` VALUES ('5', 'device-app', '2026-08-11 20:00:08', NULL, NULL, '设备码客户端', 'none', 'refresh_token,urn:ietf:params:oauth:grant-type:device_code', NULL, NULL, 'openid,profile,email,read', '{"requireProofKey":false,"requireAuthorizationConsent":true}', '{"accessTokenFormat":"REFERENCE","accessTokenTimeToLive":"PT1H","reuseRefreshTokens":false,"refreshTokenTimeToLive":"PT12H"}');
-INSERT INTO `oauth2_registered_client` VALUES ('6', 'mobile-app', '2026-08-11 20:00:08', NULL, NULL, '移动应用客户端(PKCE)', 'none', 'authorization_code,refresh_token', 'com.example.mobileapp://oauth2/redirect,http://localhost:8083/callback', 'http://localhost:8083/logout', 'openid,profile,email,read,write', '{"requireProofKey":true,"requireAuthorizationConsent":true}', '{"accessTokenFormat":"REFERENCE","accessTokenTimeToLive":"PT2H","reuseRefreshTokens":false,"refreshTokenTimeToLive":"PT12H","idTokenSignatureAlgorithm":"RS256"}');
+INSERT INTO `oauth2_registered_client` VALUES ('3', 'portal-app', '2026-08-11 20:00:08', '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e', NULL, '门户应用 (SSO)', 'client_secret_basic', 'refresh_token,authorization_code', 'http://localhost:8084/portal-sso-callback,http://localhost:8081/portal-sso-callback,http://localhost:8080/login/oauth2/code/portal-app-oidc', 'http://localhost:8000/logged-out,http://localhost:8081/logged-out', 'openid,profile,email,portal.profile', '{"requireProofKey":true,"requireAuthorizationConsent":false}', '{"accessTokenFormat":"reference","authorizationCodeTimeToLive":"PT5M","accessTokenTimeToLive":"PT2H","reuseRefreshTokens":false,"refreshTokenTimeToLive":"PT12H"}');
+INSERT INTO `oauth2_registered_client` VALUES ('4', 'oa-web-app', '2026-08-11 20:00:08', '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e', NULL, 'OA Web 客户端', 'client_secret_basic', 'authorization_code,refresh_token', 'http://localhost:8081/callback,http://127.0.0.1:8081/callback', 'http://localhost:8081/logout', 'openid,profile,email,read,write,third.profile', '{"requireProofKey":true,"requireAuthorizationConsent":true}', '{"accessTokenFormat":"REFERENCE","accessTokenTimeToLive":"PT2H","reuseRefreshTokens":false,"refreshTokenTimeToLive":"PT12H","idTokenSignatureAlgorithm":"RS256"}');
+INSERT INTO `oauth2_registered_client` VALUES ('5', 'device-app', '2026-08-11 20:00:08', NULL, NULL, '设备客户端', 'none', 'refresh_token,urn:ietf:params:oauth:grant-type:device_code', '', '', 'read,openid,profile,email', '{"requireProofKey":false,"requireAuthorizationConsent":true}', '{"accessTokenFormat":"reference","authorizationCodeTimeToLive":"PT5M","accessTokenTimeToLive":"PT1H","reuseRefreshTokens":false,"refreshTokenTimeToLive":"PT1H"}');
+INSERT INTO `oauth2_registered_client` VALUES ('6', 'mobile-app', '2026-08-11 20:00:08', NULL, NULL, '移动原生客户端(PKCE)', 'none', 'refresh_token,authorization_code', 'com.example.mobileapp://oauth2/redirect', NULL, 'read,openid,profile,write,email', '{"requireProofKey":true,"requireAuthorizationConsent":true}', '{"accessTokenFormat":"reference","authorizationCodeTimeToLive":"PT5M","accessTokenTimeToLive":"PT2H","reuseRefreshTokens":false,"refreshTokenTimeToLive":"PT1H"}');
+INSERT INTO `oauth2_registered_client` VALUES ('9', 'oa-h5-app', '2026-11-03 12:00:00', '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e', NULL, 'OA H5 客户端', 'client_secret_basic', 'authorization_code,refresh_token', 'http://localhost:8084/callback,http://127.0.0.1:8084/callback', 'http://localhost:8084/logout', 'openid,profile,email,read,write,third.profile', '{"requireProofKey":true,"requireAuthorizationConsent":true}', '{"accessTokenFormat":"REFERENCE","accessTokenTimeToLive":"PT2H","reuseRefreshTokens":false,"refreshTokenTimeToLive":"PT12H","idTokenSignatureAlgorithm":"RS256"}');
 -- INSERT INTO `oauth2_registered_client` VALUES ('7', 'service-app', '2026-08-11 20:00:08', '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e', NULL, '服务间调用客户端', 'client_secret_basic', 'client_credentials', NULL, NULL, 'read,write', '{"requireProofKey":false,"requireAuthorizationConsent":true}', '{"accessTokenFormat":"REFERENCE","accessTokenTimeToLive":"PT30M","reuseRefreshTokens":false}');
 -- 阶段清理: service-app 客户端退役 (client_credentials 演示/测试账号, 无程序特判、无业务消费方;
 -- 连带 test.http 第二部分 403 负例与 index.html 展示卡片一并移除)
@@ -138,8 +139,8 @@ CREATE TABLE `sys_user`  (
 -- ----------------------------
 -- Records of sys_user
 -- ----------------------------
-INSERT INTO `sys_user` VALUES (1, 'u_1a2b3c4d5e6f708090a0b0c0d0e0f001', 'admin', '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e', '管理员', 'admin@example.com', NULL, NULL, 1, 1, 1, 1, '2026-08-11 20:00:08', '2026-08-11 20:00:08');
-INSERT INTO `sys_user` VALUES (2, 'u_1a2b3c4d5e6f708090a0b0c0d0e0f002', 'user', '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e', '普通用户', 'user@example.com', NULL, NULL, 1, 1, 1, 1, '2026-08-11 20:00:08', '2026-08-11 20:00:08');
+INSERT INTO `sys_user` VALUES (1, '550e8400-e29b-41d4-a716-446655440001', 'admin', '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e', '管理员', 'admin@example.com', NULL, NULL, 1, 1, 1, 1, '2026-08-11 20:00:08', '2026-08-11 20:00:08');
+INSERT INTO `sys_user` VALUES (2, '550e8400-e29b-41d4-a716-446655440002', 'user', '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e', '普通用户', 'user@example.com', NULL, NULL, 1, 1, 1, 1, '2026-08-11 20:00:08', '2026-08-11 20:00:08');
 
 -- ----------------------------
 -- 退役清理: iam_client_policy (登录边界策略) 已删除, 职责由 scope∧RBAC 双维交集覆盖
@@ -181,7 +182,7 @@ CREATE TABLE `sys_scope_permission`  (
 INSERT INTO `sys_scope` (id, code, name, status, remark) VALUES
 (1, 'admin.full', '管理端全量', 1, '管理后台应用: 含全部 16 个 admin 域码 (admin-app 持有)'),
 (2, 'portal.profile', '门户工作台', 1, '门户应用授权范围: 含 portal:client:read (portal-app 持有)'),
-(3, 'third.profile', '三方最小集', 1, '三方/外部客户端: 三方域暂无端点, 空映射 fail-closed (web-app 持有, 仅 OIDC 标准能力)');
+(3, 'third.profile', '三方最小集', 1, '三方/外部客户端: 三方域暂无端点, 空映射 fail-closed (oa-web-app 持有, 仅 OIDC 标准能力)');
 
 INSERT INTO `sys_scope_permission` (scope_id, permission_id) VALUES
 (1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (1, 7), (1, 8),
@@ -320,8 +321,8 @@ CREATE TABLE `sys_user_role`  (
 -- ----------------------------
 -- Records of sys_user_role
 -- ----------------------------
-INSERT INTO `sys_user_role` VALUES (1, 'u_1a2b3c4d5e6f708090a0b0c0d0e0f001', 1);
-INSERT INTO `sys_user_role` VALUES (2, 'u_1a2b3c4d5e6f708090a0b0c0d0e0f002', 2);
+INSERT INTO `sys_user_role` VALUES (1, '550e8400-e29b-41d4-a716-446655440001', 1);
+INSERT INTO `sys_user_role` VALUES (2, '550e8400-e29b-41d4-a716-446655440002', 2);
 
 -- ----------------------------
 -- Table structure for iam_application (应用表: 门户展示单元)
@@ -346,9 +347,9 @@ CREATE TABLE `iam_application`  (
 -- Records of iam_application (demo: 3 条; 应用授权见 iam_app_authorization)
 -- ----------------------------
 INSERT INTO `iam_application` VALUES
-(1, 'portal', '门户工作台', NULL, '统一工作台门户', 1, 1, 1, '2026-08-15 10:00:00', '2026-08-15 10:00:00'),
+(1, 'portal', '原生APP',    NULL, 'Android 和 iOS', 1, 0, 1, '2026-08-15 10:00:00', '2026-08-15 10:00:00'),
 (2, 'oa',     'OA 办公系统', NULL, '办公自动化', 2, 0, 1, '2026-08-15 10:00:00', '2026-08-15 10:00:00'),
-(3, 'crm',    'CRM 客户管理', NULL, '客户关系管理', 3, 0, 1, '2026-08-15 10:00:00', '2026-08-15 10:00:00');
+(3, 'crm',    '三方终端', NULL, '设备或运行环境不适合直接弹出浏览器、输入账号密码，或者不能安全地保存用户凭证。设备码流把“登录动作”从受限设备转移到用户自己的手机/电脑浏览器上完成，再由受限设备轮询认证结果', 3, 0, 1, '2026-08-15 10:00:00', '2026-08-15 10:00:00');
 
 -- ----------------------------
 -- Table structure for iam_application_channel (渠道表: 应用 1:N 门户形态 + SSO 客户端绑定)
@@ -374,11 +375,13 @@ CREATE TABLE `iam_application_channel`  (
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '应用渠道表 (门户形态 + SSO 客户端绑定)' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
--- Records of iam_application_channel (demo: OA 应用 Web + 移动两种形态)
+-- Records of iam_application_channel (OA=Web+H5 两形态 / 三方终端=设备码 / 原生APP=占位无URL)
 -- ----------------------------
 INSERT INTO `iam_application_channel` VALUES
-(1, 2, 'WEB',    'Web 门户', 'http://localhost:8081', NULL, 0, NULL, 1, 1, 1, '2026-08-15 10:00:00', '2026-08-15 10:00:00'),
-(2, 2, 'MOBILE', '移动门户', 'http://localhost:8082', NULL, 0, NULL, 0, 2, 1, '2026-08-15 10:00:00', '2026-08-15 10:00:00');
+(1, 2, 'WEB',    'Web 门户', 'http://localhost:8081', 'oa-web-app', 0, NULL, 1, 1, 1, '2026-08-15 10:00:00', '2026-08-15 10:00:00'),
+(2, 2, 'H5',     'H5 门户', 'http://localhost:8084', 'oa-h5-app',  0, NULL, 0, 2, 1, '2026-08-15 10:00:00', '2026-08-15 10:00:00'),
+(3, 3, 'DEVICE', '设备终端', 'http://localhost:8082', 'device-app', 0, NULL, 0, 1, 1, '2026-08-15 10:00:00', '2026-08-15 10:00:00'),
+(4, 1, 'MOBILE', '原生APP', '',                     'mobile-app', 0, NULL, 0, 1, 1, '2026-08-15 10:00:00', '2026-08-15 10:00:00');
 
 -- ----------------------------
 -- Table structure for iam_org (组织表: 应用授权主体之一)
@@ -428,12 +431,16 @@ CREATE TABLE `iam_app_authorization`  (
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '应用授权表' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
--- Records of iam_app_authorization (demo: 管理员/门户用户角色授权 OA 全渠道; 研发部授权 CRM, 主体按编码)
+-- Records of iam_app_authorization (admin/portal 角色授权三个应用全渠道; ORG/RND 为主体类型样例, ORG 暂不解析)
 -- ----------------------------
 INSERT INTO `iam_app_authorization` VALUES
 (1, 2, 0, 'ROLE', 'ADMIN', 1, '2026-08-15 10:00:00', NULL, '2026-08-15 10:00:00', '2026-08-15 10:00:00'),
 (2, 3, 0, 'ORG',  'RND', 1, '2026-08-15 10:00:00', NULL, '2026-08-15 10:00:00', '2026-08-15 10:00:00'),
-(3, 2, 0, 'ROLE', 'PORTAL', 1, '2026-08-17 20:36:16', NULL, '2026-08-17 20:36:16', '2026-08-17 20:36:16');
+(3, 2, 0, 'ROLE', 'PORTAL', 1, '2026-08-17 20:36:16', NULL, '2026-08-17 20:36:16', '2026-08-17 20:36:16'),
+(4, 1, 0, 'ROLE', 'ADMIN', 1, '2026-11-03 12:00:00', NULL, '2026-11-03 12:00:00', '2026-11-03 12:00:00'),
+(5, 1, 0, 'ROLE', 'PORTAL', 1, '2026-11-03 12:00:00', NULL, '2026-11-03 12:00:00', '2026-11-03 12:00:00'),
+(6, 3, 0, 'ROLE', 'ADMIN', 1, '2026-11-03 12:00:00', NULL, '2026-11-03 12:00:00', '2026-11-03 12:00:00'),
+(7, 3, 0, 'ROLE', 'PORTAL', 1, '2026-11-03 12:00:00', NULL, '2026-11-03 12:00:00', '2026-11-03 12:00:00');
 
 -- ----------------------------
 -- Table structure for iam_endpoint_policy (资源接口准入策略: 启动扫描播种 + 管理端覆盖)

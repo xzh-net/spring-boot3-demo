@@ -1,4 +1,4 @@
-# =====================================================================
+﻿# =====================================================================
 # start-all.ps1 — iam-platform 全量服务启停脚本 (PowerShell 5.1)
 # ---------------------------------------------------------------------
 # 每次执行:
@@ -34,6 +34,7 @@ $services = @(
     @{ Name = 'iam-portal-bff';       Type = 'java'; Port = 8080; Dir = 'bff/iam-portal-bff';   ReadyPort = 8080 }
     @{ Name = 'iam-admin-web';            Type = 'node'; Port = 8001; Dir = 'web/iam-admin-web';        ReadyPort = 8001 }
     @{ Name = 'iam-portal-web';           Type = 'node'; Port = 8000; Dir = 'web/iam-portal-web';       ReadyPort = 8000 }
+    @{ Name = 'iam-client-h5-demo';       Type = 'node'; Port = 8084; Dir = 'client/iam-client-h5-demo'; ReadyPort = 8084 }
 )
 
 # ---------------------------------------------------------------------

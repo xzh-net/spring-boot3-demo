@@ -73,7 +73,7 @@
             <table>
                 <thead>
                     <tr>
-                        <th>用户名</th>
+                        <th>登录账号</th>
                         <th>客户端</th>
                         <th>授权权限</th>
                         <th>授权类型</th>
@@ -163,14 +163,14 @@ async function loadConsentList() {
     empty.style.display = "none";
     tbody.innerHTML = data.map(c => `
         <tr>
-            <td style="font-family:monospace;">${c.principalName}</td>
+            <td style="font-family:monospace;">${c.username || c.principalName}</td>
             <td>${c.clientName || c.registeredClientId}</td>
             <td>${scopePills(c.authorities)}</td>
             <td>${(c.grantTypes || []).map(gt => grantTypeTag(gt)).join(' ') || '-'}</td>
             <td style="font-size:12px;color:#64748b;">${fmtTime(c.firstGrantTime) || '-'}</td>
             <td>
-                <button class="btn-link" onclick="showDetail('${c.registeredClientId}', '${App.esc(c.principalName)}', '${App.esc(c.clientName || c.registeredClientId)}')">查看历史</button>
-                <button class="btn-link danger" onclick="revokeAuth('${c.registeredClientId}', '${App.esc(c.principalName)}', '${App.esc(c.clientName || c.registeredClientId)}')">取消授权</button>
+                <button class="btn-link" onclick="showDetail('${c.registeredClientId}', '${App.esc(c.principalName)}', '${App.esc(c.clientName || c.registeredClientId)}', '${App.esc(c.username || c.principalName)}')">查看历史</button>
+                <button class="btn-link danger" onclick="revokeAuth('${c.registeredClientId}', '${App.esc(c.principalName)}', '${App.esc(c.clientName || c.registeredClientId)}', '${App.esc(c.username || c.principalName)}')">取消授权</button>
             </td>
         </tr>
     `).join("");
@@ -180,9 +180,10 @@ async function loadConsentList() {
 // 子表: 授权历史明细弹窗
 // ------------------------------------------------------------------
 
-async function showDetail(clientId, principalName, clientName) {
+/** 展示登录账号 (username); principalName=user_code, 仅作查询/撤销 API 参数 */
+async function showDetail(clientId, principalName, clientName, username = principalName) {
     document.getElementById("detailSub").textContent =
-        `客户端: ${clientName}  |  用户: ${principalName}`;
+        `客户端: ${clientName}  |  登录账号: ${username}`;
     document.getElementById("detailModal").classList.add("show");
 
     let data;
@@ -215,8 +216,9 @@ function closeDetail() {
 // 取消授权
 // ------------------------------------------------------------------
 
-async function revokeAuth(clientId, principalName, clientName) {
-    if (!confirm(`确认取消用户 "${principalName}" 对客户端 "${clientName}" 的授权 ?\n(将同时强制下线该用户在该客户端上的所有会话)`)) return;
+/** 取消授权 (confirm 展示登录账号; API 仍按 principalName=user_code 调用) */
+async function revokeAuth(clientId, principalName, clientName, username = principalName) {
+    if (!confirm(`确认取消用户 "${username}" 对客户端 "${clientName}" 的授权 ?\n(将同时强制下线该用户在该客户端上的所有会话)`)) return;
     try {
         await App.api(`/admin/records?clientId=${encodeURIComponent(clientId)}&principalName=${encodeURIComponent(principalName)}`, { method: "DELETE" });
         alert("✅ 已取消该用户对客户端的授权");

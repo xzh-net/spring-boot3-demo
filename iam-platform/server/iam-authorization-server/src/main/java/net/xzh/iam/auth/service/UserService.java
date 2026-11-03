@@ -42,6 +42,10 @@ public class UserService {
                         .eq("username", username));
     }
 
+    /** 标准 UUID 编码格式 (如 550e8400-e29b-41d4-a716-446655440000) */
+    private static final java.util.regex.Pattern UUID_FORMAT = java.util.regex.Pattern
+            .compile("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
+
     @Transactional
     public void create(SysUser user) {
         if (getByUsername(user.getUsername()) != null) {
@@ -64,6 +68,9 @@ public class UserService {
             if (code.length() > 64) {
                 throw new IllegalArgumentException("用户编码过长 (最多 64 字符)");
             }
+            if (!UUID_FORMAT.matcher(code).matches()) {
+                throw new IllegalArgumentException("编码格式不正确, 应为标准 UUID (如 550e8400-e29b-41d4-a716-446655440000)");
+            }
             if (mapper.selectCount(new QueryWrapper<SysUser>().eq("user_code", code)) > 0) {
                 throw new IllegalArgumentException("用户编码已存在: " + code);
             }
@@ -75,9 +82,9 @@ public class UserService {
         log.info("新增用户 username={}, userCode={}", user.getUsername(), user.getUserCode());
     }
 
-    /** 业务用户编码: u_ + 32 位随机十六进制 */
+    /** 业务用户编码: 标准 UUID 格式 (如 550e8400-e29b-41d4-a716-446655440000) */
     private String generateUserCode() {
-        return "u_" + UUID.randomUUID().toString().replace("-", "");
+        return UUID.randomUUID().toString();
     }
 
     @Transactional
@@ -86,6 +93,7 @@ public class UserService {
         if (existing == null) throw new IllegalArgumentException("用户不存在: " + id);
 
         boolean passwordChanged = false;
+        // 编码不可变: 有意不读取 user.getUserCode(), 编辑请求携带的 userCode 一律忽略
         if (user.getNickname() != null) existing.setNickname(user.getNickname());
         if (user.getEmail() != null) existing.setEmail(user.getEmail());
         if (user.getPhone() != null) existing.setPhone(user.getPhone());

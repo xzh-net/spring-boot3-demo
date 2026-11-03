@@ -27,9 +27,9 @@ iam-platform/
 │   └── iam-portal-web/                 #   :8000  门户（客户端 SSO 卡片）
 │
 ├── client/                             # ──【客户端示例】Node.js 零依赖 OAuth2 接入演示──
-│   ├── iam-client-web-demo/            #   :8081  授权码 + 密码模式（web-app）
-│   ├── iam-client-device-demo/         #   :8082  设备码 RFC 8628（device-app）
-│   └── iam-client-mobile-demo/         #   :8083  授权码 + PKCE（mobile-app）
+│   ├── iam-client-web-demo/            #   :8081  授权码 + PKCE（oa-web-app）
+│   ├── iam-client-h5-demo/             #   :8084  授权码 + PKCE（oa-h5-app · OA 的 H5 形态, 手机模拟器壳）
+│   └── iam-client-device-demo/         #   :8082  设备码 RFC 8628（device-app）
 │
 ├── sql/                                # ──【数据库脚本】单库 iam──
 │   ├── iam.sql                         #   合并基线（16 表 + 全部种子，新库初始化唯一入口）
@@ -37,6 +37,7 @@ iam-platform/
 │
 ├── docs/                               # ──【文档】概要/详细设计 · 权限 · 库 · 接口 · 编码 · 操作（7 份）──
 ├── start-all.ps1 / start-all.bat       # ──【脚本】一键启停核心服务──
+├── reset-init.ps1 / reset-init.bat     # ──【脚本】一键重置: 清库+清Redis+UUID种子+重启 (从头验证用)──
 └── 待处理.txt
 ```
 
@@ -55,9 +56,9 @@ MySQL / Redis 在 `192.168.31.161`（库 `iam`；Redis 分库：db1=认证中心
 | **iam-admin-web** | 8001 | `http://localhost:8001` | 管理后台前端（node 静态 + 代理） | 未登录访问 → `/login` → 8085 → 9000 登录 → 成功**返回管理台**。**门户用户（user）不可登录**，原因同上：admin-app × PORTAL 角色无交集。页面：用户/角色/权限/客户端/授权管理/在线用户，外加只读「授权范围」「资源准入(48 行)」。node 将 `/admin/**` 与 `/api/**` 代理到 8085 |
 | **iam-portal-bff** | 8080 | `http://localhost:8080` | 门户 BFF（OAuth2 Client: portal-app，Confidential + PKCE） | 未登录自动发起登录，成功**返回已登录门户**。**仅普通用户可进**：portal-app 持 `portal.profile`（1 个码）与 PORTAL 角色有交集，admin 无交集 → 9000 红条拒绝。`/api/*` 为 BFF 原生（会话层）；可见应用列表由 BFF **服务端代调** 9000 `/biz/clients/mine` |
 | **iam-portal-web** | 8000 | `http://localhost:8000` | 门户前端（node 静态 + 代理） | 未登录：显示新闻动态/通知公告演示数据，登录入口在导航栏右上角。`/login` → 8080 → 9000 登录 → 成功**返回已登录门户**（应用中心卡片）。**管理员（admin）不可登录**，原因同上：portal-app × ADMIN 角色无交集。登录后点应用卡片即 SSO 跳对接应用；node 将 `/api/*` 代理到 8080 |
-| **iam-client-web-demo** | 8081 | `http://localhost:8081` | 三方演示：授权码 + PKCE（web-app） | 流程演示：登录 → code 换 token → 调 API → 内省 → 刷新/登出，页面可见真实令牌。web-app 持 `third.profile`（**空映射**）→ 任何账号都能登录（逃逸阀）但令牌 **0 个业务码**；调门户接口 `/biz/clients/mine` 一律 **403** —— fail-closed 现场 |
+| **iam-client-web-demo** | 8081 | `http://localhost:8081` | 三方演示：授权码 + PKCE（oa-web-app） | 流程演示：登录 → code 换 token → 调 API → 内省 → 刷新/登出，页面可见真实令牌。oa-web-app 持 `third.profile`（**空映射**）→ 任何账号都能登录（逃逸阀）但令牌 **0 个业务码**；调门户接口 `/biz/clients/mine` 一律 **403** —— fail-closed 现场 |
 | **iam-client-device-demo** | 8082 | `http://localhost:8082` | 三方演示：设备码（device-app） | RFC 8628 全流程：取码 → 本页 `/activate` 输入 user_code → 登录 + 同意 → 设备端轮询换票。device-app 为**公开客户端（无密钥）**，须用户同意后才发令牌 |
-| **iam-client-mobile-demo** | 8083 | `http://localhost:8083` | 三方演示：移动端 PKCE（mobile-app） | 公开客户端 PKCE 演示：页面**预生成授权链接**（已带 code_challenge），授权码换票。无密钥，靠 PKCE 防授权码拦截 |
+| **iam-client-h5-demo** | 8084 | `http://localhost:8084` | OA 演示：纯 Web 应用的 H5 形态（oa-h5-app，与 web 版同款对接） | 手机模拟器壳 + 硬编码模块（请假管理/报销审核/审批中心…），点模块即发起授权码登录（SSO 在场免登）。机密客户端 + PKCE + 服务端换票，与 8081 本质一致 |
 | MySQL | 3306 | `192.168.31.161` | 库 `iam`（16 表） | 种子唯一来源 `sql/iam.sql`；字典/准入表的写入语义见「五、核心架构」 |
 | Redis | 6379 | `192.168.31.161` | **db1**=9000 专用：SSO 会话、OAuth2 授权记录、令牌内省与客户端缓存；**db3**=8085 专用：管理 BFF 会话与令牌（分库物理隔离，键前缀 oauth2:* / admin-bff:* 双保险） |
 
@@ -77,7 +78,7 @@ MySQL / Redis 在 `192.168.31.161`（库 `iam`；Redis 分库：db1=认证中心
               即 9000 默认归属门户；管理员唯一入口是 8001
 ```
 
-三方演示（8081/8082/8083）不走「客户端 × 角色」约束——其客户端 scope 映射不到任何业务码，
+三方演示（8081/8082/8084）不走「客户端 × 角色」约束——其客户端 scope 映射不到任何业务码，
 令牌一律 0 业务码，业务接口（`/biz/**`、`/admin/**`）调用一律 403：权限收敛在 API 层，而非登录层。
 
 ---
@@ -98,7 +99,7 @@ MySQL / Redis 在 `192.168.31.161`（库 `iam`；Redis 分库：db1=认证中心
 | iam-portal-bff | 8080 | 门户 BFF：OAuth2 Client(portal-app) Confidential + PKCE，独立会话与 RP-Initiated 登出 |
 | iam-admin-web | 8001 | 管理后台静态站（含只读「授权范围」页与只读「资源准入」页） |
 | iam-portal-web | 8000 | 门户静态站（客户端列表与 SSO 跳转卡片） |
-| iam-client-*-demo | 8081/8082/8083 | 三种 OAuth2 接入姿势演示（授权码+密码 / 设备码 / PKCE） |
+| iam-client-*-demo | 8081/8082/8084 | 三种 OAuth2 接入姿势演示（授权码 / 设备码 / OA H5 形态） |
 
 ---
 
@@ -132,7 +133,7 @@ cd bff/iam-portal-bff && mvn spring-boot:run   # :8080
 cd web/iam-portal-web && node server.js         # :8000
 cd client/iam-client-web-demo    && node server.js   # :8081
 cd client/iam-client-device-demo && node server.js   # :8082
-cd client/iam-client-mobile-demo && node server.js   # :8083
+cd client/iam-client-h5-demo     && node server.js   # :8084
 ```
 
 ### 4. 默认账号
@@ -148,7 +149,7 @@ cd client/iam-client-mobile-demo && node server.js   # :8083
 |---|---|---|---|
 | `admin-app` | 授权码 + 刷新 | `admin.full`（16 码） | 管理后台 BFF |
 | `portal-app` | 授权码 + 刷新（PKCE） | `portal.profile`（1 码） | 门户 BFF |
-| `web-app` | 授权码 / 密码 | `third.profile`（空映射） | 传统 Web 应用演示 |
+| `oa-web-app` | 授权码 | `third.profile`（空映射） | 传统 Web 应用演示 |
 | `device-app` | 设备码 | 无业务 scope | 电视 / IoT / CLI |
 | `mobile-app` | 授权码 + PKCE | 无业务 scope | 原生 App / SPA |
 
@@ -210,7 +211,7 @@ cd client/iam-client-mobile-demo && node server.js   # :8083
 | [详细设计](./docs/详细设计.md) | 详细设计 | 3 条安全链、认证与令牌流程、Redis key、签发/端点准入实现、扫描算法、关键类索引 |
 | [权限与安全设计](./docs/权限与安全设计.md) | 权限维度 | 双维交集、四层裁决链、17 权限码、3 scope、角色绑定、已退役机制 |
 | [数据库设计文档](./docs/数据库设计文档.md) | 数据库设计 | 16 表结构、字典写入语义（谁能写什么）、种子数据速查、落库步骤 |
-| [接口文档](./docs/接口文档.md) | 对外接口 | 协议端点 + 48 个业务接口清单、**三方接入指南**（授权码/密码/设备码/刷新/内省） |
+| [接口文档](./docs/接口文档.md) | 对外接口 | 协议端点 + 48 个业务接口清单、**三方接入指南**（授权码/设备码/刷新/内省） |
 | [编码规范](./docs/编码规范.md) | 编码规范 | **包结构硬性要求**、8 条红线、命名规范、禁止事项黑名单 |
 | [操作说明](./docs/操作说明.md) | 操作运维 | 环境前置、初始化、启停（顺序约束）、冒烟、6 类排障、管理端截图（待补） |
 
@@ -251,3 +252,4 @@ cd client/iam-client-mobile-demo && node server.js   # :8083
 9. **安全基线补强**：登录 CSRF 豁免（静态登录页无 token）改为可取 token；`maximumSessions(-1)` 改有限并发；OAuth 2.1 对齐（密码 grant 仅留演示、PKCE 已全量强制）。
 10. **服务自愈**：计划任务随开机自启 + 端口健康检查自动拉起（当前机器重启后三服务全灭，需手工重启）。
 11. **文档配图**：6 张架构/时序图（IMG-1~6，各设计文档内已列清单）+ 9 张管理端截图（SHOT-1~9，`操作说明` §七已列）。
+12. **用户模块编码字段治理**：现状杂乱，三件事——① `user_code` 格式不统一：存量为 `u_`+32hex 与裸 `zhang3` 混杂，**格式已裁定为标准 UUID（`550e8400-e29b-41d4-a716-446655440000`）**，新建用户已改为系统自动生成、页面只读不可编辑、服务端格式校验（2026-11-03）；存量回填可由 `reset-init.bat` 一键完成（清库重载 UUID 种子 + 清 Redis 会话/令牌，2026-11-03）；② 历史命名双职遗留：`username` 曾装 user_code、`principalName` 至今兼任 API 参数，展示字段与 API 取值须持续分离（在线/授权两页已拆，后续新接口注意）；③ 关联键选型已裁定（2026-11-03）：维持字符串，物理主键用自增/雪花 id、对外关联键用 user_code，不做类型变更。

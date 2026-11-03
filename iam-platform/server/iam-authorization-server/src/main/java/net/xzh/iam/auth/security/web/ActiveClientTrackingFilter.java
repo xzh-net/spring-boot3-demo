@@ -34,7 +34,7 @@ import net.xzh.iam.auth.security.repository.RedisOAuth2AuthorizationService;
  * <p>
  * 目的：实现多客户端会话隔离。当用户点击退出 (调用 /logout) 时，服务端
  * 可从 Session 中读取此值，精确撤销该客户端的 OAuth2Authorization，
- * 而不影响同一用户在其他客户端 (如 8082 mobile-app) 上的登录态。
+ * 而不影响同一用户在其他客户端 (如 8082 device-app) 上的登录态。
  * </p>
  *
  * <p>
@@ -128,7 +128,7 @@ public final class ActiveClientTrackingFilter extends OncePerRequestFilter {
      * 支持两种客户端认证方式：
      * <ul>
      *   <li>Public Client (如 mobile-app): 请求参数 client_id=xxx</li>
-     *   <li>Confidential Client (如 web-app): Authorization: Basic base64(client_id:client_secret)</li>
+     *   <li>Confidential Client (如 oa-web-app): Authorization: Basic base64(client_id:client_secret)</li>
      * </ul>
      * 仅在 HTTP 200 响应时更新，避免 token 请求失败 (如 invalid_grant) 污染 Session。
      * </p>
@@ -152,7 +152,7 @@ public final class ActiveClientTrackingFilter extends OncePerRequestFilter {
             return clientId;
         }
 
-        // 2. 从 Basic Auth header 获取 (confidential client 如 web-app)
+        // 2. 从 Basic Auth header 获取 (confidential client 如 oa-web-app)
         String authHeader = request.getHeader("Authorization");
         if (authHeader != null && authHeader.regionMatches(true, 0, "Basic ", 0, 6)) {
             try {

@@ -16,7 +16,7 @@ import lombok.extern.slf4j.Slf4j;
  * 不新建任何规则表、不复活已退役的 iam_client_policy:
  * <ul>
  *   <li>客户端 scope 展开非空且与用户码交集为空 → 拒绝签发 (fail-closed), 如 PORTAL 用户登 admin-app;</li>
- *   <li>客户端 scope 展开为 0 码 (纯 OIDC 客户端, 如 web-app/device-app/mobile-app) → 放行,
+ *   <li>客户端 scope 展开为 0 码 (纯 OIDC 客户端, 如 oa-web-app/device-app/mobile-app) → 放行,
  *       其令牌在自省层同样拿不到任何业务码 (仅能访问 OIDC 标准端点), 不参与业务权限模型, 不闸;</li>
  *   <li>客户端/用户缺失 → 拒绝 (fail-closed)。</li>
  * </ul>

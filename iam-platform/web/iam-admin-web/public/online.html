@@ -104,7 +104,7 @@
             <table>
                 <thead>
                     <tr>
-                        <th>用户名</th>
+                        <th>登录账号</th>
                         <th>昵称</th>
                         <th>SSO 会话</th>
                         <th>客户端会话</th>
@@ -227,7 +227,7 @@ async function loadOnlineUsers() {
                 <td style="font-size:12px;">${clients}</td>
                 <td style="font-size:12px;color:#94a3b8;">${u.lastAccessTime || "-"}</td>
                 <td>
-                    ${userId ? `<button class="btn-link" onclick="showUserSessions(${userId}, '${u.username}')">查看会话</button>` : ''}
+                    ${userId ? `<button class="btn-link" onclick="showUserSessions(${userId}, '${u.username}', '${u.userCode || ''}')">查看会话</button>` : ''}
                     ${userId ? `<button class="btn-link danger" onclick="kickUser(${userId}, '${u.username}')">强制下线</button>` : ''}
                 </td>
             </tr>
@@ -237,8 +237,9 @@ async function loadOnlineUsers() {
 
 function closeSessionModal() { document.getElementById("sessionModal").classList.remove("show"); }
 
-/** 显示用户会话层级视图 (SSO 会话 → 客户端会话) */
-async function showUserSessions(userId, username) {
+/** 显示用户会话层级视图 (SSO 会话 → 客户端会话)
+ *  username=登录账号 (仅展示), userCode=user_code (撤销令牌 API 的 principal 参数) */
+async function showUserSessions(userId, username, userCode = '') {
     let data;
     try { data = await App.api(`/admin/sessions/users/${userId}`); }
     catch (e) { alert("加载会话失败: " + e.message); return; }
@@ -282,7 +283,7 @@ async function showUserSessions(userId, username) {
                         ${rt ? `<button class="btn-icon" data-token="${rt}" onclick="copyToken(this)" title="复制 Refresh Token">${COPY_ICON}<span class="copy-tooltip" data-full="${rt}">${rtShort}</span></button>` : ''}
                     </td>
                     <td>
-                        <button class="btn-link danger" onclick="kickClientSession('${username}')">撤销令牌</button>
+                        <button class="btn-link danger" onclick="kickClientSession('${userCode}', '${username}')">撤销令牌</button>
                     </td>
                 </tr>
             `;}).join("");
@@ -298,7 +299,7 @@ async function showUserSessions(userId, username) {
                     <span style="font-size:12px;color:#94a3b8;">最近: ${sso.lastAccessTime || "-"}</span>
                     <span class="tag blue">客户端会话: ${clientCount}</span>
                     <div style="margin-left:auto;">
-                        <button class="btn-link danger" onclick="kickSsoSession('${sid}', ${userId}, '${username}')">终止会话</button>
+                        <button class="btn-link danger" onclick="kickSsoSession('${sid}', ${userId}, '${username}', '${userCode}')">终止会话</button>
                     </div>
                 </div>
                 <table style="width:100%;border-collapse:collapse;">
@@ -336,13 +337,13 @@ async function kickUser(userId, username) {
 }
 
 /** 按 SSO 会话踢下线 (仅撤销指定 SSO 会话及其客户端会话) */
-async function kickSsoSession(ssoSessionId, userId, username) {
+async function kickSsoSession(ssoSessionId, userId, username, userCode = '') {
     if (!confirm(`确认踢下线此 SSO 会话 ?\n(仅此设备退出, 其他设备不受影响)\nSessionID: ${ssoSessionId.substring(0, 32)}...`)) return;
     try {
         const ok = await App.api(`/admin/sessions/${encodeURIComponent(ssoSessionId)}/logout`, { method: "POST" });
         if (ok) {
             alert("✅ 已踢下线此 SSO 会话");
-            showUserSessions(userId, username); // 刷新弹窗内的会话列表
+            showUserSessions(userId, username, userCode); // 刷新弹窗内的会话列表
             loadOnlineUsers(); // 刷新外层用户列表
         }
     } catch (e) {
@@ -350,11 +351,11 @@ async function kickSsoSession(ssoSessionId, userId, username) {
     }
 }
 
-/** 撤销指定用户名下的所有客户端令牌 (V6 恢复授权/令牌撤销按 principal 维度) */
-async function kickClientSession(username) {
+/** 撤销指定用户下的所有客户端令牌 (API 按 principal=user_code 维度; confirm 展示登录账号) */
+async function kickClientSession(userCode, username) {
     if (!confirm(`确认撤销用户 "${username}" 的所有客户端令牌 ?`)) return;
     try {
-        await App.api(`/admin/sessions/online/${encodeURIComponent(username)}`, { method: "DELETE" });
+        await App.api(`/admin/sessions/online/${encodeURIComponent(userCode)}`, { method: "DELETE" });
         alert("✅ 已撤销该用户的所有客户端令牌");
         loadOnlineUsers();
     } catch (e) {

@@ -1,0 +1,12 @@
+{
+  "name": "iam-client-h5-demo",
+  "version": "1.0.0",
+  "description": "OA H5 形态演示 — 授权码 + PKCE (oa-h5-app), 手机模拟器主页",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": ["oauth2", "pkce", "h5", "oa"],
+  "license": "MIT"
+}

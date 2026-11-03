@@ -24,6 +24,10 @@ public class OAuth2AuthorizationConsentEntity {
     @TableField(exist = false)
     private String clientName;
 
+    /** 非数据库字段, 仅用于管理端展示登录账号 (sys_user.username, 由 controller 按 user_code 反查填充; 查不到回退 principalName) */
+    @TableField(exist = false)
+    private String username;
+
     /** 非数据库字段, 仅用于管理端展示该 (client, user) 的所有授权类型 */
     @TableField(exist = false)
     private List<String> grantTypes;

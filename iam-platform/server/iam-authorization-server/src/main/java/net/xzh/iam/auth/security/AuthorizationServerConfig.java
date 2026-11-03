@@ -2,6 +2,7 @@ package net.xzh.iam.auth.security;
 
 import java.net.URI;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
@@ -232,6 +233,11 @@ public class AuthorizationServerConfig {
 	public OAuth2TokenCustomizer<JwtEncodingContext> jwtTokenCustomizer(SysUserMapper sysUserMapper) {
 		return context -> {
 			String tokenType = context.getTokenType().getValue();
+			// JDK17 强封装: nimbus 内嵌 gson 无法反射序列化 java.time.Instant.
+			// 刷新令牌时 SAS 会复制旧 id_token 的 claims (Redis 反序列化已把 exp/iat/auth_time 恢复为
+			// Instant 供 userinfo 使用), 直接带入新签名会抛 JsonIOException → 500 → 客户端静默重登。
+			// 此处在签名前把 claims map 里的 Instant 原值统一转为 epoch 秒; userinfo 读的是存储侧, 不受影响。
+			context.getClaims().claims(m -> m.replaceAll((k, v) -> v instanceof Instant inst ? inst.getEpochSecond() : v));
 			if ("access_token".equals(tokenType)) {
 				context.getClaims().claim("aud", Set.of(CONTACTS_API_AUD));
 			}
