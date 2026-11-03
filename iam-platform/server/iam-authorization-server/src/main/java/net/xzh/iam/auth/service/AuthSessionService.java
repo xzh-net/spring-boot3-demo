@@ -4,6 +4,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -381,12 +382,16 @@ public class AuthSessionService {
                 vo.setLastAccessTime(FMT.format(Instant.ofEpochMilli(si.getLastRequest().getTime()).atZone(ZoneId.systemDefault())));
             }
 
-            // 拉取该 SSO 会话下的客户端会话
+            // 拉取该 SSO 会话下的客户端会话 (组内按登录时间倒排, 最新登录的客户端会话在前)
             List<OAuth2Authorization> clientAuths = authorizationService.findBySsoSessionId(si.getSessionId());
-            vo.setClientSessions(clientAuths.stream().map(this::toClientSessionVO).toList());
+            List<ClientSessionVO> clientSessions = new ArrayList<>(clientAuths.stream().map(this::toClientSessionVO).toList());
+            clientSessions.sort(Comparator.comparing(ClientSessionVO::getLoginTime, Comparator.nullsLast(Comparator.reverseOrder())));
+            vo.setClientSessions(clientSessions);
 
             result.add(vo);
         }
+        // 最外层按登录时间倒排 (最新登录的 SSO 会话在前)
+        result.sort(Comparator.comparing(SsoSessionVO::getLoginTime, Comparator.nullsLast(Comparator.reverseOrder())));
         return result;
     }
 
