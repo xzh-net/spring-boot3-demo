@@ -427,7 +427,8 @@ public class AuthorizationServerConfig {
 				// 【登录隔离】授权端点发码前先做「该用户能否登录该客户端」判定
 				// (client_login_policy 准入表, allow-list fail-closed): 不合规 302 回登录页
 				// /login.html?error=access_denied, 不下发授权码。
-				// 评估期: 过滤器内以 if (true) 跳过拦截, 结构就位但不生效 (见 AuthorizeIssuanceFilter)。
+				// 登录隔离: 过滤器按 client_login_policy 准入表实时裁决, 未命中 302 拒发码
+				// (见 AuthorizeIssuanceFilter)。
 				.addFilterAfter(new AuthorizeIssuanceFilter(loginAdmissionService), SecurityContextHolderFilter.class);
 
 		return http.build();

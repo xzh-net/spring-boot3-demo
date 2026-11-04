@@ -24,12 +24,10 @@ import net.xzh.iam.resource.service.LoginAdmissionService;
  * fail-closed): 不合规直接 302 回登录页 {@code /login.html?error=access_denied}
  * (与密码错误的失败体验一致, 提示语区分), 不向客户端下发授权码。
  * <p>
- * <b>【评估期占位】</b>准入判定当前以 {@code if (true)} 跳过 — 本过滤器结构已就位但不拦截,
- * 签发层登录隔离暂不生效; 期间 fail-closed 由自省层双维交集兜底 (越权登录拿到的令牌
- * 业务码为 0, 调业务接口一律 403)。评估通过后删除 {@code if (true)} 包裹即可启用。
- * <p>
- * 与授权维度解耦: 登录资格只看准入表, 令牌业务码仍由自省层 用户码 ∩ scope码 决定
- * (见 {@code RbacAuthoritiesOpaqueTokenIntrospector}), 改权限码不再影响登录边界。
+ * <b>【已启用】</b>准入判定按 client_login_policy 准入表实时裁决 (2026-11-04 启用):
+ * 未命中即 302 拒发授权码, fail-closed。与授权维度解耦 — 登录资格只看准入表,
+ * 令牌业务码仍由自省层 用户码 ∩ scope码 决定 (见 {@code RbacAuthoritiesOpaqueTokenIntrospector}),
+ * 改权限码不再影响登录边界。
  * </p>
  */
 @Slf4j
@@ -59,15 +57,12 @@ public class AuthorizeIssuanceFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
             return;
         }
-        // 【评估期占位】准入拦截暂跳过: 删除 if (true) 即启用下方真实裁决
-        if (true) {
-            // TODO(评估通过后启用): 准入表裁决
-            // if (!loginAdmissionService.canLogin(clientId, auth.getName())) {
-            //     log.info("[签发准入] 拒绝签发授权码 (准入表未命中): 客户端={}, 用户={}",
-            //             clientId, auth.getName());
-            //     response.sendRedirect(request.getContextPath() + "/login.html?error=access_denied");
-            //     return;
-            // }
+        // 【登录层】准入表裁决 (client_login_policy): 未命中 → 302 拒发授权码, fail-closed
+        if (!loginAdmissionService.canLogin(clientId, auth.getName())) {
+            log.info("[签发准入] 拒绝签发授权码 (准入表未命中): 客户端={}, 用户={}",
+                    clientId, auth.getName());
+            response.sendRedirect(request.getContextPath() + "/login.html?error=access_denied");
+            return;
         }
         filterChain.doFilter(request, response);
     }

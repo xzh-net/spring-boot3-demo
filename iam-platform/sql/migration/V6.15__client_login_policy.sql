@@ -18,7 +18,7 @@
 --   - 授权层不变: 令牌业务码仍 = 用户码 ∩ scope码 (RbacAuthoritiesOpaqueTokenIntrospector),
 --     本表不参与自省裁决。
 --   - 服务端判定 LoginAdmissionService.canLogin 已就位, 但 AuthorizeIssuanceFilter
---     以 if(true) 跳过 (评估期), 评估通过后删除 if(true) 包裹即启用。
+--     AuthorizeIssuanceFilter 按准入表实时裁决 (已启用), 未命中 302 拒发码 fail-closed。
 --   - 管理 API/页面写入口未建 (评估后补); 届时需同步 iam_endpoint_policy 种子行。
 --   - 一次性 DDL, 不可重复执行 (新库走基线 iam.sql, 无需本脚本)。
 

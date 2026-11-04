@@ -1,4 +1,4 @@
-﻿# =====================================================================
+# =====================================================================
 # reset-init.ps1 — IAM 环境一键重置为「最干净初始化状态」(PowerShell 5.1)
 # ---------------------------------------------------------------------
 # 执行流程:
@@ -8,7 +8,7 @@
 #   3. 清空 Redis: db1(认证中心) + db3(管理BFF) —— db2 属其他项目, 不动
 #   4. 清空 MySQL iam 库全部表结构与数据, 重新执行 sql/iam.sql 种子
 #      (种子用户编码已为标准 UUID: 550e8400-...-446655440001/0002)
-#   5. 校验种子: 16 表 / 2 用户 UUID 编码 / 5 客户端 / 3 角色
+#   5. 校验种子: 17 表 / 2 用户 UUID 编码 / 6 客户端 / 3 角色
 #   6. 调 start-all.ps1 重启 5 服务, 并做入口健康检查
 #
 # 用法: 双击 reset-init.bat, 或
@@ -194,7 +194,7 @@ public class ResetTool {
         boolean ok = true;
         try (Connection c = conn(a)) {
             int tables = q1(c, "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE()");
-            ok &= chk("tables = 16", tables == 16, String.valueOf(tables));
+            ok &= chk("tables = 17", tables == 17, String.valueOf(tables));
 
             int users = q1(c, "SELECT COUNT(*) FROM sys_user");
             ok &= chk("seed users = 2", users == 2, String.valueOf(users));

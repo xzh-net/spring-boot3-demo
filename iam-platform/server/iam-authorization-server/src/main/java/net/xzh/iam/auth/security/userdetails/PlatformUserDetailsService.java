@@ -25,7 +25,7 @@ import net.xzh.iam.resource.service.PermissionService;
  * principal name 采用业务用户编码 {@code user_code}（即令牌 sub），业务 RBAC 角色由同库
  * {@link PermissionService#findRoleCodes} 按 user_code 供给 (角色编码原样, 不拼 ROLE_ 前缀);
  * 本地角色查询异常时降级为空角色 (fail-closed, 粗档令牌与 user_label 降级猜测均已退役)。
- * 登录准入由签发准入过滤器按 client_login_policy 准入表 fail-closed 把关 (评估期 if(true) 暂跳过),
+ * 登录准入由签发准入过滤器按 client_login_policy 准入表 fail-closed 把关,
  * 令牌业务码由自省层双维交集承担。
  * <p>
  * 命名说明: 历史上曾按「门户 / 管理端」双服务各配一个 UserDetailsService, 单库合并后只剩本类

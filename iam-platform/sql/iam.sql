@@ -12,7 +12,7 @@
 --                 iam_endpoint_policy (iam_api_capability / iam_capability_subscription 已随开放能力退役删除)
 -- 双维准入 (两层解耦):
 --   登录层 ①: 能否登录 = client_login_policy 准入表 (allow-list fail-closed);
---             评估期 AuthorizeIssuanceFilter 以 if(true) 跳过拦截, 结构就位不生效。
+--             AuthorizeIssuanceFilter 按准入表实时裁决 (已启用), 未命中 302 拒发码 fail-closed。
 --   授权层 ②: 令牌业务码 = 用户 RBAC 码 ∩ 客户端 scope 展开码 (自省层交集, fail-closed);
 --             iam_client_policy (登录边界策略) 已退役删除, 登录职责移交 client_login_policy。
 -- 说明: 租户功能已整体移除 (iam_tenant / iam_tenant_user 表删除, 各表 tenant_code 列、
