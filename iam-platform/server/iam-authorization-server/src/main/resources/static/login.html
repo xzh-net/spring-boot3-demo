@@ -127,7 +127,7 @@
         var err = params.get('error');
         if (err !== null) {
             var alertEl = document.getElementById('errorAlert');
-            // 签发准入拒绝 (角色与该客户端授权范围无交集) 与密码错误区分提示
+            // 登录准入拒绝 (client_login_policy 准入表未命中) 与密码错误区分提示
             alertEl.textContent = (err === 'access_denied')
                 ? '当前账号无权登录该应用，请使用对应端的账号'
                 : '用户名或密码错误，请重试';

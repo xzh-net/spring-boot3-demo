@@ -2,15 +2,19 @@
 -- 合并基线 - IAM 单库 (认证域 + 资源域)
 -- 数据库: iam
 -- 归属: iam-authorization-server (合并后单服务, 原认证中心 + 资源中心)
--- 表清单 (共 16 表):
+-- 表清单 (共 17 表):
 --   认证域 5 表: oauth2_authorization_consent / oauth2_authorization_record /
 --                oauth2_registered_client / sys_user / iam_external_identity
---   资源域 11 表: sys_permission / sys_role / sys_role_permission / sys_user_role /
+--   资源域 12 表: sys_permission / sys_role / sys_role_permission / sys_user_role /
 --                 sys_scope / sys_scope_permission (客户端授权范围字典, 双维控制客户端维度) /
+--                 client_login_policy (登录准入: 客户端×主体 allow-list, 登录维度) /
 --                 iam_application / iam_application_channel / iam_org / iam_app_authorization /
 --                 iam_endpoint_policy (iam_api_capability / iam_capability_subscription 已随开放能力退役删除)
--- 双维准入: 令牌业务码 = 用户 RBAC 码 ∩ 客户端 scope 展开码 (自省层交集, fail-closed);
---           iam_client_policy (登录边界策略) 已退役删除, 其职责由 scope 双维交集覆盖。
+-- 双维准入 (两层解耦):
+--   登录层 ①: 能否登录 = client_login_policy 准入表 (allow-list fail-closed);
+--             评估期 AuthorizeIssuanceFilter 以 if(true) 跳过拦截, 结构就位不生效。
+--   授权层 ②: 令牌业务码 = 用户 RBAC 码 ∩ 客户端 scope 展开码 (自省层交集, fail-closed);
+--             iam_client_policy (登录边界策略) 已退役删除, 登录职责移交 client_login_policy。
 -- 说明: 租户功能已整体移除 (iam_tenant / iam_tenant_user 表删除, 各表 tenant_code 列、
 --       种子值与唯一键中的租户位一并清除)。
 -- 基线: iam_identity.sql (原认证中心) + iam_authorization.sql (原资源中心)
@@ -443,6 +447,37 @@ INSERT INTO `iam_app_authorization` VALUES
 (7, 3, 0, 'ROLE', 'PORTAL', 1, '2026-11-03 12:00:00', NULL, '2026-11-03 12:00:00', '2026-11-03 12:00:00');
 
 -- ----------------------------
+-- Table structure for client_login_policy (登录准入: 客户端 × 主体 allow-list, 登录维度)
+-- 说明: 与授权维度正交 — 本表只裁决①签发准入 (能否登录), 不参与②自省层业务码注入;
+--       allow-list fail-closed: 无启用行 = 拒绝所有登录; 不支持 DENY 行。
+--       管理 API/页面写入口待评估后补, 当前仅 SQL 种子 (与 iam_endpoint_policy 同为"准入"族)。
+-- ----------------------------
+DROP TABLE IF EXISTS `client_login_policy`;
+CREATE TABLE `client_login_policy`  (
+  `id` bigint(0) NOT NULL AUTO_INCREMENT COMMENT '准入ID',
+  `client_id` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT 'OAuth2 client_id (逻辑引用 oauth2_registered_client.client_id, 无外键)',
+  `subject_type` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '主体类型: ROLE=角色 / USER=用户 / ANY=所有已登录用户',
+  `subject_id` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL DEFAULT '' COMMENT '主体ID: ROLE=sys_role.code / USER=user_code / ANY=空串',
+  `status` tinyint(1) NOT NULL DEFAULT 1 COMMENT '状态: 1=启用, 0=停用 (停用行不参与判定)',
+  `remark` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '备注',
+  `create_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0) COMMENT '创建时间',
+  `update_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0) ON UPDATE CURRENT_TIMESTAMP(0) COMMENT '更新时间',
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE INDEX `uk_policy`(`client_id`, `subject_type`, `subject_id`) USING BTREE
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '客户端登录准入表 (登录维度: 谁能登录该客户端; allow-list, fail-closed)' ROW_FORMAT = Dynamic;
+
+-- ----------------------------
+-- Records of client_login_policy (6 行, 放行结果与原签发准入交集判定等价)
+-- ----------------------------
+INSERT INTO `client_login_policy` (`client_id`, `subject_type`, `subject_id`, `status`, `remark`) VALUES
+('admin-app',   'ROLE', 'ADMIN',  1, '管理后台: 仅 ADMIN 角色 (原交集: ADMIN 16码 ∩ admin.full 16码)'),
+('portal-app',  'ROLE', 'PORTAL', 1, '门户 SSO: 仅 PORTAL 角色 (原交集: PORTAL 1码 ∩ portal.profile 1码)'),
+('oa-web-app',  'ANY',  '',       1, '三方 Web 演示: 所有登录用户 (原逃逸阀: third.profile 空映射)'),
+('oa-h5-app',   'ANY',  '',       1, 'OA H5 演示: 所有登录用户 (原逃逸阀: third.profile 空映射)'),
+('device-app',  'ANY',  '',       1, '设备码演示: 所有登录用户 (原逃逸阀: 无业务 scope)'),
+('mobile-app',  'ANY',  '',       1, '移动原生演示: 所有登录用户 (原逃逸阀: 无业务 scope)');
+
+-- ----------------------------
 -- Table structure for iam_endpoint_policy (资源接口准入策略: 启动扫描播种 + 管理端覆盖)
 -- 说明: admin 域 49 行以权限码 override 随基线预置 (source=override, rescan 跳过对齐, 防止被重置回粗档);
 --       其余域 (portal 等) 数据行由合并服务启动时按 controller 分包扫描 RequestMapping 自动播种
@@ -505,6 +540,9 @@ INSERT INTO `iam_endpoint_policy` (`method`, `path`, `required_authority`, `stat
 ('PUT', '/admin/clients/{id}', 'client:write', 1),
 ('DELETE', '/admin/clients/{id}', 'client:write', 1),
 ('POST', '/admin/clients/{id}/reset-secret', 'client:write', 1),
+('GET', '/admin/login-policies', 'client:read', 1),
+('GET', '/admin/login-policies/{clientId}', 'client:read', 1),
+('PUT', '/admin/login-policies/{clientId}', 'client:write', 1),
 ('GET', '/admin/permissions', 'permission:read', 1),
 ('POST', '/admin/permissions', 'permission:write', 1),
 ('PUT', '/admin/permissions/{id}', 'permission:write', 1),

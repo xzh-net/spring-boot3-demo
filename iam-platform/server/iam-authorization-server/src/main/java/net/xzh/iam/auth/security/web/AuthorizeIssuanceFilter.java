@@ -8,24 +8,28 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import net.xzh.iam.resource.service.IssuanceAdmissionService;
+import net.xzh.iam.resource.service.LoginAdmissionService;
 
 /**
- * 授权端点签发准入过滤器 (混合登录隔离).
+ * 授权端点签发准入过滤器 (登录维度: client_login_policy 准入表裁决).
  * <p>
- * 在 {@code /oauth2/authorize} 签发授权码之前先做「该用户能否登录该客户端」判定
- * (用户 RBAC 码 ∩ 客户端 scope 展开码, 见 {@link IssuanceAdmissionService}): 不合规直接
- * 302 回登录页 {@code /login.html?error=access_denied} (与密码错误的失败体验一致, 提示语区分),
- * 不向客户端下发授权码。审计日志在服务端记录 (客户端 + 用户 + 结论), 可归因、可追溯。
+ * 在 {@code /oauth2/authorize} 签发授权码之前先做「该用户能否登录该客户端」判定,
+ * 判据为 {@link LoginAdmissionService} 查 client_login_policy 准入表 (allow-list,
+ * fail-closed): 不合规直接 302 回登录页 {@code /login.html?error=access_denied}
+ * (与密码错误的失败体验一致, 提示语区分), 不向客户端下发授权码。
  * <p>
- * 该闸为 fail-closed: 决策依赖 scope 字典与 RBAC, 任一维缺口即拒绝; 与令牌自省层双维交集同源,
- * 取代已退役的 iam_client_policy 登录边界策略 (不新建规则表)。
+ * <b>【评估期占位】</b>准入判定当前以 {@code if (true)} 跳过 — 本过滤器结构已就位但不拦截,
+ * 签发层登录隔离暂不生效; 期间 fail-closed 由自省层双维交集兜底 (越权登录拿到的令牌
+ * 业务码为 0, 调业务接口一律 403)。评估通过后删除 {@code if (true)} 包裹即可启用。
+ * <p>
+ * 与授权维度解耦: 登录资格只看准入表, 令牌业务码仍由自省层 用户码 ∩ scope码 决定
+ * (见 {@code RbacAuthoritiesOpaqueTokenIntrospector}), 改权限码不再影响登录边界。
  * </p>
  */
 @Slf4j
@@ -35,7 +39,7 @@ public class AuthorizeIssuanceFilter extends OncePerRequestFilter {
     private static final AntPathRequestMatcher AUTHORIZE_MATCHER =
             new AntPathRequestMatcher("/oauth2/authorize");
 
-    private final IssuanceAdmissionService issuanceAdmissionService;
+    private final LoginAdmissionService loginAdmissionService;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -55,11 +59,15 @@ public class AuthorizeIssuanceFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
             return;
         }
-        if (!issuanceAdmissionService.allowLogin(clientId, auth.getName())) {
-            log.info("[签发准入] 拒绝签发授权码 (用户与客户端授权范围无交集): 客户端={}, 用户={}",
-                    clientId, auth.getName());
-            response.sendRedirect(request.getContextPath() + "/login.html?error=access_denied");
-            return;
+        // 【评估期占位】准入拦截暂跳过: 删除 if (true) 即启用下方真实裁决
+        if (true) {
+            // TODO(评估通过后启用): 准入表裁决
+            // if (!loginAdmissionService.canLogin(clientId, auth.getName())) {
+            //     log.info("[签发准入] 拒绝签发授权码 (准入表未命中): 客户端={}, 用户={}",
+            //             clientId, auth.getName());
+            //     response.sendRedirect(request.getContextPath() + "/login.html?error=access_denied");
+            //     return;
+            // }
         }
         filterChain.doFilter(request, response);
     }

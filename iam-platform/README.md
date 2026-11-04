@@ -241,6 +241,26 @@ cd client/iam-client-h5-demo     && node server.js   # :8084
 
 ## 九、待办清单
 
+### A. 架构设计问题（2026-11-04 双维权限架构评审，按优先级）
+
+> 优先级：**P0** = 对外契约失真 / 已具备可修条件，应优先处理；**P1** = 语义缺口，特定条件下爆发；**P2** = 韧性与代码卫生。
+
+- **P0-1 令牌 `scope` claim 与实际授权脱钩（对外契约失真）**：自省裁决只取 `client_id` 查注册表（`RbacAuthoritiesOpaqueTokenIntrospector` L72-73 → `ScopeService.resolveClientBusinessCodes` 读 `oauth2_registered_client.scopes`），**从不读同一批 attributes 里的 `scope`**；但 `RedisOpaqueTokenIntrospector` L110/L118 却把 `authorizedScopes` 写进 claim，`EnrichedOAuth2TokenIntrospectionAuthenticationProvider` L132-135 还「无条件补齐」给外部消费方。后果：① RFC 7662 `/oauth2/introspect` 返回的 `scope` 与平台实际放行的业务码不一致——**实证**：`iam-admin-bff` 申请 `openid,profile,read,write`（无 `admin.full`），令牌 claim 无管理权限却实际注入 16 个管理码；② 标准 OAuth2「按令牌收窄 scope」能力在业务码维度失效；③ 外部资源方按 RFC 语义实现会得出与平台相反的结论。安全底线未破（业务码 ⊆ 注册 scope 展开上限，请求侧无法提权）。**建议方向**：内省响应回传实际生效业务码（自定义 `permissions` claim），或明文声明 `scope` claim 不参与裁决、外部方不得依赖。
+
+- **P0-2 表驱动端点准入「两头不占」**：付出无参照完整性代价——`iam_endpoint_policy.required_authority` 按字符串引用权限码，`RbacService.updatePermission()` **无引用守卫**（仅 `deletePermission()` 有），页面又允许改名 → 改名后引用行静默失联、端点永久 403；同时**未拿到运行时可改的收益**（页面只读 + 启动扫描不回写）。**建议方向二选一**：① 改 `@PreAuthorize` 编译期声明，种子表降级为审计/文档；② 保留表驱动，则补引用完整性（禁止改名或级联更新）并提供页面写入口。
+
+- **P1-1 签发准入与自省层对「空 scope」语义不一致**：`IssuanceAdmissionService.allowLogin` L46-51 遇 `scopeCodes.isEmpty()` 走逃逸阀**放行** → 停用 `admin.full` 后 admin-app **登录不被拦**（仅令牌 0 业务码、全 403），而自省层是 fail-closed。「停用 scope = 拦登录」在签发层不成立，两层同源语义有缝。
+
+- **P1-2 consent 不参与裁决**：`oauth2_authorization_consent` 仅作审计记录 + 撤销时踢会话，`RbacAuthoritiesOpaqueTokenIntrospector` 完全不读它。第一方场景无害；接入**需用户自主授权的第三方应用**时是真实缺口（届时 consent 须升为第三裁决维度）。
+
+- **P1-3 `password` / `device_code` 不走签发准入闸**：`AuthorizeIssuanceFilter` 只匹配 `/oauth2/authorize`；`DeviceCodeGrantAuthenticationProvider` L206-209 在无既存 scope 时直接全量下发客户端 scope。这两种流程的隔离完全依赖自省层兜底。
+
+- **P2-1 端点宽松窗口的隐性 fail-open**：新端点自扫描补 `AUTHENTICATED`、种子配码前为「持令牌即可」——此部分**已裁定关闭**（见下方第 2 条与 §六.5，不重开）；但 `EndpointPolicyScanInitializer` L38-40 **吞异常** → 表加载失败时快照为空，**全部端点退化为认证档**，该点未被既有裁定覆盖，需单独补（加载失败应拒绝启动或告警）。
+
+- **P2-2 `authorizedScopes` 断头数据**：授权记录的 `authorizedScopes` 被 `RedisOpaqueTokenIntrospector` L110 读出后，唯一去处是 L118 `attributes.put("scope")`，全 `server/` 无任何 `attributes.get("scope")` 消费者（grep 0 命中）。与 P0-1 同源，修 P0-1 时一并清理。
+
+### B. 既有待办
+
 1. **YAML 配置分类**：整理当前项目存在的硬编码，按 `application-auth.yaml` / `application-resource.yaml` 的格式，拆分到不同的配置文件中。
 2. ~~新端点 fail-closed 收口~~ **已裁定关闭（2026-11-02）**：维持「启动自扫描自动添加（`AUTHENTICATED` 宽松档）+ 种子配精确权限码」的现行模式，不改为 `status=0`。新端点的宽松窗口由操作纪律兜底：**新增端点后先补种子再开放调用**（见「六、关键设计裁定」第 5 条）。
 3. **登录防爆破**：登录端点失败限流 + 账号临时锁定（历史改造清单 A1，始终未实现）。

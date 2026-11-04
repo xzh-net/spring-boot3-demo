@@ -91,7 +91,7 @@ import net.xzh.iam.auth.security.web.CompositeSecurityContextRepository;
 import net.xzh.iam.auth.security.web.SessionExpirationFilter;
 import net.xzh.iam.auth.security.web.converter.DeviceClientAuthenticationConverter;
 import net.xzh.iam.auth.security.web.converter.PasswordGrantAuthenticationConverter;
-import net.xzh.iam.resource.service.IssuanceAdmissionService;
+import net.xzh.iam.resource.service.LoginAdmissionService;
 
 /**
  * Spring Authorization Server 核心配置类.
@@ -308,7 +308,7 @@ public class AuthorizationServerConfig {
 			PasswordEncoder passwordEncoder,
 			@Qualifier("platformDaoProvider") DaoAuthenticationProvider platformDaoProvider,
 			SessionRegistry sessionRegistry,
-			IssuanceAdmissionService issuanceAdmissionService) throws Exception {
+			LoginAdmissionService loginAdmissionService) throws Exception {
 
 		// 1. 准备自定义的认证组件
 		// 创建用于设备授权流程的客户端认证转换器，指定其处理的端点路径
@@ -424,10 +424,11 @@ public class AuthorizationServerConfig {
 				.addFilterAfter(new SessionExpirationFilter(sessionRegistry), SecurityContextHolderFilter.class)
 				// 跟踪当前活跃客户端 (解析 Bearer Token, 存入 Session)
 				.addFilterAfter(new ActiveClientTrackingFilter(authorizationService), SecurityContextHolderFilter.class)
-				// 【混合登录隔离】授权端点发码前先做「该用户能否登录该客户端」判定
-				// (用户 RBAC 码 ∩ 客户端 scope 展开码, fail-closed): 不合规 302 回登录页
-				// /login.html?error=access_denied, 不下发授权码。取代已退役的 iam_client_policy。
-				.addFilterAfter(new AuthorizeIssuanceFilter(issuanceAdmissionService), SecurityContextHolderFilter.class);
+				// 【登录隔离】授权端点发码前先做「该用户能否登录该客户端」判定
+				// (client_login_policy 准入表, allow-list fail-closed): 不合规 302 回登录页
+				// /login.html?error=access_denied, 不下发授权码。
+				// 评估期: 过滤器内以 if (true) 跳过拦截, 结构就位但不生效 (见 AuthorizeIssuanceFilter)。
+				.addFilterAfter(new AuthorizeIssuanceFilter(loginAdmissionService), SecurityContextHolderFilter.class);
 
 		return http.build();
 	}

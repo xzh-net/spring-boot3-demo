@@ -25,7 +25,7 @@ import net.xzh.iam.resource.service.PermissionService;
  * principal name 采用业务用户编码 {@code user_code}（即令牌 sub），业务 RBAC 角色由同库
  * {@link PermissionService#findRoleCodes} 按 user_code 供给 (角色编码原样, 不拼 ROLE_ 前缀);
  * 本地角色查询异常时降级为空角色 (fail-closed, 粗档令牌与 user_label 降级猜测均已退役)。
- * 签发准入由签发准入过滤器按 scope∧RBAC 交集 fail-closed 把关 (旧 iam_client_policy 已退役),
+ * 登录准入由签发准入过滤器按 client_login_policy 准入表 fail-closed 把关 (评估期 if(true) 暂跳过),
  * 令牌业务码由自省层双维交集承担。
  * <p>
  * 命名说明: 历史上曾按「门户 / 管理端」双服务各配一个 UserDetailsService, 单库合并后只剩本类
@@ -112,7 +112,8 @@ public final class PlatformUserDetailsService implements UserDetailsService {
 
         // 业务 RBAC 角色: 同库 sys_user_role 按 user_code 供给 (角色编码原样, 不拼 ROLE_ 前缀)。
         // 粗档 ADMIN_SERVICE_TOKEN 与 user_label 降级猜测均已退役: 角色查询异常时降级为空角色
-        // (fail-closed, 无 user_label 依赖), 令牌业务码由自省层双维交集与签发准入共同把关。
+        // (fail-closed, 无 user_label 依赖), 令牌业务码由自省层双维交集把关,
+        // 登录资格由 client_login_policy 准入表把关 (见 LoginAdmissionService)。
         List<SimpleGrantedAuthority> authorities;
         try {
             Set<String> roles = Set.copyOf(permissionService.findRoleCodes(userCode));
