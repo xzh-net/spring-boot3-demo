@@ -8,8 +8,9 @@
 -- 变更内容:
 --   1) 新建 client_login_policy (client_id + subject_type/subject_id + status),
 --      无外键 (逻辑引用 oauth2_registered_client.client_id, 与 sso_client_id 同风格)。
---   2) 种子 6 行, 放行结果与原交集判定等价:
---      admin-app←ROLE ADMIN / portal-app←ROLE PORTAL / 其余 4 个演示客户端←ANY。
+--   2) 种子 6 行: admin-app←ROLE ADMIN / portal-app←ROLE PORTAL /
+--      device-app←ROLE THIRD_PARTY (设备码客户端收敛为三方角色, 不再对所有用户开放) /
+--      oa-web-app / oa-h5-app / mobile-app←ANY。
 --
 -- 关键注记:
 --   - fail-closed 方向修正: 无启用行 = 拒绝 (原逃逸阀对空 scope 放行, 已随
@@ -35,13 +36,13 @@ CREATE TABLE `client_login_policy`  (
   UNIQUE INDEX `uk_policy`(`client_id`, `subject_type`, `subject_id`) USING BTREE
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '客户端登录准入表 (登录维度: 谁能登录该客户端; allow-list, fail-closed)' ROW_FORMAT = Dynamic;
 
--- ============ 2. 种子 (与原交集判定放行结果等价) ============
+-- ============ 2. 种子 (device-app 收敛为仅 THIRD_PARTY, 其余与原签发准入放行结果一致) ============
 INSERT INTO `client_login_policy` (`client_id`, `subject_type`, `subject_id`, `status`, `remark`) VALUES
 ('admin-app',   'ROLE', 'ADMIN',  1, '管理后台: 仅 ADMIN 角色 (原交集: ADMIN 16码 ∩ admin.full 16码)'),
 ('portal-app',  'ROLE', 'PORTAL', 1, '门户 SSO: 仅 PORTAL 角色 (原交集: PORTAL 1码 ∩ portal.profile 1码)'),
 ('oa-web-app',  'ANY',  '',       1, '三方 Web 演示: 所有登录用户 (原逃逸阀: third.profile 空映射)'),
 ('oa-h5-app',   'ANY',  '',       1, 'OA H5 演示: 所有登录用户 (原逃逸阀: third.profile 空映射)'),
-('device-app',  'ANY',  '',       1, '设备码演示: 所有登录用户 (原逃逸阀: 无业务 scope)'),
+('device-app',  'ROLE', 'THIRD_PARTY', 1, '设备码客户端: 仅 THIRD_PARTY 角色 (设备/IoT/CLI 三方演示)'),
 ('mobile-app',  'ANY',  '',       1, '移动原生演示: 所有登录用户 (原逃逸阀: 无业务 scope)');
 
 -- ============ 3. 端点准入行 (管理 API, 否则启动扫描落 AUTHENTICATED 宽松档) ============

@@ -467,14 +467,14 @@ CREATE TABLE `client_login_policy`  (
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '客户端登录准入表 (登录维度: 谁能登录该客户端; allow-list, fail-closed)' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
--- Records of client_login_policy (6 行, 放行结果与原签发准入交集判定等价)
+-- Records of client_login_policy (6 行; device-app 收敛为仅 THIRD_PARTY, 其余与原签发准入放行结果一致)
 -- ----------------------------
 INSERT INTO `client_login_policy` (`client_id`, `subject_type`, `subject_id`, `status`, `remark`) VALUES
 ('admin-app',   'ROLE', 'ADMIN',  1, '管理后台: 仅 ADMIN 角色 (原交集: ADMIN 16码 ∩ admin.full 16码)'),
 ('portal-app',  'ROLE', 'PORTAL', 1, '门户 SSO: 仅 PORTAL 角色 (原交集: PORTAL 1码 ∩ portal.profile 1码)'),
 ('oa-web-app',  'ANY',  '',       1, '三方 Web 演示: 所有登录用户 (原逃逸阀: third.profile 空映射)'),
 ('oa-h5-app',   'ANY',  '',       1, 'OA H5 演示: 所有登录用户 (原逃逸阀: third.profile 空映射)'),
-('device-app',  'ANY',  '',       1, '设备码演示: 所有登录用户 (原逃逸阀: 无业务 scope)'),
+('device-app',  'ROLE', 'THIRD_PARTY', 1, '设备码客户端: 仅 THIRD_PARTY 角色 (设备/IoT/CLI 三方演示)'),
 ('mobile-app',  'ANY',  '',       1, '移动原生演示: 所有登录用户 (原逃逸阀: 无业务 scope)');
 
 -- ----------------------------
