@@ -141,6 +141,7 @@ cd client/iam-client-h5-demo     && node server.js   # :8084
 |---|---|---|---|
 | `admin` | `123456` | `ADMIN`（持 16 个管理域权限码） | 管理后台 |
 | `user` | `123456` | `PORTAL`（持 1 个门户权限码） | 门户 / 演示项目 |
+| `zhangsan` | `123456` | `THIRD_PARTY`（0 权限码） | 设备码流程验证（`device-app` 准入仅此角色） |
 
 ### 5. 默认客户端
 
@@ -221,7 +222,7 @@ cd client/iam-client-h5-demo     && node server.js   # :8084
 | 日期 | 类型 | 内容 |
 |---|---|---|
 | 2026-11-04 | 增加 | **登录准入模块**：`client_login_policy` 表（client × 主体 allow-list）+ `LoginAdmissionService` + `AdminLoginPolicyController` + 管理页 `login_policy.html`（菜单「登录准入」）；签发准入由「权限码交集」改为「准入表裁决」，登录/授权两层解耦，`IssuanceAdmissionService` 删除 |
-| 2026-11-04 | 修改 | 种子 `device-app` 登录准入收敛为仅 `THIRD_PARTY` 角色（原对所有登录用户开放）；新增用户 `zhang3`（THIRD_PARTY）用于设备码流程验证 |
+| 2026-11-04 | 修改 | 种子 `device-app` 登录准入收敛为仅 `THIRD_PARTY` 角色（原对所有登录用户开放）；新增种子用户 `zhangsan`（THIRD_PARTY，0 权限码）用于设备码流程验证 |
 | 2026-11-04 | 增加 | README §九 待办新增 A 组「架构设计问题」（P0-1 令牌 scope claim 失真 / P0-2 表驱动端点准入两头不占 等 7 项） |
 | 2026-10-27 | 删除 | `iam_endpoint_policy` 的 `domain`/`source` 两列及其页面增删改，表收归「只读 + 唯一写入方=启动自扫描」 |
 | 2026-10-27 | 删除 | `sys_permission.domain`（业务分类改用 `remark` 前缀 `【管理端】`/`【门户】`）、`sys_scope.domain`（由 scope 码前缀自表达） |

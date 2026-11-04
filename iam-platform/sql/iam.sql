@@ -145,6 +145,7 @@ CREATE TABLE `sys_user`  (
 -- ----------------------------
 INSERT INTO `sys_user` VALUES (1, '550e8400-e29b-41d4-a716-446655440001', 'admin', '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e', '管理员', 'admin@example.com', NULL, NULL, 1, 1, 1, 1, '2026-08-11 20:00:08', '2026-08-11 20:00:08');
 INSERT INTO `sys_user` VALUES (2, '550e8400-e29b-41d4-a716-446655440002', 'user', '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e', '普通用户', 'user@example.com', NULL, NULL, 1, 1, 1, 1, '2026-08-11 20:00:08', '2026-08-11 20:00:08');
+INSERT INTO `sys_user` VALUES (3, '550e8400-e29b-41d4-a716-446655440003', 'zhangsan', '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e', '张三', 'zhangsan@example.com', NULL, NULL, 1, 1, 1, 1, '2026-08-11 20:00:08', '2026-08-11 20:00:08');
 
 -- ----------------------------
 -- 退役清理: iam_client_policy (登录边界策略) 已删除, 职责由 scope∧RBAC 双维交集覆盖
@@ -327,6 +328,7 @@ CREATE TABLE `sys_user_role`  (
 -- ----------------------------
 INSERT INTO `sys_user_role` VALUES (1, '550e8400-e29b-41d4-a716-446655440001', 1);
 INSERT INTO `sys_user_role` VALUES (2, '550e8400-e29b-41d4-a716-446655440002', 2);
+INSERT INTO `sys_user_role` VALUES (3, '550e8400-e29b-41d4-a716-446655440003', 3);
 
 -- ----------------------------
 -- Table structure for iam_application (应用表: 门户展示单元)

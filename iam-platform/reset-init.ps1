@@ -8,7 +8,7 @@
 #   3. 清空 Redis: db1(认证中心) + db3(管理BFF) —— db2 属其他项目, 不动
 #   4. 清空 MySQL iam 库全部表结构与数据, 重新执行 sql/iam.sql 种子
 #      (种子用户编码已为标准 UUID: 550e8400-...-446655440001/0002)
-#   5. 校验种子: 17 表 / 2 用户 UUID 编码 / 6 客户端 / 3 角色
+#   5. 校验种子: 17 表 / 3 用户 UUID 编码 / 6 客户端 / 3 角色
 #   6. 调 start-all.ps1 重启 5 服务, 并做入口健康检查
 #
 # 用法: 双击 reset-init.bat, 或
@@ -197,7 +197,7 @@ public class ResetTool {
             ok &= chk("tables = 17", tables == 17, String.valueOf(tables));
 
             int users = q1(c, "SELECT COUNT(*) FROM sys_user");
-            ok &= chk("seed users = 2", users == 2, String.valueOf(users));
+            ok &= chk("seed users = 3", users == 3, String.valueOf(users));
 
             ResultSet rs = c.createStatement().executeQuery("SELECT username, user_code FROM sys_user ORDER BY id");
             boolean any = false;
