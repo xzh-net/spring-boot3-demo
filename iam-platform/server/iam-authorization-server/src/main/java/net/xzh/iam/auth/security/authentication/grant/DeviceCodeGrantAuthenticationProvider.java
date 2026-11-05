@@ -13,6 +13,7 @@ import java.util.Set;
 
 import lombok.extern.slf4j.Slf4j;
 import net.xzh.iam.auth.security.userdetails.PlatformUserDetailsService;
+import net.xzh.iam.resource.service.LoginAdmissionService;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -55,6 +56,8 @@ import org.springframework.security.oauth2.server.authorization.token.OAuth2Toke
  *   <li>验证 device_code 有效性（存在、未过期、未失效、客户端匹配）。</li>
  *   <li>检查 userCode 状态：未失效 → authorization_pending（轮询继续），已失效且未拒绝 → 签发 token。</li>
  *   <li>重新加载真实用户 authorities（不依赖 Redis 反序列化的 stub Principal）。</li>
+ *   <li>登录准入闸：查 client_login_policy 准入表，该客户端未放行此主体则 access_denied
+ *       （设备码流程不经 /oauth2/authorize，此处为唯一准入点）。</li>
  *   <li>生成 access_token（Opaque 短码）、可选的 refresh_token 和 OIDC id_token。</li>
  *   <li>将授权记录持久化到 OAuth2AuthorizationService（Redis）。</li>
  * </ol>
@@ -70,8 +73,6 @@ import org.springframework.security.oauth2.server.authorization.token.OAuth2Toke
  *       刷新时 JwtGenerator 读取 idToken claims 的 NPE 问题。</li>
  *   <li>device_code 失效与过期场景与 SAS 默认 Provider 行为完全一致。</li>
  * </ul>
- *
- * @see PasswordGrantAuthenticationProvider
  */
 @Slf4j
 public final class DeviceCodeGrantAuthenticationProvider implements AuthenticationProvider {
@@ -97,15 +98,20 @@ public final class DeviceCodeGrantAuthenticationProvider implements Authenticati
     /** 令牌生成器，根据 TokenSettings.accessTokenFormat 选择生成策略 */
     private final OAuth2TokenGenerator<?> tokenGenerator;
 
+    /** 登录准入服务 (client_login_policy 裁决, 设备码唯一的签发准入点) */
+    private final LoginAdmissionService loginAdmissionService;
+
     public DeviceCodeGrantAuthenticationProvider(
             RegisteredClientRepository registeredClientRepository,
             OAuth2AuthorizationService authorizationService,
             UserDetailsService userDetailsService,
-            OAuth2TokenGenerator<?> tokenGenerator) {
+            OAuth2TokenGenerator<?> tokenGenerator,
+            LoginAdmissionService loginAdmissionService) {
         this.registeredClientRepository = registeredClientRepository;
         this.authorizationService = authorizationService;
         this.userDetailsService = userDetailsService;
         this.tokenGenerator = tokenGenerator;
+        this.loginAdmissionService = loginAdmissionService;
     }
 
     @Override
@@ -190,6 +196,16 @@ public final class DeviceCodeGrantAuthenticationProvider implements Authenticati
         } catch (UsernameNotFoundException e) {
             throw new OAuth2AuthenticationException(
                     new OAuth2Error(OAuth2ErrorCodes.ACCESS_DENIED, "用户不存在或已停用", DEVICE_ERROR_URI));
+        }
+
+        // 【登录准入闸】client_login_policy 裁决 (fail-closed)。
+        // 设备码流程不经过 /oauth2/authorize, AuthorizeIssuanceFilter 覆盖不到,
+        // 此处是设备码唯一的签发准入点 — 未命中即拒, 与授权码流的签发准入同判据。
+        if (!loginAdmissionService.canLogin(registeredClient.getClientId(), principalName)) {
+            log.info("[签发准入] 设备码拒绝签发 (准入表未命中): 客户端={}, 用户={}",
+                    registeredClient.getClientId(), principalName);
+            throw new OAuth2AuthenticationException(new OAuth2Error(
+                    OAuth2ErrorCodes.ACCESS_DENIED, "当前账号无权登录该应用", DEVICE_ERROR_URI));
         }
 
         // 构建资源所有者认证对象（用于令牌生成时注入用户身份信息）

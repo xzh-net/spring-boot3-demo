@@ -1,5 +1,6 @@
 package net.xzh.iam.auth.controller;
 
+import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
 import org.springframework.stereotype.Controller;
@@ -10,14 +11,17 @@ import org.springframework.web.bind.annotation.RequestParam;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import net.xzh.iam.resource.service.LoginAdmissionService;
+
+@Slf4j
 @Controller
+@RequiredArgsConstructor
 public class ConsentController {
 
     private final RegisteredClientRepository registeredClientRepository;
-
-    public ConsentController(RegisteredClientRepository registeredClientRepository) {
-        this.registeredClientRepository = registeredClientRepository;
-    }
+    private final LoginAdmissionService loginAdmissionService;
 
     @GetMapping("/consent")
     public String consentPage(
@@ -27,7 +31,16 @@ public class ConsentController {
             @RequestParam(value = "scope", required = false) String scope,
             @RequestParam(value = "state", required = false) String state,
             @RequestParam(value = "user_code", required = false) String userCode,
+            Authentication auth,
             Model model) {
+
+        // 【登录准入·兜底】防止直接构造 consent URL 绕过 /activate 的前置判定。
+        // 与 DeviceActivateController 同判据 (client_login_policy), 同文案踢回登录页。
+        if (auth != null && auth.isAuthenticated()
+                && !loginAdmissionService.canLogin(clientId, auth.getName())) {
+            log.info("[签发准入] 同意页拒绝 (准入表未命中): 客户端={}, 用户={}", clientId, auth.getName());
+            return "redirect:/login.html?error=access_denied";
+        }
 
         String effectiveRedirectUri = redirectUri;
         if (effectiveRedirectUri == null || effectiveRedirectUri.isBlank()) {

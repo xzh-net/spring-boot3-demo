@@ -221,6 +221,8 @@ cd client/iam-client-h5-demo     && node server.js   # :8084
 
 | 日期 | 类型 | 内容 |
 |---|---|---|
+| 2026-11-04 | 增加 | **设备码签发准入闸**：`DeviceCodeGrantAuthenticationProvider` 用户激活确认后调 `LoginAdmissionService.canLogin`，未命中 `access_denied` —— 设备码不经 `/oauth2/authorize`，此前 `client_login_policy` 对其不生效（README 待办 P1-3 活路径半边） |
+| 2026-11-04 | 删除 | **密码模式三件套**（`PasswordGrantAuthenticationConverter`/`Provider`/`Token`）及 `AuthorizationServerConfig` 装配、`passwordEncoder` 参数、`test.http` 示例；OAuth 2.1 废弃该授权类型且无客户端注册（P1-3 另半边） |
 | 2026-11-04 | 增加 | **登录准入模块**：`client_login_policy` 表（client × 主体 allow-list）+ `LoginAdmissionService` + `AdminLoginPolicyController` + 管理页 `login_policy.html`（菜单「登录准入」）；签发准入由「权限码交集」改为「准入表裁决」，登录/授权两层解耦，`IssuanceAdmissionService` 删除 |
 | 2026-11-04 | 修改 | 种子 `device-app` 登录准入收敛为仅 `THIRD_PARTY` 角色（原对所有登录用户开放）；新增种子用户 `zhangsan`（THIRD_PARTY，0 权限码）用于设备码流程验证 |
 | 2026-11-04 | 增加 | README §九 待办新增 A 组「架构设计问题」（P0-1 令牌 scope claim 失真 / P0-2 表驱动端点准入两头不占 等 7 项） |
@@ -256,7 +258,7 @@ cd client/iam-client-h5-demo     && node server.js   # :8084
 
 - **P1-2 consent 不参与裁决**：`oauth2_authorization_consent` 仅作审计记录 + 撤销时踢会话，`RbacAuthoritiesOpaqueTokenIntrospector` 完全不读它。第一方场景无害；接入**需用户自主授权的第三方应用**时是真实缺口（届时 consent 须升为第三裁决维度）。
 
-- **P1-3 `password` / `device_code` 不走签发准入闸**：`AuthorizeIssuanceFilter` 只匹配 `/oauth2/authorize`；`DeviceCodeGrantAuthenticationProvider` L206-209 在无既存 scope 时直接全量下发客户端 scope。这两种流程的隔离完全依赖自省层兜底。
+- ~~**P1-3 `password` / `device_code` 不走签发准入闸**~~ **已解决（2026-11-04）**：① `password` 三件套已删除（OAuth 2.1 废弃该授权类型且无客户端注册）；② `device_code` 已在 `DeviceCodeGrantAuthenticationProvider` 用户激活确认后接入 `LoginAdmissionService.canLogin`，未命中即 `access_denied`。注：原文「无既存 scope 时全量下发客户端 scope」属**授权层**行为（下发的是 scope 而非业务码），业务码仍由自省层交集 fail-closed 兜底，不在本条范围。
 
 - **P2-1 端点宽松窗口的隐性 fail-open**：新端点自扫描补 `AUTHENTICATED`、种子配码前为「持令牌即可」——此部分**已裁定关闭**（见下方第 2 条与 §六.5，不重开）；但 `EndpointPolicyScanInitializer` L38-40 **吞异常** → 表加载失败时快照为空，**全部端点退化为认证档**，该点未被既有裁定覆盖，需单独补（加载失败应拒绝启动或告警）。
 
@@ -272,7 +274,7 @@ cd client/iam-client-h5-demo     && node server.js   # :8084
 6. **客户端密钥治理**：`client_secret` 明文（演示为 `123456`）与 BCrypt 哈希会经 `GET /admin/clients/{id}` 回显给调用方——建议对外掩码，密钥改由环境变量/密钥管理注入。
 7. **代码卫生**：孤儿权限码 `policy:write`（无任何端点引用）、`resolveDomain` 返回值只剩判空用途（应改 `isManagedPackage()`）、`AdminUserDataController` 的 `/users/{code}/data` 已无前端调用方（级联已本地化）、`sql/iam.sql` 内 13 行注释掉的 capability 死块与 `iam_client_policy` 遗留 DROP、BFF 配置键 `iam.resource-service-base-url`（值正确指向 9000，但键名仍引用已删除的 resource-service，应改名并同步 `ApiProxyController` 的 `@Value`）。
 8. **`iam_external_identity` 接通**：外部身份绑定（微信/企业微信/GitHub）仅建表、从未接通。
-9. **安全基线补强**：登录 CSRF 豁免（静态登录页无 token）改为可取 token；`maximumSessions(-1)` 改有限并发；OAuth 2.1 对齐（密码 grant 仅留演示、PKCE 已全量强制）。
+9. **安全基线补强**：登录 CSRF 豁免（静态登录页无 token）改为可取 token；`maximumSessions(-1)` 改有限并发。~~OAuth 2.1 对齐（密码 grant 仅留演示、PKCE 已全量强制）~~ **密码 grant 已删除（2026-11-04）、PKCE 已全量强制**，本条余 CSRF 与并发两项。
 10. **服务自愈**：计划任务随开机自启 + 端口健康检查自动拉起（当前机器重启后三服务全灭，需手工重启）。
 11. **文档配图**：6 张架构/时序图（IMG-1~6，各设计文档内已列清单）+ 9 张管理端截图（SHOT-1~9，`操作说明` §七已列）。
 12. **用户模块编码字段治理**：现状杂乱，三件事——① `user_code` 格式不统一：存量为 `u_`+32hex 与裸 `zhang3` 混杂，**格式已裁定为标准 UUID（`550e8400-e29b-41d4-a716-446655440000`）**，新建用户已改为系统自动生成、页面只读不可编辑、服务端格式校验（2026-11-03）；存量回填可由 `reset-init.bat` 一键完成（清库重载 UUID 种子 + 清 Redis 会话/令牌，2026-11-03）；② 历史命名双职遗留：`username` 曾装 user_code、`principalName` 至今兼任 API 参数，展示字段与 API 取值须持续分离（在线/授权两页已拆，后续新接口注意）；③ 关联键选型已裁定（2026-11-03）：维持字符串，物理主键用自增/雪花 id、对外关联键用 user_code，不做类型变更。

@@ -82,7 +82,6 @@ import net.xzh.iam.auth.mapper.SysUserMapper;
 import net.xzh.iam.auth.security.repository.RedisOAuth2AuthorizationService;
 import net.xzh.iam.auth.security.authentication.client.DeviceClientAuthenticationProvider;
 import net.xzh.iam.auth.security.authentication.grant.DeviceCodeGrantAuthenticationProvider;
-import net.xzh.iam.auth.security.authentication.grant.PasswordGrantAuthenticationProvider;
 import net.xzh.iam.auth.security.session.RedisSessionRegistry;
 import net.xzh.iam.auth.security.token.EnrichedOAuth2TokenIntrospectionAuthenticationProvider;
 import net.xzh.iam.auth.security.web.ActiveClientTrackingFilter;
@@ -90,7 +89,6 @@ import net.xzh.iam.auth.security.web.AuthorizeIssuanceFilter;
 import net.xzh.iam.auth.security.web.CompositeSecurityContextRepository;
 import net.xzh.iam.auth.security.web.SessionExpirationFilter;
 import net.xzh.iam.auth.security.web.converter.DeviceClientAuthenticationConverter;
-import net.xzh.iam.auth.security.web.converter.PasswordGrantAuthenticationConverter;
 import net.xzh.iam.resource.service.LoginAdmissionService;
 
 /**
@@ -305,7 +303,6 @@ public class AuthorizationServerConfig {
 			RegisteredClientRepository registeredClientRepository, RedisOAuth2AuthorizationService authorizationService,
 			OAuth2AuthorizationConsentService authorizationConsentService, OAuth2TokenGenerator<?> tokenGenerator,
 			@Qualifier("platformUserDetailsService") UserDetailsService platformUserDetailsService,
-			PasswordEncoder passwordEncoder,
 			@Qualifier("platformDaoProvider") DaoAuthenticationProvider platformDaoProvider,
 			SessionRegistry sessionRegistry,
 			LoginAdmissionService loginAdmissionService) throws Exception {
@@ -354,21 +351,18 @@ public class AuthorizationServerConfig {
 											// 移除默认的设备码认证提供者
 											providers
 													.removeIf(p -> p instanceof OAuth2DeviceCodeAuthenticationProvider);
-											// 添加自定义的密码模式认证提供者
-											providers.add(new PasswordGrantAuthenticationProvider(
-													registeredClientRepository, platformUserDetailsService,
-													passwordEncoder, authorizationService, tokenGenerator));
-											// 添加自定义的设备码认证提供者
+											// 添加自定义的设备码认证提供者 (含登录准入闸)
 											providers.add(new DeviceCodeGrantAuthenticationProvider(
 													registeredClientRepository, authorizationService,
-													platformUserDetailsService, tokenGenerator));
+													platformUserDetailsService, tokenGenerator,
+													loginAdmissionService));
 											// 授权码兑换/刷新令牌: 保留 SAS 默认提供者
 											// (旧 "客户端×身份类型" 登录边界策略已随 iam_client_policy 退役,
 											//  双维准入由自省层 scope∧RBAC 交集承担, 见 RbacAuthoritiesOpaqueTokenIntrospector)
 										})
-										// 【目的】组合多种认证转换器，确保能处理密码模式、授权码、刷新令牌等多种请求
+										// 【目的】组合多种认证转换器，确保能处理授权码、刷新令牌、设备码、客户端凭证等多种请求
 										.accessTokenRequestConverter(new DelegatingAuthenticationConverter(
-												List.of(new PasswordGrantAuthenticationConverter(),
+												List.of(new OAuth2AuthorizationCodeAuthenticationConverter(),
 														new OAuth2AuthorizationCodeAuthenticationConverter(),
 														new OAuth2RefreshTokenAuthenticationConverter(),
 														new OAuth2ClientCredentialsAuthenticationConverter(),

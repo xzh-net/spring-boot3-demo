@@ -44,17 +44,10 @@ Content-Type: application/x-www-form-urlencoded
 grant_type=authorization_code&code={{adminCode}}&redirect_uri=http://localhost:8085/login/oauth2/code/admin-app
 
 
-# ---- 2. 【已停用】密码模式示例 (仅作协议格式参考) ----
-# 说明: Provider 校验客户端 authorization_grant_types 必须含 password, 否则返回 unauthorized_client;
-#       2026-11-03 起所有客户端均已去掉 password 授权, 本请求预期被拒。
-#       取 admin 令牌请改用第 1 节授权码 + PKCE 流程。
-
-### 2.1 admin 密码换 token (填入 {{adminToken}})
-POST {{authBaseUrl}}/oauth2/token
-Authorization: {{adminAuth}}
-Content-Type: application/x-www-form-urlencoded
-
-grant_type=password&username=admin&password=123456&scope=read+write
+# ---- 2. 密码模式 (已移除) ----
+# 2026-11-04: PasswordGrantAuthenticationConverter/Provider/Token 三个类已删除
+# (OAuth 2.1 废弃该授权类型)。grant_type=password 在令牌端点无匹配转换器, 直接被拒。
+# 取 admin 令牌请用第 1 节 授权码 + PKCE 流程。
 
 
 # ---- 3. 令牌能力 ----

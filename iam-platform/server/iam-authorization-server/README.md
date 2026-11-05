@@ -109,9 +109,7 @@ net.xzh.iam                              # 合并单服务根包 (common / auth 
     │   ├── client/                          #     客户端认证逻辑
     │   │   └── DeviceClientAuthenticationProvider.java  # NONE 公共客户端认证（设备码/刷新令牌）
     │   └── grant/                           #     自定义授权模式逻辑（扁平，按文件名区分类型）
-    │       ├── PasswordGrantAuthenticationProvider.java  # 密码模式 Provider（支持 id_token）
-    │       ├── PasswordGrantAuthenticationToken.java     # 密码模式 Token 载体
-    │       └── DeviceCodeGrantAuthenticationProvider.java # 设备码模式 Provider（替换 SAS 原生，支持 id_token + 真实 authorities）
+    │       └── DeviceCodeGrantAuthenticationProvider.java # 设备码模式 Provider（替换 SAS 原生，支持 id_token + 真实 authorities + 登录准入闸）
     ├── repository/                          #   OAuth2 持久化
     │   ├── JdbcRegisteredClientRepository.java       # 客户端配置 (MySQL + Redis 缓存，强制 REFERENCE)
     │   ├── JdbcOAuth2AuthorizationConsentService.java # 授权同意 (MySQL) + 审计日志
@@ -124,8 +122,7 @@ net.xzh.iam                              # 合并单服务根包 (common / auth 
     │   └── PlatformUserDetailsService.java  #     统一账号 IdP (为 id_token 加载真实 authorities)
     └── web/                                 #   【Web 层】HTTP 请求处理
         ├── converter/                       #     AuthenticationConverter（请求 → 未认证 Token）
-        │   ├── DeviceClientAuthenticationConverter.java  # 解析 device_code / refresh_token 请求
-        │   └── PasswordGrantAuthenticationConverter.java  # 解析 password grant 请求
+        │   └── DeviceClientAuthenticationConverter.java  # 解析 device_code / refresh_token 请求
         ├── CompositeSecurityContextRepository.java   # SecurityContext 组合读写 (DEVICE→PORTAL 回退)
         ├── ActiveClientTrackingFilter.java           # 跟踪活跃客户端 (解析 Bearer Token 存入 Session)
         └── SessionExpirationFilter.java              # 会话过期检测 + 自动续签

@@ -19,7 +19,7 @@ import net.xzh.iam.auth.mapper.SysUserMapper;
 import net.xzh.iam.resource.service.PermissionService;
 
 /**
- * OAuth2 授权登录 / 设备验证 / 密码模式的统一 {@link UserDetailsService} 实现（全量 IdP 自持用户源）。
+ * OAuth2 授权登录 / 设备验证的统一 {@link UserDetailsService} 实现（全量 IdP 自持用户源）。
  * <p>
  * 单库合并版：用户凭据收归 {@code iam.sys_user}（本地库查询 + BCrypt 校验，登录零远程调用）。
  * principal name 采用业务用户编码 {@code user_code}（即令牌 sub），业务 RBAC 角色由同库
