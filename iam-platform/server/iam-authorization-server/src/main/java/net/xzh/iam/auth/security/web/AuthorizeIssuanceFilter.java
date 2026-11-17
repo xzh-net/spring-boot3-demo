@@ -5,6 +5,7 @@ import java.io.IOException;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.savedrequest.HttpSessionRequestCache;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -37,6 +38,13 @@ public class AuthorizeIssuanceFilter extends OncePerRequestFilter {
     private static final AntPathRequestMatcher AUTHORIZE_MATCHER =
             new AntPathRequestMatcher("/oauth2/authorize");
 
+    /**
+     * SavedRequest 缓存 — 拒绝时存下原始授权请求, 使用户重新登录后能回到 /oauth2/authorize
+     * 重新判定 (否则拒绝 302 不留恢复点, 重登后走 defaultSuccessUrl "/" → 被送进门户页)。
+     * 与 DeviceActivateController / ConsentController 同语义。
+     */
+    private static final HttpSessionRequestCache REQUEST_CACHE = new HttpSessionRequestCache();
+
     private final LoginAdmissionService loginAdmissionService;
 
     @Override
@@ -61,6 +69,8 @@ public class AuthorizeIssuanceFilter extends OncePerRequestFilter {
         if (!loginAdmissionService.canLogin(clientId, auth.getName())) {
             log.info("[签发准入] 拒绝签发授权码 (准入表未命中): 客户端={}, 用户={}",
                     clientId, auth.getName());
+            // 存 SavedRequest: 否则重登后无恢复点, 会走 defaultSuccessUrl "/" → 门户页
+            REQUEST_CACHE.saveRequest(request, response);
             response.sendRedirect(request.getContextPath() + "/login.html?error=access_denied");
             return;
         }

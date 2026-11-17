@@ -1,8 +1,11 @@
 package net.xzh.iam.auth.controller;
 
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
+import org.springframework.security.web.savedrequest.HttpSessionRequestCache;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,6 +26,9 @@ public class ConsentController {
     private final RegisteredClientRepository registeredClientRepository;
     private final LoginAdmissionService loginAdmissionService;
 
+    /** SavedRequest 缓存 — 拒绝时存下原始请求, 使重新登录后能回到同意页重新判定 (语义同 DeviceActivateController) */
+    private static final HttpSessionRequestCache REQUEST_CACHE = new HttpSessionRequestCache();
+
     @GetMapping("/consent")
     public String consentPage(
             @RequestParam("client_id") String clientId,
@@ -32,6 +38,8 @@ public class ConsentController {
             @RequestParam(value = "state", required = false) String state,
             @RequestParam(value = "user_code", required = false) String userCode,
             Authentication auth,
+            HttpServletRequest request,
+            HttpServletResponse response,
             Model model) {
 
         // 【登录准入·兜底】防止直接构造 consent URL 绕过 /activate 的前置判定。
@@ -39,6 +47,8 @@ public class ConsentController {
         if (auth != null && auth.isAuthenticated()
                 && !loginAdmissionService.canLogin(clientId, auth.getName())) {
             log.info("[签发准入] 同意页拒绝 (准入表未命中): 客户端={}, 用户={}", clientId, auth.getName());
+            // 存 SavedRequest: 否则重新登录后无恢复点, 会走 defaultSuccessUrl "/" → 门户页
+            REQUEST_CACHE.saveRequest(request, response);
             return "redirect:/login.html?error=access_denied";
         }
 

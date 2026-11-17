@@ -1,6 +1,7 @@
 package net.xzh.iam.auth.controller;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.server.authorization.OAuth2Authorization;
@@ -8,6 +9,7 @@ import org.springframework.security.oauth2.server.authorization.OAuth2Authorizat
 import org.springframework.security.oauth2.server.authorization.OAuth2TokenType;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClient;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
+import org.springframework.security.web.savedrequest.HttpSessionRequestCache;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -45,19 +47,35 @@ public class DeviceActivateController {
     /** user_code 的令牌类型 (与 SAS OAuth2DeviceVerificationAuthenticationProvider 内部常量一致) */
     private static final OAuth2TokenType USER_CODE_TOKEN_TYPE = new OAuth2TokenType("user_code");
 
+    /**
+     * SavedRequest 缓存 — 拒绝时存下原始请求, 使用户在错误页重新登录后能回到原处重新判定.
+     * <p>
+     * 不存的话: 拒绝 302 (普通重定向, 不经 AuthenticationEntryPoint) 不会保存请求,
+     * 重新登录后无 SavedRequest → 走 defaultSuccessUrl "/" → 被 LoginController 送进门户页.
+     * 实例无状态 (存储用固定 session attribute key), 各处独立 new 亦兼容 Spring Security 默认 handler.
+     */
+    private static final HttpSessionRequestCache REQUEST_CACHE = new HttpSessionRequestCache();
+
     private final OAuth2AuthorizationService authorizationService;
     private final RegisteredClientRepository registeredClientRepository;
     private final LoginAdmissionService loginAdmissionService;
 
     @GetMapping("/activate")
     public String activate(@RequestParam(value = "user_code", required = false) String userCode,
-                           Authentication auth) {
+                           Authentication auth,
+                           HttpServletRequest request,
+                           HttpServletResponse response) {
         if (userCode != null && !userCode.isBlank()) {
             // 【登录准入·前置】准入表未命中 → 踢到登录页 (与授权码流同文案), 不进 SAS 验证端点
             if (!admitted(userCode, auth)) {
                 log.info("[签发准入] 设备激活拒绝 (准入表未命中): 设备userCode={}, 用户={}",
                         userCode, auth != null ? auth.getName() : "anonymous");
-                return "redirect:/login.html?error=access_denied";
+                // 存 SavedRequest: 否则拒绝 302 (普通重定向) 不留恢复点, 用户在错误页重新登录后
+                // 无 SavedRequest 可恢复 → 走 defaultSuccessUrl "/" → 被 LoginController 送进门户页
+                REQUEST_CACHE.saveRequest(request, response);
+                // 带 type=device: 错误页 form.action 才会指向 /device-login (链2),
+                // 登录写 DEVICE_SECURITY_CONTEXT — 链2 只读该 key, 否则读不到登录态会要求二次登录
+                return "redirect:/login.html?type=device&error=access_denied";
             }
             return "redirect:/oauth2/device/verify?user_code=" + userCode;
         }
