@@ -41,7 +41,9 @@
         .btn-danger { background: #dc2626; color: #fff; }
         .btn-danger:hover { background: #b91c1c; }
         .btn-sm { padding: 5px 12px; font-size: 12px; }
-        .btn-link { background: none; border: none; color: #2563eb; cursor: pointer; font-size: 13px; }
+        .btn:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; transform: none; }
+        .btn-link { background: none; border: none; color: #2563eb; cursor: pointer; font-size: 13px; white-space: nowrap; }
+        #clientTable td:last-child { white-space: nowrap; }   /* 操作列: 按钮间不折行, 列宽贴合文字 */
         .btn-link:hover { text-decoration: underline; }
         .btn-link.danger { color: #dc2626; }
 
@@ -58,7 +60,7 @@
         td { border-bottom: 1px solid #f0f0f0; color: #334155; }
         tr:last-child td { border-bottom: none; }
         tr:hover { background: #f8fafc; }
-        .tag { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; background: rgba(37,99,235,0.08); color: #2563eb; border: 1px solid rgba(37,99,235,0.2); margin-right: 4px; }
+        .tag { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; background: rgba(37,99,235,0.08); color: #2563eb; border: 1px solid rgba(37,99,235,0.2); margin-right: 4px; white-space: nowrap; }
         .tag.green { background: rgba(34,197,94,0.08); color: #16a34a; border-color: rgba(34,197,94,0.2); }
         .tag.orange { background: rgba(249,115,22,0.08); color: #ea580c; border-color: rgba(249,115,22,0.2); }
 
@@ -66,11 +68,12 @@
 
         .modal-bg {
             display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45);
-            align-items: center; justify-content: center; z-index: 100;
+            align-items: center; justify-content: center; z-index: 100; padding: 24px;
         }
         .modal-bg.show { display: flex; }
         .modal {
-            background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; width: 680px; max-height: 85vh; overflow-y: auto;
+            background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px;
+            width: min(1040px, calc(100vw - 64px)); max-height: 92vh; overflow-y: auto;
             box-shadow: 0 16px 50px rgba(0,0,0,0.18); color: #1e293b;
         }
         .modal-header {
@@ -108,6 +111,39 @@
         }
         .token-opts label input[type=checkbox] { margin: 0; }
         .form-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; padding-top: 16px; border-top: 1px solid #f0f0f0; }
+
+        /* ===== C-1 客户端治理聚合: 字典明细 / 登录准入 / 概览体检 ===== */
+        .tag.red { background: rgba(220,38,38,0.08); color: #dc2626; border-color: rgba(220,38,38,0.2); }
+        .tag.amber { background: rgba(245,158,11,0.10); color: #d97706; border-color: rgba(245,158,11,0.25); }
+        .tag.gray { background: rgba(100,116,139,0.10); color: #64748b; border-color: rgba(100,116,139,0.2); }
+        .dict-box { border: 1px solid #dbeafe; background: #f8fbff; border-radius: 8px; padding: 10px 12px; font-size: 12px; max-height: 280px; overflow: auto; }
+        .dict-box table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .dict-box th { background: transparent; font-size: 11px; padding: 6px 8px; border-bottom: 1px solid #e2e8f0; text-transform: none; letter-spacing: 0; color: #64748b; }
+        .dict-box td { padding: 6px 8px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+        .dict-box tr.held td { background: #eff6ff; }
+        .dict-box .muted { color: #94a3b8; font-size: 11px; }
+        .gov-flag { padding: 7px 10px; border-radius: 6px; font-size: 12px; margin: 5px 0; line-height: 1.6; }
+        .gov-flag.ok    { background: #f0fdf4; color: #16a34a; }
+        .gov-flag.warn  { background: #fffbeb; color: #d97706; }
+        .gov-flag.bad   { background: #fef2f2; color: #dc2626; }
+        .gov-flag.info  { background: #eff6ff; color: #2563eb; }
+        .form-note { font-size: 12px; color: #94a3b8; line-height: 1.6; }
+        .switch-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; cursor: pointer; user-select: none; }
+        .switch-row input { accent-color: #2563eb; width: 16px; height: 16px; cursor: pointer; }
+        .switch-row .t { font-size: 13px; font-weight: 500; color: #1e293b; }
+        .switch-row .d { font-size: 12px; color: #94a3b8; margin-top: 2px; }
+        .perm-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+        .perm-item { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid #dbe3ee; border-radius: 8px; cursor: pointer; font-size: 13px; transition: all .15s; background: #f8fafc; user-select: none; }
+        .perm-item:hover { border-color: #2563eb; background: #eff6ff; }
+        .perm-item.checked { border-color: #2563eb; background: #eff6ff; color: #1d4ed8; }
+        .perm-item.disabled { opacity: .5; cursor: not-allowed; }
+        .perm-item input { accent-color: #2563eb; }
+        .perm-item .perm-code { font-size: 11px; color: #94a3b8; font-family: monospace; }
+        .modal .sub { font-size: 12px; color: #94a3b8; margin-top: 2px; }
+        .gov-sep { border: none; border-top: 2px dashed #60a5fa; margin: 20px 0 4px; }
+        .gov-sep-labels { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; margin: 6px 0 14px; user-select: none; }
+        .gov-sep-labels .sep-up { color: #64748b; }
+        .gov-sep-labels .sep-down { color: #2563eb; }
     </style>
 </head>
 <body>
@@ -117,7 +153,7 @@
         <div class="page-header">
             <div>
                 <h2>客户端管理</h2>
-                <div class="hint">OAuth2 授权客户端维护 · 配置授权模式、认证方式、Scopes 与重定向地址</div>
+                <div class="hint">OAuth2 客户端治理唯一入口 · 协议配置 + 授权范围(字典明细) + 登录准入一处维护，治理概览只读体检（准入行 / 展开码 / 端点覆盖）</div>
             </div>
             <div>
                 <button class="btn btn-primary" onclick="openModal()">+ 新增客户端</button>
@@ -135,7 +171,8 @@
                         <th>认证方式</th>
                         <th>Scopes</th>
                         <th>重定向地址</th>
-                        <th style="width: 180px">操作</th>
+                        <th style="width: 84px">登录准入</th>
+                        <th style="width: 116px">操作</th>
                     </tr>
                 </thead>
                 <tbody id="clientTable"></tbody>
@@ -177,11 +214,6 @@
                 </div>
 
                 <div class="form-row">
-                    <label>授权范围 (客户端维度) <span style="color:#94a3b8;font-weight:normal;">(字典只读, 见「授权范围」页)</span></label>
-                    <div class="checkbox-group" id="scopeGroups"></div>
-                    <div class="hint" id="scopeGroupsHint" style="display:none;color:#94a3b8;font-size:11px;">授权范围字典加载失败 — 仅可编辑下方保留 Scope</div>
-                </div>
-                <div class="form-row">
                     <label>保留 Scope (逗号分隔) <span style="color:#94a3b8;font-weight:normal;">(openid/profile 等非业务占位)</span></label>
                     <input type="text" id="scopesReserved" placeholder="openid,profile,email,read,write">
                 </div>
@@ -222,10 +254,93 @@
                     <div class="hint">ISO8601 持续期, 默认 5 分钟 (PT5M). 仅授权码模式生效.</div>
                 </div>
 
+                <!-- ===== 分界线: 以上 = 标准配置 (OAuth2 协议), 以下 = 扩展配置 (平台治理) ===== -->
+                <div class="gov-sep-wrap">
+                    <hr class="gov-sep">
+                    <div class="gov-sep-labels">
+                        <span class="sep-up">▲ 以上 · 标准配置</span>
+                        <span class="sep-down">▼ 以下 · 扩展配置</span>
+                    </div>
+                </div>
+
+                <!-- 授权范围 + 字典明细: 紧随分界线, 两种模式位置一致 (其后才按模式插入治理分区) -->
+                <div class="form-row" style="margin-top:4px;">
+                    <label>授权范围 (客户端维度) <span style="color:#94a3b8;font-weight:normal;">(勾选 = 客户端持有该组)</span></label>
+                    <div class="checkbox-group" id="scopeGroups"></div>
+                    <div class="hint" id="scopeGroupsHint" style="display:none;color:#94a3b8;font-size:11px;">授权范围字典加载失败 — 授权范围组暂不可勾选，仅可编辑上方「保留 Scope」</div>
+                </div>
+                <div class="form-row">
+                    <label>授权范围字典明细 (只读) <span style="color:#94a3b8;font-weight:normal;">(组 → 权限码映射)</span></label>
+                    <div class="dict-box" id="scopeDictBox">字典加载中…</div>
+                    <div class="hint" style="color:#94a3b8;font-size:11px;">字典改动一律走 <code>iam.sql</code> 种子（git 审计），页面无写入口。</div>
+                </div>
+
+                <!-- ===== C-1 治理分区: 置于最后 (仅编辑显示), 保证授权范围在新建/编辑两模式位置不位移 ===== -->
+                <div id="govSections" style="display:none;">
+                    <div class="form-row">
+                        <label>登录准入 (client × 主体 allow-list)
+                            <span style="color:#94a3b8;font-weight:normal;">fail-closed：无启用行 = 拒绝所有登录</span></label>
+                        <div class="dict-box" id="admissionBox">加载中…</div>
+                        <div style="margin-top:8px;">
+                            <button type="button" class="btn btn-primary btn-sm" id="configAdmissionBtn" onclick="openPolicyModal()">⚙ 配置准入</button>
+                            <button type="button" class="btn btn-sm" id="clearAdmissionBtn"
+                                    style="background:#fee2e2;color:#b91c1c;display:none;margin-left:8px;" onclick="clearPolicy()">清空准入</button>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <label>治理概览 (只读体检) <span style="color:#94a3b8;font-weight:normal;">(展开码 · 端点覆盖 · 异常标红)</span></label>
+                        <div class="dict-box" id="govOverview">加载中…</div>
+                    </div>
+                </div>
+
                 <div class="form-actions">
                     <button class="btn" onclick="closeModal()">取消</button>
                     <button class="btn btn-primary" onclick="save()">保存</button>
                 </div>
+                <div class="form-note" style="margin-top:8px;text-align:right;">分区独立保存：「保存」仅提交协议与范围勾选；登录准入在上方分区内独立提交。</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 登录准入配置弹窗 (自原 login_policy.html 迁入, 本分区独立保存) -->
+    <div class="modal-bg" id="policyModal">
+        <div class="modal" style="width:min(860px, calc(100vw - 64px));">
+            <div class="modal-header">
+                <div>
+                    <h3>配置登录准入</h3>
+                    <div class="sub" id="policyModalSub"></div>
+                </div>
+                <button class="close-btn" onclick="closePolicyModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form">
+                    <label class="switch-row">
+                        <input type="checkbox" id="allowAny" onchange="onAnyToggle()">
+                        <div>
+                            <div class="t">允许所有已登录用户</div>
+                            <div class="d">勾选 = ANY 行, 任何账号均可登录该客户端 (请谨慎)</div>
+                        </div>
+                    </label>
+                    <div class="form-row">
+                        <label>按角色限定 (勾选允许登录的角色)</label>
+                        <div class="perm-grid" id="roleGrid"></div>
+                        <div class="empty" id="roleEmpty" style="display:none;padding:16px;">暂无角色数据或无权查看 (需 role:read)，可仅用下方用户限定</div>
+                    </div>
+                    <div class="form-row">
+                        <label>按用户限定 (可选, 逗号分隔的 user_code, 与角色取并集)</label>
+                        <input id="userCodes" placeholder="如 550e8400-e29b-41d4-a716-446655440003, zhangsan">
+                        <div class="form-note">仅列出的用户可登录; 留空则不按用户限定。</div>
+                    </div>
+                    <div class="form-row">
+                        <label>备注</label>
+                        <textarea id="policyRemark" rows="2" placeholder="该客户端准入说明 (可选)"></textarea>
+                    </div>
+                    <div class="form-note" id="policyWarn" style="display:none;color:#d97706;"></div>
+                </div>
+            </div>
+            <div class="modal-footer" style="padding:14px 24px;border-top:1px solid #f0f0f0;display:flex;justify-content:flex-end;gap:10px;">
+                <button class="btn" onclick="closePolicyModal()">取消</button>
+                <button class="btn btn-primary" onclick="savePolicy()">保存准入</button>
             </div>
         </div>
     </div>
@@ -295,6 +410,7 @@ async function loadScopeGroups() {
     const box = document.getElementById("scopeGroups");
     if (!SCOPE_GROUPS.length) {
         box.innerHTML = '<span style="color:#94a3b8;font-size:12px;">(暂无授权范围字典, 请在 iam.sql 种子维护)</span>';
+        renderScopeDict();
         return;
     }
     box.innerHTML = SCOPE_GROUPS.map(s =>
@@ -302,6 +418,8 @@ async function loadScopeGroups() {
         ` ${App.esc(s.name)} <span style="color:#94a3b8;font-size:11px;">${App.esc(s.code)}</span>` +
         `${s.status === 0 ? ' <span style="color:#dc2626;font-size:11px;">(停用)</span>' : ''}</label>`
     ).join("");
+    document.querySelectorAll("#scopeGroups input").forEach(i => i.addEventListener("change", onScopeToggle));
+    renderScopeDict();
 }
 function scopeGroupCodes() { return SCOPE_GROUPS.map(s => s.code); }
 function setScopeChecks(codes) {
@@ -311,9 +429,285 @@ function getCheckedScopes() {
     return Array.from(document.querySelectorAll("#scopeGroups input:checked")).map(i => i.value);
 }
 
+/* =====================================================================
+ * ===== C-1 客户端治理聚合 =====
+ * 1) 不触发跳转的安全 fetch (降级): 403/失败 → null, 区别于 App.api 的踢登录
+ * 2) 登录准入迁入 (数据面自原 login_policy.html 平移, 写接口不变)
+ * 3) 授权范围字典明细 (只读, 替代已删除的 scope.html)
+ * 4) 治理概览只读体检 (铁律1: 概览永远只读, 各分区独立保存)
+ * =================================================================== */
+async function safeApi(path) {
+    try {
+        const res = await fetch(path);
+        if (!res.ok) return null;
+        const j = await res.json();
+        return (j && j.code === 200) ? j.data : null;
+    } catch (e) { return null; }
+}
+
+/* ---------- 登录准入数据面 ---------- */
+let POLICY_LIST = [];
+async function loadPoliciesCached(force) {
+    if (POLICY_LIST.length && !force) return POLICY_LIST;
+    const d = await safeApi('/admin/login-policies');
+    POLICY_LIST = d || [];
+    return POLICY_LIST;
+}
+function policiesOf(cid) { return POLICY_LIST.filter(p => p.clientId === cid); }
+
+/** 列表页「登录准入」列 */
+function admissionCell(cid) {
+    const rows = policiesOf(cid);
+    if (!rows.length) return '<span class="tag red" title="fail-closed: 未配置 = 拒绝所有登录">未配置</span>';
+    const any = rows.some(r => (r.subjectType || '').toUpperCase() === 'ANY');
+    return `<span class="tag green">${rows.length} 行</span>` + (any ? '<span class="tag amber">ANY</span>' : '');
+}
+
+/** 登录准入行 → 标签 HTML (新建/编辑共用) */
+function admissionTagsHtml(rows) {
+    return rows.map(r => {
+        const t = (r.subjectType || '').toUpperCase();
+        const st = r.status === 1 ? '' : ' (停用)';
+        if (t === 'ANY') return `<span class="tag amber">所有已登录用户${st}</span>`;
+        if (t === 'ROLE') return `<span class="tag blue">角色 ${App.esc(r.subjectId)}${st}</span>`;
+        if (t === 'USER') return `<span class="tag green">用户 ${App.esc(r.subjectId)}${st}</span>`;
+        return `<span class="tag gray">${App.esc(t)} ${App.esc(r.subjectId)}${st}</span>`;
+    }).join('');
+}
+
+/** 扩展配置: 登录准入分区渲染 —— 新建与编辑都显示 (新建只读 + 写按钮禁用) */
+function renderAdmission() {
+    const box = document.getElementById('admissionBox');
+    const clearBtn = document.getElementById('clearAdmissionBtn');
+    const cfgBtn = document.getElementById('configAdmissionBtn');
+    if (!box) return;
+    const cid = document.getElementById('clientId').value.trim();
+    const isNew = !document.getElementById('editId').value;
+    loadPoliciesCached().then(function () {
+        if (cfgBtn) {
+            cfgBtn.disabled = isNew;
+            cfgBtn.title = isNew ? '请先保存客户端，再配置准入（避免产生无主准入行）' : '';
+        }
+        const rows = cid ? policiesOf(cid) : [];
+        if (isNew) {
+            box.innerHTML = rows.length
+                ? admissionTagsHtml(rows) + '<div class="muted" style="margin-top:4px;">同名已存在客户端的准入行（仅展示）</div>'
+                : '<span class="tag gray">新建模式</span>' +
+                  '<span class="muted"> — 保存客户端后可点「配置准入」；未配置 = 拒绝所有登录 (fail-closed)</span>';
+            if (clearBtn) clearBtn.style.display = 'none';
+            return;
+        }
+        if (!rows.length) {
+            box.innerHTML = '<span class="tag red">未配置 → 拒绝所有登录 (fail-closed)</span> ' +
+                '<span class="muted">点「配置准入」添加角色 / 用户 / ANY 行</span>';
+            if (clearBtn) clearBtn.style.display = 'none';
+            return;
+        }
+        box.innerHTML = admissionTagsHtml(rows) + (rows[0] && rows[0].remark
+            ? `<div class="muted" style="margin-top:4px;">备注: ${App.esc(rows[0].remark)}</div>` : '');
+        if (clearBtn) clearBtn.style.display = '';
+    });
+}
+
+/* ---------- 授权范围字典明细 (只读, 承接原 scope.html) ---------- */
+function renderScopeDict() {
+    const box = document.getElementById('scopeDictBox');
+    if (!box) return;
+    if (!SCOPE_GROUPS.length) {
+        box.innerHTML = '<span class="muted">(字典为空 — iam.sql 种子未加载)</span>';
+        return;
+    }
+    const held = getCheckedScopes();
+    box.innerHTML =
+        '<table><thead><tr><th>组码</th><th>名称 / 状态</th><th>展开权限码 (细粒度)</th><th>引用客户端</th></tr></thead><tbody>' +
+        SCOPE_GROUPS.map(s => {
+            const isHeld = held.includes(s.code);
+            const perms = (s.permissions || []).map(p => p.status === 0
+                ? `<span class="tag red" title="权限码已停用">${App.esc(p.code)}</span>`
+                : `<span class="tag blue" title="${App.esc(p.name || '')}">${App.esc(p.code)}</span>`
+            ).join('') || '<span class="muted">(空映射 → fail-closed, 仅 OIDC 标准能力)</span>';
+            const clients = (s.clientIds || []).map(c =>
+                `<span class="tag amber" style="font-family:monospace;">${App.esc(c)}</span>`
+            ).join('') || '<span class="muted">(无客户端持有)</span>';
+            return `<tr class="${isHeld ? 'held' : ''}" title="${App.esc(s.remark || '')}">
+                <td><span class="tag blue" style="font-family:monospace;">${App.esc(s.code)}</span>${isHeld ? ' <span class="tag green">本客户端持有</span>' : ''}</td>
+                <td>${App.esc(s.name || '-')} <span class="tag ${s.status === 0 ? 'red' : 'green'}">${s.status === 0 ? '停用' : '启用'}</span></td>
+                <td>${perms}</td>
+                <td>${clients}</td>
+            </tr>`;
+        }).join('') +
+        '</tbody></table>' +
+        '<div class="muted" style="margin-top:6px;">数据源 sys_scope + sys_scope_permission (iam.sql 种子, 页面只读)；蓝底行 = 当前编辑对象持有。</div>';
+}
+
+/* ---------- 治理概览 (只读体检) ---------- */
+let EP_LIST;      // undefined=未加载, null=无权/失败
+async function loadEndpointsCached() {
+    if (EP_LIST === undefined) EP_LIST = await safeApi('/admin/endpoint-policies');
+    return EP_LIST;
+}
+function expansionCodes(heldCodes) {
+    const out = [];
+    SCOPE_GROUPS.filter(s => heldCodes.includes(s.code) && s.status === 1)
+        .forEach(s => (s.permissions || []).forEach(p => out.push(p.code)));
+    return Array.from(new Set(out));
+}
+async function renderOverview() {
+    const box = document.getElementById('govOverview');
+    if (!box) return;
+    const cid = document.getElementById('clientId').value.trim();
+    const isNew = !document.getElementById('editId').value;
+    await loadPoliciesCached();
+    const heldCodes = getCheckedScopes();
+    const heldDict = SCOPE_GROUPS.filter(s => heldCodes.includes(s.code));
+    const stopped = heldDict.filter(s => s.status === 0);
+    const codes = expansionCodes(heldCodes);   // 停用组不参与展开 (等同一码不放)
+    const flags = [];
+
+    // ① 登录准入 (新建模式: 客户端尚未落库, 不做红牌判定, 只提示保存后配置)
+    if (isNew) {
+        flags.push(['info', 'ℹ 新建模式：保存客户端后生成准入行并完成准入体检；下方展开码 / 端点覆盖可先行预览']);
+    } else {
+        const rows = policiesOf(cid);
+        if (rows.length === 0) flags.push(['bad', '✗ 登录准入未配置 — fail-closed：所有用户都无法登录该客户端']);
+        else if (!rows.some(r => r.status === 1)) flags.push(['bad', '✗ 登录准入全部停用 — 等同未配置，拒绝所有登录']);
+        else flags.push(['ok', `✓ 登录准入 ${rows.filter(r => r.status === 1).length} 行启用中`]);
+    }
+
+    // ② 展开码
+    if (stopped.length) flags.push(['warn', '⚠ 持有组已停用 (不参与展开): ' + stopped.map(s => s.code).join(', ')]);
+    if (heldCodes.length === 0) flags.push(['warn', '⚠ 未勾选任何授权范围组 — 令牌无业务码 (仅占位 scope)']);
+    else if (codes.length === 0) flags.push(['warn', '⚠ 持有组展开为空 — 业务接口全部 403，仅 OIDC 标准能力 (third.profile 语义)']);
+    else flags.push(['ok', `✓ 展开码 ${codes.length} 个 (来自 ${heldDict.filter(s => s.status === 1).map(s => s.code).join(', ')})`]);
+
+    // ③ 端点覆盖 (反查资源准入, 需 policy:read, 无权则降级)
+    const eps = await loadEndpointsCached();
+    let epHtml = '';
+    if (eps === null) {
+        epHtml = '<div class="gov-flag info">端点投影不可用（需 policy:read 权限或接口失败）— 仅展示准入与展开码体检</div>';
+    } else {
+        const codeSet = new Set(codes);
+        const covered = eps.filter(e => e.status === 1 && codeSet.has(e.requiredAuthority));
+        if (codes.length > 0 && covered.length === 0) {
+            flags.push(['warn', '⚠ 展开码未被任何端点准入引用 — 需在「资源准入」种子补端点行后方可用']);
+        } else if (covered.length) {
+            flags.push(['ok', `✓ 端点覆盖 ${covered.length} 个 (按展开码反查 iam_endpoint_policy)`]);
+        }
+        epHtml = covered.length
+            ? '<div style="font-size:11px;color:#475569;margin:6px 0 3px;">覆盖端点:</div>' +
+              covered.slice(0, 12).map(e =>
+                  `<span class="tag gray" style="font-family:monospace;" title="${App.esc(e.path)}">${App.esc(e.method)} ${App.esc(e.path)}</span>`
+              ).join('') + (covered.length > 12 ? `<span class="muted"> …+${covered.length - 12}</span>` : '')
+            : '';
+    }
+    const codesHtml = codes.length
+        ? '<div style="font-size:11px;color:#475569;margin-bottom:3px;">展开码 (持有组 ∑, 停用组已剔除):</div>' +
+          codes.map(c => `<span class="tag" style="font-family:monospace;">${App.esc(c)}</span>`).join('')
+        : '<span class="muted">(无有效展开码)</span>';
+    box.innerHTML = codesHtml + epHtml + flags.map(f => `<div class="gov-flag ${f[0]}">${f[1]}</div>`).join('');
+}
+function onScopeToggle() {
+    renderScopeDict();
+    renderOverview();   // 两模式均刷新 (新建=预览展开码/端点覆盖)
+}
+
+/* ---------- 登录准入配置弹窗 (自 login_policy.html 迁入) ---------- */
+async function openPolicyModal() {
+    const cid = document.getElementById('clientId').value.trim();
+    if (!cid) { alert('请先填写 client_id'); return; }
+    if (!document.getElementById('editId').value) {
+        alert('请先保存客户端，再配置登录准入（避免产生无主准入行）');
+        return;
+    }
+    document.getElementById('policyModalSub').textContent = '客户端: ' + cid +
+        (document.getElementById('clientName').value ? ' (' + document.getElementById('clientName').value + ')' : '');
+    await loadPoliciesCached();
+    const rows = policiesOf(cid);
+    document.getElementById('allowAny').checked = rows.some(r => (r.subjectType || '').toUpperCase() === 'ANY');
+    document.getElementById('userCodes').value =
+        rows.filter(r => (r.subjectType || '').toUpperCase() === 'USER').map(r => r.subjectId).join(', ');
+    document.getElementById('policyRemark').value = (rows[0] && rows[0].remark) || '';
+    document.getElementById('policyWarn').style.display = 'none';
+    const roleIds = rows.filter(r => (r.subjectType || '').toUpperCase() === 'ROLE').map(r => r.subjectId);
+    const roles = await safeApi('/admin/roles');
+    renderRoleGrid(roles || [], roleIds, roles === null);
+    onAnyToggle();
+    document.getElementById('policyModal').classList.add('show');
+}
+function renderRoleGrid(roles, checkedCodes, unavailable) {
+    const grid = document.getElementById('roleGrid');
+    const empty = document.getElementById('roleEmpty');
+    if (unavailable || !roles || roles.length === 0) {
+        grid.innerHTML = '';
+        empty.style.display = 'block';
+        return;
+    }
+    empty.style.display = 'none';
+    grid.innerHTML = roles.map(r => {
+        const checked = checkedCodes.includes(r.code);
+        return `<label class="perm-item ${checked ? 'checked' : ''}">
+            <input type="checkbox" value="${App.esc(r.code)}" ${checked ? 'checked' : ''}
+                   onchange="this.closest('.perm-item').classList.toggle('checked', this.checked)">
+            <span>${App.esc(r.name || r.code)}</span>
+            <span class="perm-code">${App.esc(r.code)}</span>
+        </label>`;
+    }).join('');
+}
+function onAnyToggle() {
+    const anyOn = document.getElementById('allowAny').checked;
+    document.querySelectorAll('#roleGrid input').forEach(i => {
+        i.disabled = anyOn;
+        i.closest('.perm-item').classList.toggle('disabled', anyOn);
+    });
+    document.getElementById('userCodes').disabled = anyOn;
+    const warn = document.getElementById('policyWarn');
+    warn.style.display = anyOn ? 'block' : 'none';
+    if (anyOn) warn.textContent = '⚠ ANY 模式下角色与用户限定不生效, 保存时将只保留 ANY 行。';
+}
+function closePolicyModal() { document.getElementById('policyModal').classList.remove('show'); }
+
+async function savePolicy() {
+    const cid = document.getElementById('clientId').value.trim();
+    if (!cid) return;
+    const anyOn = document.getElementById('allowAny').checked;
+    const remark = document.getElementById('policyRemark').value.trim();
+    const rows = [];
+    if (anyOn) {
+        rows.push({ subjectType: 'ANY', subjectId: '', status: 1, remark });
+    } else {
+        Array.from(document.querySelectorAll('#roleGrid input:checked')).forEach(i =>
+            rows.push({ subjectType: 'ROLE', subjectId: i.value, status: 1, remark }));
+        document.getElementById('userCodes').value.split(',').map(s => s.trim()).filter(Boolean).forEach(u =>
+            rows.push({ subjectType: 'USER', subjectId: u, status: 1, remark }));
+    }
+    if (rows.length === 0) {
+        if (!confirm('未选择任何主体。\n保存 = 清空该客户端准入 = 【所有用户都无法登录它】(fail-closed)。\n确认保存？')) return;
+    }
+    try {
+        await App.api('/admin/login-policies/' + encodeURIComponent(cid), { method: 'PUT', body: rows });
+        alert('✅ 登录准入已保存 (' + rows.length + ' 行), 独立于协议配置生效');
+        closePolicyModal();
+        POLICY_LIST = [];
+        await loadPoliciesCached(true);
+        renderAdmission(); renderOverview(); list();
+    } catch (e) { alert('保存失败: ' + e.message); }
+}
+async function clearPolicy() {
+    const cid = document.getElementById('clientId').value.trim();
+    if (!cid) return;
+    if (!confirm(`确认清空 "${cid}" 的登录准入？\n清空后所有用户都无法登录该客户端 (fail-closed)。`)) return;
+    try {
+        await App.api('/admin/login-policies/' + encodeURIComponent(cid), { method: 'PUT', body: [] });
+        alert('✅ 已清空, 该客户端现在拒绝所有登录');
+        POLICY_LIST = [];
+        await loadPoliciesCached(true);
+        renderAdmission(); renderOverview(); list();
+    } catch (e) { alert('清空失败: ' + e.message); }
+}
+
 async function list() {
     let data;
-    try { data = await App.api("/admin/clients"); }
+    try { data = (await Promise.all([App.api("/admin/clients"), loadPoliciesCached()]))[0]; }
     catch (e) { alert("加载客户端失败: " + e.message); return; }
     const tbody = document.getElementById("clientTable");
     const empty = document.getElementById("emptyTip");
@@ -344,9 +738,10 @@ async function list() {
             <td>${methods}</td>
             <td>${scopes}</td>
             <td>${uris}</td>
+            <td>${admissionCell(c.clientId)}</td>
             <td>
                 <button class="btn-link" onclick='edit("${c.id}")'>编辑</button>
-                <button class="btn-link" onclick='resetSecret("${c.id}", "${c.clientId}")'>重置密钥</button>
+                <button class="btn-link" title="重置密钥" onclick='resetSecret("${c.id}", "${c.clientId}")'>重置</button>
                 <button class="btn-link danger" onclick='del("${c.id}", "${c.clientId}")'>删除</button>
             </td>
         </tr>`;
@@ -355,6 +750,7 @@ async function list() {
 
 function openModal() {
     document.getElementById("modalTitle").textContent = "新增客户端";
+    document.getElementById("govSections").style.display = "block";  // 扩展配置两模式均显示 (新建=只读预览+禁写)
     document.getElementById("editId").value = "";
     document.getElementById("clientId").value = "";
     document.getElementById("clientId").disabled = false;
@@ -376,6 +772,8 @@ function openModal() {
     AUTH_METHODS.forEach(m => document.getElementById("am_" + m.v).checked = false);
     document.getElementById("am_client_secret_basic").checked = true;
     syncPkceWithGrant();
+    renderAdmission();      // 新建模式: 准入分区只读展示 + 配置按钮禁用
+    renderOverview();       // 新建模式: 预览展开码/端点覆盖, 准入项显示 info 提示
     document.getElementById("modal").classList.add("show");
 }
 
@@ -407,6 +805,9 @@ async function edit(id) {
         data.authorizationGrantTypes && Array.isArray(data.authorizationGrantTypes) && data.authorizationGrantTypes.includes(g.v));
     AUTH_METHODS.forEach(m => document.getElementById("am_" + m.v).checked =
         data.clientAuthenticationMethods && Array.isArray(data.clientAuthenticationMethods) && data.clientAuthenticationMethods.includes(m.v));
+    document.getElementById("govSections").style.display = "block";
+    renderAdmission();
+    renderOverview();
     syncPkceWithGrant();
     document.getElementById("modal").classList.add("show");
 }

@@ -96,7 +96,7 @@ MySQL / Redis 在 `192.168.31.161`（库 `iam`；Redis 分库：db1=认证中心
 |---|---|---|
 | iam-admin-bff | 8085 | 管理 BFF：OAuth2 Client(admin-app) 授权码 SSO 登录，Bearer 透传管理 API |
 | iam-portal-bff | 8080 | 门户 BFF：OAuth2 Client(portal-app) Confidential + PKCE，独立会话与 RP-Initiated 登出 |
-| iam-admin-web | 8001 | 管理后台静态站（含只读「授权范围」页与只读「资源准入」页） |
+| iam-admin-web | 8001 | 管理后台静态站（八项菜单；授权范围字典与登录准入已并入「客户端管理」，只读「资源准入」页保留） |
 | iam-portal-web | 8000 | 门户静态站（客户端列表与 SSO 跳转卡片） |
 | iam-client-*-demo | 8081/8082/8084 | 三种 OAuth2 接入姿势演示（授权码 / 设备码 / OA H5 形态） |
 
@@ -221,6 +221,7 @@ cd client/iam-client-h5-demo     && node server.js   # :8084
 
 | 日期 | 类型 | 内容 |
 |---|---|---|
+| 2026-11-17 | 调整 | **C-1 客户端治理聚合落地**：删除菜单与页面「登录准入」「授权范围」（`login_policy.html` / `scope.html`），登录准入配置与 scope 字典明细并入「客户端管理」编辑弹窗（列表新增「登录准入」列，治理分区独立保存，治理概览只读体检标红），资源准入页补「所属授权范围组」反查；**菜单/页面 = 前端静态文件，表、种子、写接口零变化，无需重刷数据库（iam.sql 不动、V6.x 不涉及）** |
 | 2026-11-04 | 增加 | **设备码签发准入闸**：`DeviceCodeGrantAuthenticationProvider` 用户激活确认后调 `LoginAdmissionService.canLogin`，未命中 `access_denied` —— 设备码不经 `/oauth2/authorize`，此前 `client_login_policy` 对其不生效（README 待办 P1-3 活路径半边） |
 | 2026-11-04 | 删除 | **密码模式三件套**（`PasswordGrantAuthenticationConverter`/`Provider`/`Token`）及 `AuthorizationServerConfig` 装配、`passwordEncoder` 参数、`test.http` 示例；OAuth 2.1 废弃该授权类型且无客户端注册（P1-3 另半边） |
 | 2026-11-04 | 增加 | **登录准入模块**：`client_login_policy` 表（client × 主体 allow-list）+ `LoginAdmissionService` + `AdminLoginPolicyController` + 管理页 `login_policy.html`（菜单「登录准入」）；签发准入由「权限码交集」改为「准入表裁决」，登录/授权两层解耦，`IssuanceAdmissionService` 删除 |
@@ -269,7 +270,7 @@ cd client/iam-client-h5-demo     && node server.js   # :8084
 1. **YAML 配置分类**：整理当前项目存在的硬编码，按 `application-auth.yaml` / `application-resource.yaml` 的格式，拆分到不同的配置文件中。
 2. ~~新端点 fail-closed 收口~~ **已裁定关闭（2026-11-02）**：维持「启动自扫描自动添加（`AUTHENTICATED` 宽松档）+ 种子配精确权限码」的现行模式，不改为 `status=0`。新端点的宽松窗口由操作纪律兜底：**新增端点后先补种子再开放调用**（见「六、关键设计裁定」第 5 条）。
 3. **登录防爆破**：登录端点失败限流 + 账号临时锁定（历史改造清单 A1，始终未实现）。
-4. **敏感操作审计表**：记录谁、对哪个对象、改了什么、结果，覆盖用户/客户端/角色/权限/准入的写操作。
+4. **敏感操作审计表**：记录谁、对哪个对象、改了什么、结果，覆盖用户/客户端/角色/权限/准入的写操作。**与 C-1 聚合写（Phase 2）绑定排期**：客户端治理「一处配齐」的跨表写落地前，本条操作级审计必须先落地（铁律3），否则 = 把无审计的多表写收进一个按钮。
 5. **密码策略**：密码历史（禁止近期复用）+ 过期策略。
 6. **客户端密钥治理**：`client_secret` 明文（演示为 `123456`）与 BCrypt 哈希会经 `GET /admin/clients/{id}` 回显给调用方——建议对外掩码，密钥改由环境变量/密钥管理注入。
 7. **代码卫生**：孤儿权限码 `policy:write`（无任何端点引用）、`resolveDomain` 返回值只剩判空用途（应改 `isManagedPackage()`）、`AdminUserDataController` 的 `/users/{code}/data` 已无前端调用方（级联已本地化）、`sql/iam.sql` 内 13 行注释掉的 capability 死块与 `iam_client_policy` 遗留 DROP、BFF 配置键 `iam.resource-service-base-url`（值正确指向 9000，但键名仍引用已删除的 resource-service，应改名并同步 `ApiProxyController` 的 `@Value`）。
@@ -278,3 +279,11 @@ cd client/iam-client-h5-demo     && node server.js   # :8084
 10. **服务自愈**：计划任务随开机自启 + 端口健康检查自动拉起（当前机器重启后三服务全灭，需手工重启）。
 11. **文档配图**：6 张架构/时序图（IMG-1~6，各设计文档内已列清单）+ 9 张管理端截图（SHOT-1~9，`操作说明` §七已列）。
 12. **用户模块编码字段治理**：现状杂乱，三件事——① `user_code` 格式不统一：存量为 `u_`+32hex 与裸 `zhang3` 混杂，**格式已裁定为标准 UUID（`550e8400-e29b-41d4-a716-446655440000`）**，新建用户已改为系统自动生成、页面只读不可编辑、服务端格式校验（2026-11-03）；存量回填可由 `reset-init.bat` 一键完成（清库重载 UUID 种子 + 清 Redis 会话/令牌，2026-11-03）；② 历史命名双职遗留：`username` 曾装 user_code、`principalName` 至今兼任 API 参数，展示字段与 API 取值须持续分离（在线/授权两页已拆，后续新接口注意）；③ 关联键选型已裁定（2026-11-03）：维持字符串，物理主键用自增/雪花 id、对外关联键用 user_code，不做类型变更。
+
+### C. 展示与聚合收口（2026-11-17 补录）
+
+1. ~~**客户端治理聚合呈现**~~ **已落地（2026-11-17）**：登录准入 / 授权范围 / 资源准入 三处配置分散三页 → 按拍板方案收敛为「客户端管理 = 客户端治理唯一入口」：① 删除菜单与页面 `login_policy.html`、`scope.html`（菜单 10→8 项）；② scope 字典明细下沉至编辑弹窗只读区（组→码映射 + 引用客户端，仍走 iam.sql 种子）；③ 登录准入迁入编辑弹窗「登录准入」分区（**分区独立保存**，复用原 `PUT /admin/login-policies/{clientId}`），列表页新增「登录准入」列；④ 治理概览只读体检（准入行 / 展开码 / 端点覆盖 + 标红）；⑤ 资源准入页补「← 所属授权范围组」反查（未入组码标橙=孤儿码风险）。
+   **三条铁律（约束后续 Phase 2 聚合写）**：铁律1 汇聚视图与入口、**不汇聚事务**（各分区独立提交）；铁律2 字典永远只读（iam.sql = git 审计链）；铁律3 聚合写必须先落 B-4（操作级审计）与 P0-2（引用完整性），顺序不可反。
+   **数据/种子影响裁定（本次实证）**：菜单与页面为前端静态文件，不入库 → `client_login_policy`/`sys_scope`/`sys_scope_permission`/`iam_endpoint_policy` 表、`iam.sql` 种子、V6.15/V6.16 迁移、全部管理 API **均零变化**（新列与概览仅用既有只读接口），**准入/资源表无需重刷、无需 reset-init**；文档健康检查与截图清单已同步（操作说明 §四/§七、接口文档、详细设计、数据库设计、权限与安全设计）。
+2. **consent 展示层收口**：四点并存——① `ConsentController` 将 `clientName` 误传为 `clientId`，页面大标题与 ID 行重复显示技术标识，注册名（如「管理后台」）从未出现；② `describeScope` 仅 5 词硬编码，`admin.full`/`portal.profile`/`third.profile` 走 default 分支原样回显（desc 还把 key 重复一遍），`read`/`write` 译为「读取权限/写入权限」无资源指向；③ 页头「应用请求访问您的部分信息」与实际授予的 API 操作权限不符——业务码封顶结果（admin.full→16 码、third.profile→空）对用户完全不可见；④ scope 勾选框为装饰（div 绘制、hidden input 无条件提交），呈现可部分勾选实为全有全无。与 P0-1 同源但层级不同：P0-1 是协议 claim 契约（对外），本条是人话页面（对用户）。
+3. **（触发式）三方域首个业务端点开通**：`third.profile` 当前「准入 ANY + 字典空映射」是**留白而非缺陷**（iam.sql 种子备注与授权范围页已记录：三方域暂无端点、空展开 fail-closed、仅 OIDC 标准能力）。但触发点无条目挂靠——三方域开第一个业务端点时，必须先补 `sys_scope_permission` 映射并配资源端点准入，否则该端所有业务接口恒 403。

@@ -103,6 +103,12 @@
 <script src="/common.js"></script>
 <script>
 let epList = [];
+let scopeDict = [];   // /admin/scopes 字典: 反查「准入要求码 ← 属于哪些授权范围组」
+
+function groupsOfCode(code) {
+    if (!code || code === 'AUTHENTICATED' || code === 'PERMIT_ALL') return [];
+    return scopeDict.filter(s => (s.permissions || []).some(p => p.code === code));
+}
 
 async function loadEndpoints() {
     try {
@@ -111,6 +117,7 @@ async function loadEndpoints() {
         alert('加载资源准入失败: ' + e.message);
         return;
     }
+    try { scopeDict = await App.api('/admin/scopes') || []; } catch (e) { scopeDict = []; }
     const tbody = document.getElementById('epTable');
     const empty = document.getElementById('epEmpty');
     if (epList.length === 0) {
@@ -119,16 +126,26 @@ async function loadEndpoints() {
         return;
     }
     empty.style.display = 'none';
-    tbody.innerHTML = epList.map(p => `
+    tbody.innerHTML = epList.map(p => {
+        const isPass = p.requiredAuthority === 'AUTHENTICATED' || p.requiredAuthority === 'PERMIT_ALL';
+        const groups = groupsOfCode(p.requiredAuthority);
+        // 词表贯通: 权限码 → 所属授权范围组 (反查); 业务码未入组 = 没有任何客户端能持有 (孤儿码风险)
+        let backref = '';
+        if (!isPass) {
+            backref = groups.length
+                ? `<div style="font-size:10px;color:#64748b;margin-top:3px;">← 组: ${groups.map(g => App.esc(g.code)).join(', ')}</div>`
+                : `<div style="font-size:10px;color:#d97706;margin-top:3px;" title="该权限码未被任何 scope 组包含, 令牌无法经授权范围获得它">← 未入组 (任何客户端均无法持有)</div>`;
+        }
+        return `
         <tr>
             <td style="font-family:monospace;">${p.id}</td>
             <td><span class="tag gray" style="font-family:monospace;">${App.esc(p.method || '-')}</span></td>
             <td style="font-family:monospace;font-size:12px;color:#475569;">${App.esc(p.path || '-')}</td>
-            <td><span class="tag ${(p.requiredAuthority === 'AUTHENTICATED' || p.requiredAuthority === 'PERMIT_ALL') ? 'amber' : 'blue'}">${App.esc(p.requiredAuthority || '-')}</span>${(p.requiredAuthority === 'AUTHENTICATED' || p.requiredAuthority === 'PERMIT_ALL') ? ' <span style="font-size:10px;color:#94a3b8;">放行档</span>' : ''}</td>
+            <td><span class="tag ${isPass ? 'amber' : 'blue'}">${App.esc(p.requiredAuthority || '-')}</span>${isPass ? ' <span style="font-size:10px;color:#94a3b8;">放行档</span>' : ''}${backref}</td>
             <td><span class="tag ${p.status === 0 ? 'gray' : 'green'}">${p.status === 0 ? '停用' : '启用'}</span></td>
             <td style="font-size:12px;color:#64748b;">${App.esc(p.remark || '-')}</td>
         </tr>
-    `).join('');
+    `;}).join('');
 }
 
 App.guard().then(function (me) {
