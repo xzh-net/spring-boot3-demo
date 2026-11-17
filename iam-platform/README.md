@@ -33,7 +33,7 @@ iam-platform/
 │
 ├── sql/                                # ──【数据库脚本】单库 iam──
 │   ├── iam.sql                         #   合并基线（17 表 + 全部种子，新库初始化唯一入口）
-│   └── migration/                      #   既有库增量升级脚本（V6.2–V6.14）
+│   └── migration/                      #   既有库增量升级脚本（V6.2–V6.16）
 │
 ├── docs/                               # ──【文档】概要/详细设计 · 权限 · 库 · 接口 · 编码 · 操作（7 份）──
 ├── start-all.ps1 / start-all.bat       # ──【脚本】一键启停核心服务──
@@ -111,7 +111,7 @@ MySQL / Redis 在 `192.168.31.161`（库 `iam`；Redis 分库：db1=认证中心
 ```bash
 mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS iam DEFAULT CHARSET utf8mb4"
 mysql -u root -p iam < sql/iam.sql
-# 既有库升级用 sql/migration/（V6.2–V6.14），新库无需执行
+# 既有库升级用 sql/migration/（V6.2–V6.16），新库无需执行
 ```
 
 ### 2. 启动核心服务（顺序固定）
