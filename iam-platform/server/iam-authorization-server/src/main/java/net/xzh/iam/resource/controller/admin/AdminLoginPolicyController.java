@@ -22,7 +22,7 @@ import net.xzh.iam.resource.service.LoginAdmissionService;
  * <p>
  * 权限码复用客户端域 (client:read / client:write): 登录准入即客户端配置的一部分,
  * 不新增权限码 (避免连改 sys_permission / sys_role_permission / sys_scope_permission 四处种子)。
- * 经 Order(3) 资源链 + iam_endpoint_policy 端点准入保护。
+ * 经 Order(3) 资源链 + iam_endpoint 端点准入保护。
  * </p>
  */
 @RestController

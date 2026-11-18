@@ -74,7 +74,7 @@ mybatis-plus:
 # ===== 自定义配置 =====
 # authserver.* 客户端白名单配置 (admin-client-ids / service-client-ids / portal-client-ids) 已退役删除:
 # 客户端维度隔离由令牌双维交集 (用户 RBAC 码 ∩ 客户端 scope 展开码) 承担, 无独立白名单闸门;
-# 端点准入全部按权限码裁决 (见 iam_endpoint_policy 与 EndpointAdmissionManager)。
+# 端点准入全部按权限码组合裁决 (见 iam_endpoint/iam_endpoint_permission 与 EndpointAdmissionManager)。
 
 logging:
   level:

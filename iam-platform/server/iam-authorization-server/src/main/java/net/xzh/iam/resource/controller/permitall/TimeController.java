@@ -14,7 +14,7 @@ import java.util.Map;
  * 不需要权限的接口示例 (放行).
  * <p>
  * 仅承载「任何客户端 / 无令牌」均可访问的公开端点, 用于连通性与系统时间自测。
- * 不进入 iam_endpoint_policy 准入表 (播种白名单仅 admin/portal/third 三域),
+ * 不进入 iam_endpoint 准入表 (清单推导仅 admin/biz 两域),
  * 由 ResourceServerConfig 资源链对 /api/permitall/** 链层 permitAll (免令牌)。
  * </p>
  */

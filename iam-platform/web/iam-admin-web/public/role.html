@@ -67,8 +67,8 @@
         .close-btn { background: none; border: none; font-size: 22px; cursor: pointer; color: #64748b; }
         .modal-body { padding: 24px; }
         .modal-footer { padding: 14px 24px; border-top: 1px solid #f0f0f0; display: flex; justify-content: flex-end; gap: 10px; flex-shrink: 0; }
-        .btn-ghost { background: #eef2f7; color: #334155; }
-        .btn-ghost:hover { background: #e2e8f0; }
+        .btn-ghost { background: #fff; border: 1px solid #cbd5e1; color: #1e293b; }
+        .btn-ghost:hover { background: #f1f5f9; }
     </style>
 </head>
 <body>
@@ -82,7 +82,7 @@
             </div>
             <div>
                 <button class="btn btn-primary" onclick="openRoleModal()">＋ 新增角色</button>
-                <button class="btn btn-primary" style="margin-left:10px;" onclick="loadRoles()">🔄 刷新</button>
+                <button class="btn btn-ghost" style="margin-left:10px;" onclick="loadRoles()">🔄 刷新</button>
             </div>
         </div>
         <div class="card">

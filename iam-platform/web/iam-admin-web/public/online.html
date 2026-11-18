@@ -36,6 +36,8 @@
         .btn { padding: 8px 18px; border-radius: 6px; border: none; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s; }
         .btn-primary { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; }
         .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(37,99,235,0.35); }
+        .btn-ghost { background: #fff; border: 1px solid #cbd5e1; color: #1e293b; }
+        .btn-ghost:hover { background: #f1f5f9; }
         .btn-link { background: none; border: none; color: #2563eb; cursor: pointer; font-size: 13px; padding: 4px 8px; }
         .btn-link:hover { text-decoration: underline; }
         .btn-link.danger { color: #dc2626; }
@@ -91,7 +93,7 @@
                 <div class="hint">SSO 会话与在线设备管理 · 支持查看会话、强制下线、撤销令牌</div>
             </div>
             <div>
-                <button class="btn btn-primary" style="margin-left:10px;" onclick="loadOnlineUsers()">🔄 刷新</button>
+                <button class="btn btn-ghost" style="margin-left:10px;" onclick="loadOnlineUsers()">🔄 刷新</button>
             </div>
         </div>
 

@@ -9,7 +9,7 @@
 --                 sys_scope / sys_scope_permission (客户端授权范围字典, 双维控制客户端维度) /
 --                 client_login_policy (登录准入: 客户端×主体 allow-list, 登录维度) /
 --                 iam_application / iam_application_channel / iam_org / iam_app_authorization /
---                 iam_endpoint_policy (iam_api_capability / iam_capability_subscription 已随开放能力退役删除)
+--                 iam_endpoint + iam_endpoint_permission (iam_api_capability / iam_capability_subscription 已随开放能力退役删除)
 -- 双维准入 (两层解耦):
 --   登录层 ①: 能否登录 = client_login_policy 准入表 (allow-list fail-closed);
 --             AuthorizeIssuanceFilter 按准入表实时裁决 (已启用), 未命中 302 拒发码 fail-closed。
@@ -178,7 +178,8 @@ CREATE TABLE `sys_scope_permission`  (
   `permission_id` bigint(0) NOT NULL COMMENT '→ sys_permission.id',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_scope_perm`(`scope_id`, `permission_id`) USING BTREE,
-  INDEX `idx_perm`(`permission_id`) USING BTREE
+  INDEX `idx_perm`(`permission_id`) USING BTREE,
+  CONSTRAINT `fk_scope_permission` FOREIGN KEY (`permission_id`) REFERENCES `sys_permission` (`id`) ON DELETE RESTRICT
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = 'scope 内含权限码 N:N 映射 (只读, SQL种子演进)' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
@@ -232,10 +233,10 @@ CREATE TABLE `sys_permission`  (
   `update_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0) ON UPDATE CURRENT_TIMESTAMP(0) COMMENT '更新时间',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `code`(`code`) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 18 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '权限码字典 (URL→码绑定见 iam_endpoint_policy.required_authority)' ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 18 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '权限码字典 (端点绑定见 iam_endpoint_permission, 范围绑定见 sys_scope_permission)' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
--- Records of sys_permission (业务分类由 remark 前缀【管理端】/【门户】标记, 原 domain 列已删; 运行时经用户令牌注入, 端点准入经 iam_endpoint_policy 绑定)
+-- Records of sys_permission (业务分类由 remark 前缀【管理端】/【门户】标记, 原 domain 列已删; 运行时经用户令牌注入, 端点准入经 iam_endpoint_permission 绑定)
 -- ----------------------------
 INSERT INTO `sys_permission` (`id`, `code`, `name`, `status`, `remark`) VALUES
 (1,  'user:read',         '用户查看',   1, '【管理端】用户列表/详情/用户会话查询'),
@@ -252,7 +253,7 @@ INSERT INTO `sys_permission` (`id`, `code`, `name`, `status`, `remark`) VALUES
 (12, 'permission:write',  '权限管理',   1, '【管理端】权限码增删改 (准入引用中的码禁止删除)'),
 (13, 'record:read',       '记录查看',   1, '【管理端】授权记录/consent 记录查询'),
 (14, 'record:write',      '记录管理',   1, '【管理端】授权记录清空'),
-(15, 'policy:read',       '准入查看',   1, '【管理端】资源准入策略 (iam_endpoint_policy) 列表查询'),
+(15, 'policy:read',       '准入查看',   1, '【管理端】资源准入策略 (iam_endpoint) 列表查询'),
 (16, 'policy:write',      '准入管理',   1, '【管理端】资源准入策略增删改 (保留码, 写入口已收归自扫描)'),
 (17, 'portal:client:read', '门户应用查看', 1, '【门户】门户端「我的应用授权」查询 (/biz/clients/mine)');
 
@@ -452,7 +453,7 @@ INSERT INTO `iam_app_authorization` VALUES
 -- Table structure for client_login_policy (登录准入: 客户端 × 主体 allow-list, 登录维度)
 -- 说明: 与授权维度正交 — 本表只裁决①签发准入 (能否登录), 不参与②自省层业务码注入;
 --       allow-list fail-closed: 无启用行 = 拒绝所有登录; 不支持 DENY 行。
---       管理 API/页面写入口待评估后补, 当前仅 SQL 种子 (与 iam_endpoint_policy 同为"准入"族)。
+--       管理 API/页面写入口待评估后补, 当前仅 SQL 种子 (与 iam_endpoint 同为"准入"族)。
 -- ----------------------------
 DROP TABLE IF EXISTS `client_login_policy`;
 CREATE TABLE `client_login_policy`  (
@@ -480,81 +481,174 @@ INSERT INTO `client_login_policy` (`client_id`, `subject_type`, `subject_id`, `s
 ('mobile-app',  'ANY',  '',       1, '移动原生演示: 所有登录用户 (原逃逸阀: 无业务 scope)');
 
 -- ----------------------------
--- Table structure for iam_endpoint_policy (资源接口准入策略: 启动扫描播种 + 管理端覆盖)
--- 说明: admin 域 49 行以权限码 override 随基线预置 (source=override, rescan 跳过对齐, 防止被重置回粗档);
---       其余域 (portal 等) 数据行由合并服务启动时按 controller 分包扫描 RequestMapping 自动播种
---       (source=coded 默认规则); 未登记路径按默认拒绝 (deny-by-default)。
+-- Table structure for iam_endpoint (资源接口准入策略: 资源行, V6.20 拆表)
+-- 说明: 资源与绑定分离 —— 本表存资源 (方法/路径/档位/组合语义/状态),
+--       PERMISSION 行的具体权限码在 iam_endpoint_permission (1..N, ALL/ANY 组合);
+--       档位行 (AUTHENTICATED/PERMIT_ALL) 无绑定。写入 = 种子初始化 + 管理页面维护 (两表同一事务)。
 -- ----------------------------
-DROP TABLE IF EXISTS `iam_endpoint_policy`;
-CREATE TABLE `iam_endpoint_policy`  (
+DROP TABLE IF EXISTS `iam_endpoint_permission`;
+DROP TABLE IF EXISTS `iam_endpoint`;
+CREATE TABLE `iam_endpoint`  (
   `id` bigint(0) NOT NULL AUTO_INCREMENT COMMENT '策略ID',
   `method` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT 'HTTP 方法: GET/POST/PUT/DELETE (ANY=全部)',
   `path` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '路径模式 (Spring 注册模式, 如 /admin/permissions/{id})',
-  `required_authority` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL DEFAULT 'AUTHENTICATED' COMMENT '准入要求: 权限码(如 user:read)或放行档(AUTHENTICATED/PERMIT_ALL); 权威来源=本表种子, 扫描只补新端点不回写',
+  `service_key` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL DEFAULT 'iam-authorization-server' COMMENT '服务命名空间 (多服务共表预留, 单体阶段固定值)',
+  `policy_type` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL DEFAULT 'AUTHENTICATED' COMMENT '策略类型: PERMISSION=权限码(见绑定表) / AUTHENTICATED=认证档 / PERMIT_ALL=全放行',
+  `permission_logic` varchar(3) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL DEFAULT 'ALL' COMMENT '组合语义: ALL=全部满足 / ANY=任一满足 (仅 PERMISSION 行有意义)',
   `status` tinyint(1) NOT NULL DEFAULT 1 COMMENT '状态: 1=启用, 0=禁用',
   `remark` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '备注',
   `create_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0) COMMENT '创建时间',
   `update_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0) ON UPDATE CURRENT_TIMESTAMP(0) COMMENT '更新时间',
   PRIMARY KEY (`id`) USING BTREE,
-  UNIQUE INDEX `uk_endpoint`(`method`, `path`) USING BTREE
-) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '资源接口准入策略表 (唯一写入方=启动自扫描补缺, 精确码权威=种子; 页面只读)' ROW_FORMAT = Dynamic;
+  UNIQUE INDEX `uk_endpoint`(`service_key`, `method`, `path`) USING BTREE,
+  CONSTRAINT `chk_permission_logic` CHECK (`permission_logic` IN ('ALL', 'ANY'))
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '资源接口准入策略表 (资源行; 写入=种子+页面, 启动只读直查; 权限绑定见 iam_endpoint_permission)' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
--- Records of iam_endpoint_policy (51 行全部为精确权限码; domain/source 两列已删, 本表页面只读无 CRUD, 唯一增量入口=启动自扫描)
+-- Table structure for iam_endpoint_permission (端点↔权限绑定, 1:N)
+-- 仅 policy_type=PERMISSION 的资源行产生绑定; endpoint_id CASCADE 删资源自动清绑定;
+-- permission_id RESTRICT 被绑定的权限禁删。
 -- ----------------------------
-INSERT INTO `iam_endpoint_policy` (`method`, `path`, `required_authority`, `status`) VALUES
-('GET', '/admin/users', 'user:read', 1),
-('GET', '/admin/users/{id}', 'user:read', 1),
-('GET', '/admin/users/{id}/sessions', 'user:read', 1),
-('POST', '/admin/users', 'user:write', 1),
-('PUT', '/admin/users/{id}', 'user:write', 1),
-('DELETE', '/admin/users/{id}', 'user:write', 1),
-('PUT', '/admin/users/{id}/enable', 'user:write', 1),
-('POST', '/admin/users/{id}/reset-password', 'user:write', 1),
-('DELETE', '/admin/users/{id}/sessions', 'user:write', 1),
-('DELETE', '/admin/users/{userCode}/data', 'user:write', 1),
-('GET', '/admin/roles', 'role:read', 1),
-('GET', '/admin/user-roles/{userCode}', 'role:read', 1),
-('POST', '/admin/roles', 'role:write', 1),
-('PUT', '/admin/roles/{id}', 'role:write', 1),
-('DELETE', '/admin/roles/{id}', 'role:write', 1),
-('PUT', '/admin/user-roles/{userCode}', 'role:write', 1),
-('GET', '/admin/sessions/online', 'session:read', 1),
-('GET', '/admin/sessions/users/{id}', 'session:read', 1),
-('POST', '/admin/sessions/{ssoSessionId}/logout', 'session:write', 1),
-('DELETE', '/admin/sessions/online/{username}', 'session:write', 1),
-('POST', '/admin/sessions/users/{id}/logout', 'session:write', 1),
-('GET', '/admin/applications', 'application:read', 1),
-('GET', '/admin/applications/{appId}/authorizations', 'application:read', 1),
-('GET', '/admin/applications/{appId}/channels', 'application:read', 1),
-('POST', '/admin/applications', 'application:write', 1),
-('PUT', '/admin/applications/{id}', 'application:write', 1),
-('DELETE', '/admin/applications/{id}', 'application:write', 1),
-('POST', '/admin/applications/authorizations', 'application:write', 1),
-('DELETE', '/admin/applications/authorizations/{id}', 'application:write', 1),
-('POST', '/admin/applications/{appId}/channels', 'application:write', 1),
-('PUT', '/admin/applications/{appId}/channels/{channelId}', 'application:write', 1),
-('DELETE', '/admin/applications/{appId}/channels/{channelId}', 'application:write', 1),
-('GET', '/admin/clients', 'client:read', 1),
-('GET', '/admin/clients/{id}', 'client:read', 1),
-('GET', '/admin/scopes', 'client:read', 1),
-('POST', '/admin/clients', 'client:write', 1),
-('PUT', '/admin/clients/{id}', 'client:write', 1),
-('DELETE', '/admin/clients/{id}', 'client:write', 1),
-('POST', '/admin/clients/{id}/reset-secret', 'client:write', 1),
-('GET', '/admin/login-policies', 'client:read', 1),
-('GET', '/admin/login-policies/{clientId}', 'client:read', 1),
-('PUT', '/admin/login-policies/{clientId}', 'client:write', 1),
-('GET', '/admin/permissions', 'permission:read', 1),
-('POST', '/admin/permissions', 'permission:write', 1),
-('PUT', '/admin/permissions/{id}', 'permission:write', 1),
-('DELETE', '/admin/permissions/{id}', 'permission:write', 1),
-('GET', '/admin/records', 'record:read', 1),
-('GET', '/admin/records/consents', 'record:read', 1),
-('DELETE', '/admin/records', 'record:write', 1),
-('GET', '/admin/endpoint-policies', 'policy:read', 1),
-('GET', '/biz/clients/mine', 'portal:client:read', 1);
+CREATE TABLE `iam_endpoint_permission`  (
+  `id` bigint(0) NOT NULL AUTO_INCREMENT COMMENT '绑定ID',
+  `endpoint_id` bigint(0) NOT NULL COMMENT '→ iam_endpoint.id (资源行)',
+  `permission_id` bigint(0) NOT NULL COMMENT '→ sys_permission.id (所需权限码)',
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE INDEX `uk_endpoint_permission`(`endpoint_id`, `permission_id`) USING BTREE,
+  CONSTRAINT `fk_ee_endpoint` FOREIGN KEY (`endpoint_id`) REFERENCES `iam_endpoint` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT,
+  CONSTRAINT `fk_ee_permission` FOREIGN KEY (`permission_id`) REFERENCES `sys_permission` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '端点↔权限绑定 (PERMISSION 行使用, 一端点多权限 1:N, ALL/ANY 组合)' ROW_FORMAT = Dynamic;
 
+-- ----------------------------
+-- Records of iam_endpoint (56 行: 51 条业务端点 + 3 条本表写接口 + 2 条范围映射写接口)
+-- 写入语义: 种子一次性初始化 + 管理页面维护, 上线后以库数据为准; 规则每请求直查 DB。
+-- 种子全为 PERMISSION 行 → 后置 UPDATE 定型 (若未来加入档位行种子, 此句需同步调整)。
+-- ----------------------------
+INSERT INTO `iam_endpoint` (`method`, `path`, `status`) VALUES
+('GET', '/admin/users', 1),
+('GET', '/admin/users/{id}', 1),
+('GET', '/admin/users/{id}/sessions', 1),
+('POST', '/admin/users', 1),
+('PUT', '/admin/users/{id}', 1),
+('DELETE', '/admin/users/{id}', 1),
+('PUT', '/admin/users/{id}/enable', 1),
+('POST', '/admin/users/{id}/reset-password', 1),
+('DELETE', '/admin/users/{id}/sessions', 1),
+('DELETE', '/admin/users/{userCode}/data', 1),
+('GET', '/admin/roles', 1),
+('GET', '/admin/user-roles/{userCode}', 1),
+('POST', '/admin/roles', 1),
+('PUT', '/admin/roles/{id}', 1),
+('DELETE', '/admin/roles/{id}', 1),
+('PUT', '/admin/user-roles/{userCode}', 1),
+('GET', '/admin/sessions/online', 1),
+('GET', '/admin/sessions/users/{id}', 1),
+('POST', '/admin/sessions/{ssoSessionId}/logout', 1),
+('DELETE', '/admin/sessions/online/{username}', 1),
+('POST', '/admin/sessions/users/{id}/logout', 1),
+('GET', '/admin/applications', 1),
+('GET', '/admin/applications/{appId}/authorizations', 1),
+('GET', '/admin/applications/{appId}/channels', 1),
+('POST', '/admin/applications', 1),
+('PUT', '/admin/applications/{id}', 1),
+('DELETE', '/admin/applications/{id}', 1),
+('POST', '/admin/applications/authorizations', 1),
+('DELETE', '/admin/applications/authorizations/{id}', 1),
+('POST', '/admin/applications/{appId}/channels', 1),
+('PUT', '/admin/applications/{appId}/channels/{channelId}', 1),
+('DELETE', '/admin/applications/{appId}/channels/{channelId}', 1),
+('GET', '/admin/clients', 1),
+('GET', '/admin/clients/{id}', 1),
+('GET', '/admin/scopes', 1),
+('POST', '/admin/clients', 1),
+('PUT', '/admin/clients/{id}', 1),
+('DELETE', '/admin/clients/{id}', 1),
+('POST', '/admin/clients/{id}/reset-secret', 1),
+('GET', '/admin/login-policies', 1),
+('GET', '/admin/login-policies/{clientId}', 1),
+('PUT', '/admin/login-policies/{clientId}', 1),
+('GET', '/admin/permissions', 1),
+('POST', '/admin/permissions', 1),
+('PUT', '/admin/permissions/{id}', 1),
+('DELETE', '/admin/permissions/{id}', 1),
+('GET', '/admin/records', 1),
+('GET', '/admin/records/consents', 1),
+('DELETE', '/admin/records', 1),
+('GET', '/admin/endpoint-policies', 1),
+('POST', '/admin/endpoint-policies', 1),
+('PUT', '/admin/endpoint-policies/{id}', 1),
+('DELETE', '/admin/endpoint-policies/{id}', 1),
+('POST', '/admin/permissions/{id}/scopes/{scopeId}', 1),
+('DELETE', '/admin/permissions/{id}/scopes/{scopeId}', 1),
+('GET', '/biz/clients/mine', 1);
+
+UPDATE `iam_endpoint` SET `policy_type` = 'PERMISSION' WHERE `policy_type` = 'AUTHENTICATED';
+
+-- ----------------------------
+-- Records of iam_endpoint_permission (与资源行按 (method,path,code) 三元组回填)
+-- ----------------------------
+INSERT INTO `iam_endpoint_permission` (`endpoint_id`, `permission_id`)
+SELECT `e`.`id`, `p`.`id`
+  FROM `iam_endpoint` `e`
+  JOIN (
+    SELECT 'GET' AS `m`, '/admin/users' AS `pa`, 'user:read' AS `code` UNION ALL
+    SELECT 'GET' AS `m`, '/admin/users/{id}' AS `pa`, 'user:read' AS `code` UNION ALL
+    SELECT 'GET' AS `m`, '/admin/users/{id}/sessions' AS `pa`, 'user:read' AS `code` UNION ALL
+    SELECT 'POST' AS `m`, '/admin/users' AS `pa`, 'user:write' AS `code` UNION ALL
+    SELECT 'PUT' AS `m`, '/admin/users/{id}' AS `pa`, 'user:write' AS `code` UNION ALL
+    SELECT 'DELETE' AS `m`, '/admin/users/{id}' AS `pa`, 'user:write' AS `code` UNION ALL
+    SELECT 'PUT' AS `m`, '/admin/users/{id}/enable' AS `pa`, 'user:write' AS `code` UNION ALL
+    SELECT 'POST' AS `m`, '/admin/users/{id}/reset-password' AS `pa`, 'user:write' AS `code` UNION ALL
+    SELECT 'DELETE' AS `m`, '/admin/users/{id}/sessions' AS `pa`, 'user:write' AS `code` UNION ALL
+    SELECT 'DELETE' AS `m`, '/admin/users/{userCode}/data' AS `pa`, 'user:write' AS `code` UNION ALL
+    SELECT 'GET' AS `m`, '/admin/roles' AS `pa`, 'role:read' AS `code` UNION ALL
+    SELECT 'GET' AS `m`, '/admin/user-roles/{userCode}' AS `pa`, 'role:read' AS `code` UNION ALL
+    SELECT 'POST' AS `m`, '/admin/roles' AS `pa`, 'role:write' AS `code` UNION ALL
+    SELECT 'PUT' AS `m`, '/admin/roles/{id}' AS `pa`, 'role:write' AS `code` UNION ALL
+    SELECT 'DELETE' AS `m`, '/admin/roles/{id}' AS `pa`, 'role:write' AS `code` UNION ALL
+    SELECT 'PUT' AS `m`, '/admin/user-roles/{userCode}' AS `pa`, 'role:write' AS `code` UNION ALL
+    SELECT 'GET' AS `m`, '/admin/sessions/online' AS `pa`, 'session:read' AS `code` UNION ALL
+    SELECT 'GET' AS `m`, '/admin/sessions/users/{id}' AS `pa`, 'session:read' AS `code` UNION ALL
+    SELECT 'POST' AS `m`, '/admin/sessions/{ssoSessionId}/logout' AS `pa`, 'session:write' AS `code` UNION ALL
+    SELECT 'DELETE' AS `m`, '/admin/sessions/online/{username}' AS `pa`, 'session:write' AS `code` UNION ALL
+    SELECT 'POST' AS `m`, '/admin/sessions/users/{id}/logout' AS `pa`, 'session:write' AS `code` UNION ALL
+    SELECT 'GET' AS `m`, '/admin/applications' AS `pa`, 'application:read' AS `code` UNION ALL
+    SELECT 'GET' AS `m`, '/admin/applications/{appId}/authorizations' AS `pa`, 'application:read' AS `code` UNION ALL
+    SELECT 'GET' AS `m`, '/admin/applications/{appId}/channels' AS `pa`, 'application:read' AS `code` UNION ALL
+    SELECT 'POST' AS `m`, '/admin/applications' AS `pa`, 'application:write' AS `code` UNION ALL
+    SELECT 'PUT' AS `m`, '/admin/applications/{id}' AS `pa`, 'application:write' AS `code` UNION ALL
+    SELECT 'DELETE' AS `m`, '/admin/applications/{id}' AS `pa`, 'application:write' AS `code` UNION ALL
+    SELECT 'POST' AS `m`, '/admin/applications/authorizations' AS `pa`, 'application:write' AS `code` UNION ALL
+    SELECT 'DELETE' AS `m`, '/admin/applications/authorizations/{id}' AS `pa`, 'application:write' AS `code` UNION ALL
+    SELECT 'POST' AS `m`, '/admin/applications/{appId}/channels' AS `pa`, 'application:write' AS `code` UNION ALL
+    SELECT 'PUT' AS `m`, '/admin/applications/{appId}/channels/{channelId}' AS `pa`, 'application:write' AS `code` UNION ALL
+    SELECT 'DELETE' AS `m`, '/admin/applications/{appId}/channels/{channelId}' AS `pa`, 'application:write' AS `code` UNION ALL
+    SELECT 'GET' AS `m`, '/admin/clients' AS `pa`, 'client:read' AS `code` UNION ALL
+    SELECT 'GET' AS `m`, '/admin/clients/{id}' AS `pa`, 'client:read' AS `code` UNION ALL
+    SELECT 'GET' AS `m`, '/admin/scopes' AS `pa`, 'client:read' AS `code` UNION ALL
+    SELECT 'POST' AS `m`, '/admin/clients' AS `pa`, 'client:write' AS `code` UNION ALL
+    SELECT 'PUT' AS `m`, '/admin/clients/{id}' AS `pa`, 'client:write' AS `code` UNION ALL
+    SELECT 'DELETE' AS `m`, '/admin/clients/{id}' AS `pa`, 'client:write' AS `code` UNION ALL
+    SELECT 'POST' AS `m`, '/admin/clients/{id}/reset-secret' AS `pa`, 'client:write' AS `code` UNION ALL
+    SELECT 'GET' AS `m`, '/admin/login-policies' AS `pa`, 'client:read' AS `code` UNION ALL
+    SELECT 'GET' AS `m`, '/admin/login-policies/{clientId}' AS `pa`, 'client:read' AS `code` UNION ALL
+    SELECT 'PUT' AS `m`, '/admin/login-policies/{clientId}' AS `pa`, 'client:write' AS `code` UNION ALL
+    SELECT 'GET' AS `m`, '/admin/permissions' AS `pa`, 'permission:read' AS `code` UNION ALL
+    SELECT 'POST' AS `m`, '/admin/permissions' AS `pa`, 'permission:write' AS `code` UNION ALL
+    SELECT 'PUT' AS `m`, '/admin/permissions/{id}' AS `pa`, 'permission:write' AS `code` UNION ALL
+    SELECT 'DELETE' AS `m`, '/admin/permissions/{id}' AS `pa`, 'permission:write' AS `code` UNION ALL
+    SELECT 'GET' AS `m`, '/admin/records' AS `pa`, 'record:read' AS `code` UNION ALL
+    SELECT 'GET' AS `m`, '/admin/records/consents' AS `pa`, 'record:read' AS `code` UNION ALL
+    SELECT 'DELETE' AS `m`, '/admin/records' AS `pa`, 'record:write' AS `code` UNION ALL
+    SELECT 'GET' AS `m`, '/admin/endpoint-policies' AS `pa`, 'policy:read' AS `code` UNION ALL
+    SELECT 'POST' AS `m`, '/admin/endpoint-policies' AS `pa`, 'policy:write' AS `code` UNION ALL
+    SELECT 'PUT' AS `m`, '/admin/endpoint-policies/{id}' AS `pa`, 'policy:write' AS `code` UNION ALL
+    SELECT 'DELETE' AS `m`, '/admin/endpoint-policies/{id}' AS `pa`, 'policy:write' AS `code` UNION ALL
+    SELECT 'POST' AS `m`, '/admin/permissions/{id}/scopes/{scopeId}' AS `pa`, 'permission:write' AS `code` UNION ALL
+    SELECT 'DELETE' AS `m`, '/admin/permissions/{id}/scopes/{scopeId}' AS `pa`, 'permission:write' AS `code` UNION ALL
+    SELECT 'GET' AS `m`, '/biz/clients/mine' AS `pa`, 'portal:client:read' AS `code`
+  ) `t` ON `t`.`m` = `e`.`method` AND `t`.`pa` = `e`.`path`
+  JOIN `sys_permission` `p` ON `p`.`code` = `t`.`code`;
 -- ===================== 阶段清理: 开放能力体系退役 =====================
 -- iam_api_capability / iam_capability_subscription 两表及种子已退役 (CAPABILITY 订阅机制清理,
 -- 本期权限架构改造决定不保留 client×能力订阅粒度); 历史迁移 V6.5 保留为记录, 新库不再建这两表。

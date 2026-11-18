@@ -17,7 +17,7 @@
 | `iam-admin-web` | 8001 | 纯 HTML 管理台（用户/客户端/授权/在线/监控），由 admin-bff 代理后端 |
 
 访问 `http://localhost:8001` → 任一管理页触发登录 → 跳转认证中心登录页（`admin / 123456`）→ 回跳管理台。
-页面调用的 `GET /admin/**` 等管理 API 由认证中心 Order(3) 安全链保护（Bearer 令牌 + `iam_endpoint_policy` 按权限码裁决，业务码 = 用户 RBAC ∩ 客户端 scope）。
+页面调用的 `GET /admin/**` 等管理 API 由认证中心 Order(3) 安全链保护（Bearer 令牌 + `iam_endpoint` 按权限码裁决，业务码 = 用户 RBAC ∩ 客户端 scope）。
 
 > 认证中心的 `/admin/**` 页面、`AdminUserDetailsService`、`templates/admin/*` 已随迁移删除。
 
@@ -36,7 +36,7 @@ User (用户)
 
 ### 管理 API
 
-三域管理 REST API 经 `/admin/**` 暴露（Order(2) 安全链：Bearer 令牌 + `iam_endpoint_policy` 按权限码裁决），由管理后台 / 运维脚本调用：
+三域管理 REST API 经 `/admin/**` 暴露（Order(2) 安全链：Bearer 令牌 + `iam_endpoint` 按权限码裁决），由管理后台 / 运维脚本调用：
 
 | 方法 | 路径 | 说明 |
 |------|------|------|

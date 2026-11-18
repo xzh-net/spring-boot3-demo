@@ -60,8 +60,8 @@
         .close-btn { background: none; border: none; font-size: 22px; cursor: pointer; color: #64748b; }
         .modal-body { padding: 24px; }
         .modal-footer { padding: 14px 24px; border-top: 1px solid #f0f0f0; display: flex; justify-content: flex-end; gap: 10px; flex-shrink: 0; }
-        .btn-ghost { background: #eef2f7; color: #334155; }
-        .btn-ghost:hover { background: #e2e8f0; }
+        .btn-ghost { background: #fff; border: 1px solid #cbd5e1; color: #1e293b; }
+        .btn-ghost:hover { background: #f1f5f9; }
     </style>
 </head>
 <body>
@@ -75,7 +75,7 @@
             </div>
             <div>
                 <button class="btn btn-primary" onclick="openPermModal()">＋ 新增权限码</button>
-                <button class="btn btn-primary" style="margin-left:10px;" onclick="loadPerms()">🔄 刷新</button>
+                <button class="btn btn-ghost" style="margin-left:10px;" onclick="loadPerms()">🔄 刷新</button>
             </div>
         </div>
 
@@ -100,8 +100,8 @@
         </div>
 
         <div class="note">
-            说明: 令牌实际业务码 = <b>用户 RBAC 码 ∩ 客户端授权范围组展开码</b>（字典明细见「客户端管理」编辑弹窗；组 → 码映射走 iam.sql 种子）— 双维交集注入, 任一维缺口即 403;
-            端点是否需要某个码, 在「资源准入」页把该码设为对应行的准入要求; 「所属授权范围」列显示该码被哪些粗组收编。
+            说明: 令牌实际业务码 = <b>用户 RBAC 码 ∩ 客户端授权范围组展开码</b>（双维交集注入, 任一维缺口即 403）;
+            端点是否需要某个码, 在「资源准入」页设置; 「所属授权范围」在新增/编辑弹窗内维护。
         </div>
     </div>
 
@@ -124,6 +124,10 @@
                     <div class="form-row">
                         <label>名称</label>
                         <input id="permName" placeholder="请输入权限名称">
+                    </div>
+                    <div class="form-row">
+                        <label>所属授权范围</label>
+                        <div id="permScopeChecks" style="display:flex;flex-direction:row;flex-wrap:wrap;gap:8px 24px;"></div>
                     </div>
                     <div class="form-row">
                         <label>状态</label>
@@ -149,16 +153,17 @@
 <script>
 let permList = [];
 let editingPermId = null;
-let scopeMap = {}; // permission_id → [scope 码] (所属授权范围, 只读投影)
+let scopeMap = {};   // permission_id → [scope 码] (所属授权范围投影)
+let scopeList = [];  // scope 组对象列表 (id/code/name/permissions), 弹窗勾选区数据源
 
 async function loadScopeMap() {
     try {
-        const scopes = (await App.api('/admin/scopes')) || [];
+        scopeList = (await App.api('/admin/scopes')) || [];
         scopeMap = {};
-        scopes.forEach(s => (s.permissions || []).forEach(p => {
+        scopeList.forEach(s => (s.permissions || []).forEach(p => {
             (scopeMap[p.id] = scopeMap[p.id] || []).push(s.code);
         }));
-    } catch (e) { scopeMap = {}; }
+    } catch (e) { scopeList = []; scopeMap = {}; }
 }
 
 async function loadPerms() {
@@ -181,7 +186,9 @@ async function loadPerms() {
             <td style="font-family:monospace;">${p.id}</td>
             <td><span class="tag blue" style="font-family:monospace;">${App.esc(p.code)}</span></td>
             <td>${App.esc(p.name || '-')}</td>
-            <td>${(scopeMap[p.id] || []).map(c => `<span class="tag amber" title="客户端授权范围">${App.esc(c)}</span>`).join('') || '<span style="color:#94a3b8;font-size:11px;" title="未被任何授权范围收编">-</span>'}</td>
+            <td onclick="openPermModal(${p.id})" style="cursor:pointer;" title="点击编辑该权限码 (含所属授权范围)">
+                ${(scopeMap[p.id] || []).map(c => `<span class="tag amber" title="客户端授权范围">${App.esc(c)}</span>`).join('') || '<span style="color:#94a3b8;font-size:11px;" title="未被任何授权范围收编">-</span>'}
+            </td>
             <td><span class="tag ${p.status === 0 ? 'gray' : 'green'}">${p.status === 0 ? '停用' : '启用'}</span></td>
             <td style="font-size:12px;color:#64748b;">${App.esc(p.remark || '-')}</td>
             <td>
@@ -192,7 +199,7 @@ async function loadPerms() {
     `).join('');
 }
 
-function openPermModal(id) {
+async function openPermModal(id) {
     editingPermId = id || null;
     document.getElementById('permModalTitle').textContent = id ? '编辑权限码' : '新增权限码';
     document.getElementById('permCode').value = '';
@@ -208,6 +215,15 @@ function openPermModal(id) {
             document.getElementById('permRemark').value = p.remark || '';
         }
     }
+    // 所属授权范围勾选区 (数据源: scopeList, 打开前刷新一次拿最新归属)
+    await loadScopeMap();
+    const current = new Set(id ? (scopeMap[id] || []) : []);
+    document.getElementById('permScopeChecks').innerHTML = scopeList.map(s => `
+        <label style="display:flex;gap:6px;align-items:center;cursor:pointer;white-space:nowrap;">
+            <input type="checkbox" data-scope="${s.id}" ${current.has(s.code) ? 'checked' : ''}>
+            <b style="font-family:monospace;font-size:12px;">${App.esc(s.code)}</b>
+            <span style="color:#64748b;font-size:12px;">${App.esc(s.name || '')}</span>
+        </label>`).join('') || '<div style="color:#94a3b8;font-size:12px;">暂无授权范围组</div>';
     document.getElementById('permModal').classList.add('show');
 }
 
@@ -223,18 +239,23 @@ async function savePerm() {
     const remark = document.getElementById('permRemark').value.trim();
     if (!code) { alert('权限码不能为空'); return; }
     if (!name) { alert('权限名称不能为空'); return; }
-    const body = { code, name, status, remark };
+    // 组归属勾选 → scopeIds (目标全集; 与权限码同一请求/同一事务提交)
+    const scopeIds = [];
+    document.querySelectorAll('#permScopeChecks input[type=checkbox]').forEach(c => {
+        if (c.checked) scopeIds.push(Number(c.dataset.scope));
+    });
+    const body = { code, name, status, remark, scopeIds };
     try {
         if (editingPermId) {
             await App.api('/admin/permissions/' + editingPermId, { method: 'PUT', body });
         } else {
             await App.api('/admin/permissions', { method: 'POST', body });
         }
-        alert(editingPermId ? '✅ 权限码已更新' : '✅ 权限码已创建');
+        alert(editingPermId ? '✅ 已保存' : '✅ 已创建');
         closePermModal();
         loadPerms();
     } catch (e) {
-        alert('保存失败: ' + e.message);
+        alert('保存失败 (整体回滚, 未产生部分修改): ' + e.message);
     }
 }
 

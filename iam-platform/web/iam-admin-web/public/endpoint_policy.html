@@ -43,7 +43,6 @@
         .tag.amber { background: rgba(245,158,11,0.10); color: #d97706; }
 
         .empty { text-align: center; padding: 40px; color: #94a3b8; font-size: 14px; }
-        .note { margin-top: 16px; padding: 12px 16px; border-left: 3px solid #2563eb; border-radius: 4px; background: #ffffff; font-size: 13px; color: #64748b; line-height: 1.8; }
 
         .form { display: flex; flex-direction: column; gap: 14px; }
         .form-row { display: flex; flex-direction: column; gap: 6px; }
@@ -54,15 +53,29 @@
 
         .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); align-items: center; justify-content: center; z-index: 100; padding: 24px; }
         .modal-bg.show { display: flex; }
-        .modal { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; width: 560px; max-width: 100%; max-height: 85vh; overflow-y: auto; box-shadow: 0 16px 50px rgba(0,0,0,0.18); display: flex; flex-direction: column; }
+        .modal { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; width: 860px; max-width: 100%; max-height: 85vh; overflow: hidden; box-shadow: 0 16px 50px rgba(0,0,0,0.18); display: flex; flex-direction: column; }
         .modal-header { padding: 16px 24px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
         .modal-header h3 { font-size: 16px; color: #1e3a5f; }
         .modal-header .sub { font-size: 12px; color: #94a3b8; margin-top: 2px; }
         .close-btn { background: none; border: none; font-size: 22px; cursor: pointer; color: #64748b; }
-        .modal-body { padding: 24px; }
+        .modal-body { padding: 24px; display: flex; gap: 24px; overflow: hidden; }
         .modal-footer { padding: 14px 24px; border-top: 1px solid #f0f0f0; display: flex; justify-content: flex-end; gap: 10px; flex-shrink: 0; }
-        .btn-ghost { background: #eef2f7; color: #334155; }
-        .btn-ghost:hover { background: #e2e8f0; }
+        .btn-ghost { background: #fff; border: 1px solid #cbd5e1; color: #1e293b; }
+        .btn-ghost:hover { background: #f1f5f9; }
+
+        .ep-left { flex: 0 0 300px; display: flex; flex-direction: column; gap: 14px; }
+        .ep-right { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+        .ep-right label { display: block; font-size: 12px; color: #475569; margin-bottom: 6px; font-weight: 500; }
+        .ep-search { width: 100%; padding: 7px 10px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; outline: none; color: #1e293b; margin-bottom: 8px; }
+        .ep-search:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.12); }
+        .ep-perm-list { flex: 1; max-height: 300px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px; background: #fafafa; }
+        .ep-perm-item { display: flex; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+        .ep-perm-item:hover { background: #eef2f7; }
+        .ep-perm-item input { margin: 0; }
+        .ep-perm-item .code { font-family: monospace; font-weight: 600; color: #1e3a5f; }
+        .ep-perm-item .name { color: #64748b; }
+        .ep-sel-count { font-size: 11px; color: #94a3b8; margin-top: 6px; }
+        .ep-empty-hint { color: #94a3b8; font-size: 12px; padding: 16px 8px; text-align: center; }
     </style>
 </head>
 <body>
@@ -73,10 +86,13 @@
             <div>
                 <h2>资源准入</h2>
                 <div class="hint">
-                    每行 = 一个接口准入点 (方法+路径唯一)：「准入要求」填该端点所需权限码，令牌须内含该码 (命中 = 用户 RBAC ∩ 客户端授权范围)；停用即拒绝，表外路径走认证档。<br>
-                    数据权威 = <code>iam.sql</code> 种子，启动自扫描只补新端点、不回写。新增接口：权限管理加码 → 角色/scope 绑定 → 种子加端点行，重载 DB重启。<br>
-                    控制器方法须位于 <code>controller.admin|portal|third</code> 包下才会入表，否则落认证档。
+                    每行 = 一个接口准入点（方法+路径唯一）：「准入要求」填该端点所需权限码（支持多个，ALL=同时具备 / ANY=任一即可），令牌须内含相应码；停用即拒绝，表外路径走认证档。<br>
+                    新增接口：先在「权限管理」加码并绑定角色/范围，再在本页新增准入行。
                 </div>
+            </div>
+            <div style="flex-shrink:0; white-space:nowrap; margin-left:16px;">
+                <button class="btn btn-primary" onclick="openEditor(null)">＋ 新增准入行</button>
+                <button class="btn btn-ghost" style="margin-left:10px;" onclick="loadEndpoints()">🔄 刷新</button>
             </div>
         </div>
 
@@ -91,11 +107,79 @@
                             <th>准入要求</th>
                             <th>状态</th>
                             <th>备注</th>
+                            <th>操作</th>
                         </tr>
                     </thead>
                     <tbody id="epTable"></tbody>
                 </table>
-                <div class="empty" id="epEmpty" style="display:none;">暂无准入行 (种子未加载，或扫描未发现三域 controller 端点)</div>
+                <div class="empty" id="epEmpty" style="display:none;">暂无准入行</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新增/编辑弹窗 (左表单 / 右权限码面板) -->
+    <div class="modal-bg" id="epModal">
+        <div class="modal">
+            <div class="modal-header">
+                <div>
+                    <h3 id="epModalTitle">新增准入行</h3>
+                    <div class="sub">方法 + 路径唯一</div>
+                </div>
+                <button class="close-btn" onclick="closeEditor()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="ep-left">
+                    <div class="form-row">
+                        <label>HTTP 方法 *</label>
+                        <select id="fMethod">
+                            <option>GET</option>
+                            <option>POST</option>
+                            <option>PUT</option>
+                            <option>DELETE</option>
+                            <option>ANY</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label>路径 * (Spring 注册模式)</label>
+                        <input id="fPath" placeholder="/admin/xxx">
+                    </div>
+                    <div class="form-row">
+                        <label>策略类型 *</label>
+                        <select id="fType" onchange="syncType()">
+                            <option value="PERMISSION">PERMISSION — 需要权限码</option>
+                            <option value="AUTHENTICATED">AUTHENTICATED — 持有效令牌即可</option>
+                            <option value="PERMIT_ALL">PERMIT_ALL — 全放行</option>
+                        </select>
+                    </div>
+                    <div class="form-row" id="logicRow">
+                        <label>组合方式 *</label>
+                        <select id="fLogic">
+                            <option value="ALL">ALL — 同时具备全部</option>
+                            <option value="ANY">ANY — 任一即可</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label>状态</label>
+                        <select id="fStatus">
+                            <option value="1">启用</option>
+                            <option value="0">停用 (准入直接拒绝)</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label>备注</label>
+                        <input id="fRemark" placeholder="可选">
+                    </div>
+                </div>
+                <div class="ep-right" id="permPanel">
+                    <label>权限码 *</label>
+                    <input class="ep-search" id="epSearch" placeholder="搜索权限码 / 名称" oninput="renderPermList()">
+                    <div class="ep-perm-list" id="epPermList"></div>
+                    <div class="ep-sel-count" id="epSelCount"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" onclick="closeEditor()">取消</button>
+                <button class="btn btn-primary" onclick="saveRow()">保存</button>
             </div>
         </div>
     </div>
@@ -104,10 +188,15 @@
 <script>
 let epList = [];
 let scopeDict = [];   // /admin/scopes 字典: 反查「准入要求码 ← 属于哪些授权范围组」
+let permDict = [];    // /admin/permissions 字典: id → code/name (列表展示与勾选面板)
 
 function groupsOfCode(code) {
     if (!code || code === 'AUTHENTICATED' || code === 'PERMIT_ALL') return [];
     return scopeDict.filter(s => (s.permissions || []).some(p => p.code === code));
+}
+
+function permById(id) {
+    return permDict.find(p => p.id === id);
 }
 
 async function loadEndpoints() {
@@ -118,6 +207,7 @@ async function loadEndpoints() {
         return;
     }
     try { scopeDict = await App.api('/admin/scopes') || []; } catch (e) { scopeDict = []; }
+    try { permDict = await App.api('/admin/permissions') || []; } catch (e) { permDict = []; }
     const tbody = document.getElementById('epTable');
     const empty = document.getElementById('epEmpty');
     if (epList.length === 0) {
@@ -127,25 +217,159 @@ async function loadEndpoints() {
     }
     empty.style.display = 'none';
     tbody.innerHTML = epList.map(p => {
-        const isPass = p.requiredAuthority === 'AUTHENTICATED' || p.requiredAuthority === 'PERMIT_ALL';
-        const groups = groupsOfCode(p.requiredAuthority);
-        // 词表贯通: 权限码 → 所属授权范围组 (反查); 业务码未入组 = 没有任何客户端能持有 (孤儿码风险)
-        let backref = '';
-        if (!isPass) {
-            backref = groups.length
-                ? `<div style="font-size:10px;color:#64748b;margin-top:3px;">← 组: ${groups.map(g => App.esc(g.code)).join(', ')}</div>`
-                : `<div style="font-size:10px;color:#d97706;margin-top:3px;" title="该权限码未被任何 scope 组包含, 令牌无法经授权范围获得它">← 未入组 (任何客户端均无法持有)</div>`;
+        const isBand = p.policyType !== 'PERMISSION';
+        let reqCell = '';
+        if (isBand) {
+            reqCell = `<span class="tag amber">${App.esc(p.policyType)}</span> <span style="font-size:10px;color:#94a3b8;">放行档</span>`;
+        } else {
+            const ids = p.permissionIds || [];
+            const tags = ids.map(id => {
+                const perm = permById(id);
+                return `<span class="tag blue" style="font-family:monospace;" title="${perm ? App.esc(perm.name || '') : ''}">${perm ? App.esc(perm.code) : ('#' + id)}</span>`;
+            }).join(' ');
+            const logic = `<span class="tag gray" title="组合方式">${App.esc(p.permissionLogic || 'ALL')}</span>`;
+            // 单码时保留入组反查 (多码时逐码展示过长, 省略)
+            let backref = '';
+            if (ids.length === 1) {
+                const perm = permById(ids[0]);
+                if (perm) {
+                    const groups = groupsOfCode(perm.code);
+                    backref = groups.length
+                        ? `<div style="font-size:10px;color:#64748b;margin-top:3px;">← 组: ${groups.map(g => App.esc(g.code)).join(', ')}</div>`
+                        : `<div style="font-size:10px;color:#d97706;margin-top:3px;" title="该权限码未被任何 scope 组包含">← 未入组</div>`;
+                }
+            }
+            reqCell = `${tags || '<span style="color:#dc2626;font-size:11px;">未配置权限</span>'} ${logic}${backref}`;
         }
         return `
         <tr>
             <td style="font-family:monospace;">${p.id}</td>
             <td><span class="tag gray" style="font-family:monospace;">${App.esc(p.method || '-')}</span></td>
             <td style="font-family:monospace;font-size:12px;color:#475569;">${App.esc(p.path || '-')}</td>
-            <td><span class="tag ${isPass ? 'amber' : 'blue'}">${App.esc(p.requiredAuthority || '-')}</span>${isPass ? ' <span style="font-size:10px;color:#94a3b8;">放行档</span>' : ''}${backref}</td>
+            <td>${reqCell}</td>
             <td><span class="tag ${p.status === 0 ? 'gray' : 'green'}">${p.status === 0 ? '停用' : '启用'}</span></td>
             <td style="font-size:12px;color:#64748b;">${App.esc(p.remark || '-')}</td>
+            <td>
+                <button class="btn-link" onclick="openEditor(${p.id})">编辑</button>
+                <button class="btn-link danger" onclick="removeRow(${p.id})">删除</button>
+            </td>
         </tr>
     `;}).join('');
+}
+
+// ==================== 维护弹窗 (左表单 / 右权限码面板) ====================
+let editingId = null;
+let selectedPermIds = new Set();
+
+function syncType() {
+    const isPerm = document.getElementById('fType').value === 'PERMISSION';
+    document.getElementById('permPanel').style.display = isPerm ? 'flex' : 'none';
+    document.getElementById('logicRow').style.display = isPerm ? 'flex' : 'none';
+    if (isPerm) renderPermList();
+}
+
+function renderPermList() {
+    const q = (document.getElementById('epSearch').value || '').trim().toLowerCase();
+    const list = permDict.filter(p =>
+        !q || (p.code || '').toLowerCase().includes(q) || (p.name || '').toLowerCase().includes(q));
+    const box = document.getElementById('epPermList');
+    if (!permDict.length) {
+        box.innerHTML = '<div class="ep-empty-hint">权限字典加载失败, 请稍后重试</div>';
+    } else if (!list.length) {
+        box.innerHTML = '<div class="ep-empty-hint">无匹配权限码</div>';
+    } else {
+        box.innerHTML = list.map(p => `
+            <label class="ep-perm-item">
+                <input type="checkbox" data-perm="${p.id}" ${selectedPermIds.has(p.id) ? 'checked' : ''}
+                       onchange="onPermToggle(${p.id}, this.checked)">
+                <span class="code">${App.esc(p.code)}</span>
+                <span class="name">${App.esc(p.name || '')}</span>
+            </label>`).join('');
+    }
+    document.getElementById('epSelCount').textContent =
+        `已选 ${selectedPermIds.size} / ${permDict.length}`;
+}
+
+function onPermToggle(id, checked) {
+    if (checked) selectedPermIds.add(id); else selectedPermIds.delete(id);
+    document.getElementById('epSelCount').textContent =
+        `已选 ${selectedPermIds.size} / ${permDict.length}`;
+}
+
+async function openEditor(id) {
+    editingId = id;
+    const isEdit = id != null;
+    document.getElementById('epModalTitle').textContent = isEdit ? '编辑准入行' : '新增准入行';
+    const fMethod = document.getElementById('fMethod');
+    const fPath = document.getElementById('fPath');
+    fMethod.disabled = isEdit;
+    fPath.disabled = isEdit;
+    selectedPermIds = new Set();
+    if (!permDict.length) {
+        try { permDict = await App.api('/admin/permissions') || []; } catch (e) { permDict = []; }
+    }
+    if (isEdit) {
+        const row = epList.find(p => p.id === id);
+        if (!row) { alert('未找到该行'); return; }
+        fMethod.value = row.method;
+        fPath.value = row.path;
+        document.getElementById('fType').value = row.policyType || 'PERMISSION';
+        document.getElementById('fLogic').value = row.permissionLogic || 'ALL';
+        document.getElementById('fStatus').value = String(row.status ?? 1);
+        document.getElementById('fRemark').value = row.remark || '';
+        (row.permissionIds || []).forEach(pid => selectedPermIds.add(pid));
+    } else {
+        fMethod.value = 'GET';
+        fPath.value = '';
+        document.getElementById('fType').value = 'PERMISSION';
+        document.getElementById('fLogic').value = 'ALL';
+        document.getElementById('fStatus').value = '1';
+        document.getElementById('fRemark').value = '';
+    }
+    document.getElementById('epSearch').value = '';
+    syncType();
+    document.getElementById('epModal').classList.add('show');
+}
+
+function closeEditor() {
+    document.getElementById('epModal').classList.remove('show');
+    editingId = null;
+    selectedPermIds = new Set();
+}
+
+async function saveRow() {
+    const type = document.getElementById('fType').value;
+    const body = {
+        method: document.getElementById('fMethod').value,
+        path: document.getElementById('fPath').value.trim(),
+        policyType: type,
+        permissionLogic: document.getElementById('fLogic').value,
+        status: Number(document.getElementById('fStatus').value),
+        remark: document.getElementById('fRemark').value.trim() || null
+    };
+    if (type === 'PERMISSION') {
+        body.permissionIds = Array.from(selectedPermIds);
+        if (!body.permissionIds.length) { alert('请至少勾选一个权限码'); return; }
+    }
+    try {
+        if (editingId) await App.api('/admin/endpoint-policies/' + editingId, { method: 'PUT', body });
+        else await App.api('/admin/endpoint-policies', { method: 'POST', body });
+        closeEditor();
+        await loadEndpoints();
+    } catch (e) {
+        alert('保存失败: ' + e.message);
+    }
+}
+
+async function removeRow(id) {
+    const row = epList.find(p => p.id === id);
+    if (!confirm(`确认删除该准入行?\n${row ? row.method + ' ' + row.path : id}`)) return;
+    try {
+        await App.api('/admin/endpoint-policies/' + id, { method: 'DELETE' });
+        await loadEndpoints();
+    } catch (e) {
+        alert('删除失败: ' + e.message);
+    }
 }
 
 App.guard().then(function (me) {

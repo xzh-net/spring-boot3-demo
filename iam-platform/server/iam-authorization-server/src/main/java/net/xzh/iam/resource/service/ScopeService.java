@@ -38,7 +38,9 @@ import net.xzh.iam.resource.vo.ScopeVO;
  *   <li>客户端有 scope、用户无码 → 不注入 (403): 防低权用户借高权客户端越权;</li>
  *   <li>客户端无业务 scope / scope 停用 / 客户端未知 → fail-closed 一码不放。</li>
  * </ul>
- * 字典只读: sys_scope / sys_scope_permission 增删改走 SQL 种子; 本服务只提供查询与展开。
+ * 字典只读边界 (2026-11-18 Q1A 裁定): <b>组定义 sys_scope 仍走 SQL 种子</b>;
+ * 映射行 sys_scope_permission <b>放开页面维护</b> (权限管理页「所属授权范围」列, permission:write),
+ * 内省层实时展开、保存即对全部客户端生效; permission_id 有 FK RESTRICT 兜底。
  * </p>
  */
 @Slf4j
@@ -51,6 +53,51 @@ public class ScopeService {
     private final SysPermissionMapper sysPermissionMapper;
     private final RegisteredClientRepository registeredClientRepository;
     private final OAuth2RegisteredClientMapper registeredClientMapper;
+
+    // ==================== 映射行维护 (页面入口, Q1A/Q2A/Q3A 裁定) ====================
+
+    /**
+     * 把权限码加入授权范围组 (幂等: 已在组内直接返回)。
+     * 内省层每次请求实时展开 → 保存即对全部持有该组的客户端生效。
+     */
+    public void addPermissionToScope(Long scopeId, Long permissionId) {
+        checkScopeAndPermission(scopeId, permissionId);
+        Long exists = sysScopePermissionMapper.selectCount(new QueryWrapper<SysScopePermission>()
+                .eq("scope_id", scopeId).eq("permission_id", permissionId));
+        if (exists > 0) {
+            return;
+        }
+        SysScopePermission link = new SysScopePermission();
+        link.setScopeId(scopeId);
+        link.setPermissionId(permissionId);
+        sysScopePermissionMapper.insert(link);
+        log.info("[Scope] 权限码加入授权范围 (即时生效): scopeId={}, permissionId={}", scopeId, permissionId);
+    }
+
+    /**
+     * 把权限码移出授权范围组 — 移出后持有该组的客户端立即失去该码 (内省实时),
+     * 引用它的端点对这些客户端随即 403。配置完整性属运维职责, 不做拦截。
+     */
+    public void removePermissionFromScope(Long scopeId, Long permissionId) {
+        checkScopeAndPermission(scopeId, permissionId);
+        int removed = sysScopePermissionMapper.delete(new QueryWrapper<SysScopePermission>()
+                .eq("scope_id", scopeId).eq("permission_id", permissionId));
+        if (removed == 0) {
+            throw new IllegalArgumentException("该权限码不在此授权范围组内 (scopeId=" + scopeId
+                    + ", permissionId=" + permissionId + ")");
+        }
+        log.info("[Scope] 权限码移出授权范围 (即时生效): scopeId={}, permissionId={}", scopeId, permissionId);
+    }
+
+    /** 校验 scope 与 permission 均存在 (permission 侧另有 FK 兜底, scope 无 FK 故应用层查) */
+    private void checkScopeAndPermission(Long scopeId, Long permissionId) {
+        if (scopeId == null || sysScopeMapper.selectById(scopeId) == null) {
+            throw new IllegalArgumentException("授权范围不存在: " + scopeId);
+        }
+        if (permissionId == null || sysPermissionMapper.selectById(permissionId) == null) {
+            throw new IllegalArgumentException("权限不存在: " + permissionId);
+        }
+    }
 
     /**
      * 按客户端 clientId 展开业务权限码 (自省层调用).

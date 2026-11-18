@@ -1,4 +1,4 @@
-# =====================================================================
+﻿# =====================================================================
 # reset-init.ps1 — IAM 环境一键重置为「最干净初始化状态」(PowerShell 5.1)
 # ---------------------------------------------------------------------
 # 执行流程:
@@ -174,7 +174,11 @@ public class ResetTool {
                 "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA='" + a[4] + "'");
             while (rs.next()) ts.add(rs.getString(1));
             try (Statement s = c.createStatement()) {
+                // FK 无序删除保护 (V6.17 起 iam_endpoint/sys_scope_permission → sys_permission;
+                // information_schema 返回顺序不保证依赖序, 关检查无序 DROP 才稳)
+                s.execute("SET FOREIGN_KEY_CHECKS = 0");
                 for (String t : ts) s.executeUpdate("DROP TABLE IF EXISTS `" + t + "`");
+                s.execute("SET FOREIGN_KEY_CHECKS = 1");
             }
             System.out.println("  DROP OK, removed tables=" + ts.size());
         }
@@ -194,7 +198,7 @@ public class ResetTool {
         boolean ok = true;
         try (Connection c = conn(a)) {
             int tables = q1(c, "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE()");
-            ok &= chk("tables = 17", tables == 17, String.valueOf(tables));
+            ok &= chk("tables = 18", tables == 18, String.valueOf(tables));
 
             int users = q1(c, "SELECT COUNT(*) FROM sys_user");
             ok &= chk("seed users = 3", users == 3, String.valueOf(users));

@@ -38,6 +38,8 @@
         }
         .btn-primary { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; }
         .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(37,99,235,0.35); }
+        .btn-ghost { background: #fff; border: 1px solid #cbd5e1; color: #1e293b; }
+        .btn-ghost:hover { background: #f1f5f9; }
         .btn-danger { background: #dc2626; color: #fff; }
         .btn-danger:hover { background: #b91c1c; }
         .btn-sm { padding: 5px 12px; font-size: 12px; }
@@ -156,8 +158,8 @@
                 <div class="hint">OAuth2 客户端治理唯一入口 · 协议配置 + 授权范围(字典明细) + 登录准入一处维护，治理概览只读体检（准入行 / 展开码 / 端点覆盖）</div>
             </div>
             <div>
-                <button class="btn btn-primary" onclick="openModal()">+ 新增客户端</button>
-                <button class="btn btn-primary" style="margin-left:10px;" onclick="list()">🔄 刷新</button>
+                <button class="btn btn-primary" onclick="openModal()">＋ 新增客户端</button>
+                <button class="btn btn-ghost" style="margin-left:10px;" onclick="list()">🔄 刷新</button>
             </div>
         </div>
 
@@ -272,7 +274,7 @@
                 <div class="form-row">
                     <label>授权范围字典明细 (只读) <span style="color:#94a3b8;font-weight:normal;">(组 → 权限码映射)</span></label>
                     <div class="dict-box" id="scopeDictBox">字典加载中…</div>
-                    <div class="hint" style="color:#94a3b8;font-size:11px;">字典改动一律走 <code>iam.sql</code> 种子（git 审计），页面无写入口。</div>
+                    <div class="hint" style="color:#94a3b8;font-size:11px;">映射维护见「权限管理」页的所属授权范围。</div>
                 </div>
 
                 <!-- ===== C-1 治理分区: 置于最后 (仅编辑显示), 保证授权范围在新建/编辑两模式位置不位移 ===== -->
@@ -294,7 +296,7 @@
                 </div>
 
                 <div class="form-actions">
-                    <button class="btn" onclick="closeModal()">取消</button>
+                    <button class="btn btn-ghost" onclick="closeModal()">取消</button>
                     <button class="btn btn-primary" onclick="save()">保存</button>
                 </div>
                 <div class="form-note" style="margin-top:8px;text-align:right;">分区独立保存：「保存」仅提交协议与范围勾选；登录准入在上方分区内独立提交。</div>
@@ -339,7 +341,7 @@
                 </div>
             </div>
             <div class="modal-footer" style="padding:14px 24px;border-top:1px solid #f0f0f0;display:flex;justify-content:flex-end;gap:10px;">
-                <button class="btn" onclick="closePolicyModal()">取消</button>
+                <button class="btn btn-ghost" onclick="closePolicyModal()">取消</button>
                 <button class="btn btn-primary" onclick="savePolicy()">保存准入</button>
             </div>
         </div>
@@ -409,7 +411,7 @@ async function loadScopeGroups() {
     }
     const box = document.getElementById("scopeGroups");
     if (!SCOPE_GROUPS.length) {
-        box.innerHTML = '<span style="color:#94a3b8;font-size:12px;">(暂无授权范围字典, 请在 iam.sql 种子维护)</span>';
+        box.innerHTML = '<span style="color:#94a3b8;font-size:12px;">(暂无授权范围字典)</span>';
         renderScopeDict();
         return;
     }
@@ -514,7 +516,7 @@ function renderScopeDict() {
     const box = document.getElementById('scopeDictBox');
     if (!box) return;
     if (!SCOPE_GROUPS.length) {
-        box.innerHTML = '<span class="muted">(字典为空 — iam.sql 种子未加载)</span>';
+        box.innerHTML = '<span class="muted">(字典为空)</span>';
         return;
     }
     const held = getCheckedScopes();
@@ -537,7 +539,7 @@ function renderScopeDict() {
             </tr>`;
         }).join('') +
         '</tbody></table>' +
-        '<div class="muted" style="margin-top:6px;">数据源 sys_scope + sys_scope_permission (iam.sql 种子, 页面只读)；蓝底行 = 当前编辑对象持有。</div>';
+        '<div class="muted" style="margin-top:6px;">蓝底行 = 当前编辑对象持有。</div>';
 }
 
 /* ---------- 治理概览 (只读体检) ---------- */
@@ -587,11 +589,17 @@ async function renderOverview() {
         epHtml = '<div class="gov-flag info">端点投影不可用（需 policy:read 权限或接口失败）— 仅展示准入与展开码体检</div>';
     } else {
         const codeSet = new Set(codes);
-        const covered = eps.filter(e => e.status === 1 && codeSet.has(e.requiredAuthority));
+        const covered = eps.filter(e => {
+            if (e.status !== 1 || e.policyType !== 'PERMISSION') return false;
+            const ids = e.permissionIds || [];
+            if (!ids.length) return false;
+            const hit = ids.map(id => codeSet.has(id));
+            return (e.permissionLogic || 'ALL') === 'ANY' ? hit.some(Boolean) : hit.every(Boolean);
+        });
         if (codes.length > 0 && covered.length === 0) {
-            flags.push(['warn', '⚠ 展开码未被任何端点准入引用 — 需在「资源准入」种子补端点行后方可用']);
+            flags.push(['warn', '⚠ 展开码未被任何端点准入引用 — 请在「资源准入」页补充准入行']);
         } else if (covered.length) {
-            flags.push(['ok', `✓ 端点覆盖 ${covered.length} 个 (按展开码反查 iam_endpoint_policy)`]);
+            flags.push(['ok', `✓ 端点覆盖 ${covered.length} 个 (按展开码反查 iam_endpoint)`]);
         }
         epHtml = covered.length
             ? '<div style="font-size:11px;color:#475569;margin:6px 0 3px;">覆盖端点:</div>' +

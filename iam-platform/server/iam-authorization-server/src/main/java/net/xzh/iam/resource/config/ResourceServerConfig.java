@@ -21,7 +21,7 @@ import jakarta.servlet.http.HttpServletResponse;
  * <ul>
  *   <li>{@code /permitall/**} — 链层 permitAll, 免令牌不经裁决;</li>
  *   <li>表内端点 (启动扫描播种) — 由
- *       {@link EndpointAdmissionManager} 按 {@code required_authority} 裁决
+ *       {@link EndpointAdmissionManager} 按 policy_type + 权限码组合 (ALL/ANY) 裁决
  *       (全部为权限码, 粗档常量与客户端白名单闸均已退役, 客户端维度隔离由令牌双维交集承担);</li>
  *   <li>表外其余三前缀端点 — 走认证档, 持有效 Bearer Token 即放行。</li>
  * </ul>
