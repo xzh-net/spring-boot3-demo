@@ -67,16 +67,22 @@
             padding: 12px 16px; border-bottom: 1px solid #f1f5f9;
         }
         .scope-item:last-child { border-bottom: none; }
+        /* C-2④ 诚实化 (2026-11-19): 非交互"包含项"标识 —
+           原为蓝底勾选框 + cursor:pointer (暗示可逐项选择, 实为全有全无);
+           改为灰色圆形 ✓, 无边框无指针, 视觉语义 = "已包含" 而非 "已选中" */
         .scope-check {
             width: 18px; height: 18px;
-            border: 1.5px solid #2563eb; border-radius: 4px;
             flex-shrink: 0; margin-top: 1px;
             display: flex; align-items: center; justify-content: center;
-            background: #2563eb; cursor: pointer;
+            background: #f1f5f9; border-radius: 50%;
+            color: #94a3b8; font-size: 11px; font-weight: 700;
         }
-        .scope-check::after { content: "✓"; color: #fff; font-size: 11px; font-weight: 700; }
-        .scope-check.unchecked { background: #fff; border-color: #cbd5e1; }
-        .scope-check.unchecked::after { content: ""; }
+        .scope-check::after { content: "✓"; }
+        .consent-mode {
+            background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px;
+            padding: 10px 14px; margin: -16px 0 24px;
+            font-size: 12px; color: #64748b; line-height: 1.6;
+        }
         .scope-text { flex: 1; }
         .scope-name { font-size: 14px; font-weight: 500; color: #0f172a; }
         .scope-desc { font-size: 12px; color: #64748b; margin-top: 2px; }
@@ -142,6 +148,7 @@
                         </div>
                     </li>
                 </ul>
+                <div class="consent-mode">ℹ️ 本平台为整体授权：点「允许」即授予上方全部范围，点「拒绝」则不授权，暂不支持逐项选择。</div>
 
                 <div class="section-title">✅ 授权后实际获得的业务权限</div>
                 <ul class="scope-list" th:if="${!grantedCodes.isEmpty()}">
