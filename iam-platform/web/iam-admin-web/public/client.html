@@ -114,7 +114,7 @@
         .token-opts label input[type=checkbox] { margin: 0; }
         .form-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; padding-top: 16px; border-top: 1px solid #f0f0f0; }
 
-        /* ===== C-1 客户端治理聚合: 字典明细 / 登录准入 / 概览体检 ===== */
+        /* ===== C-1 客户端治理聚合: 授权范围勾选 / 登录准入 / 概览体检 ===== */
         .tag.red { background: rgba(220,38,38,0.08); color: #dc2626; border-color: rgba(220,38,38,0.2); }
         .tag.amber { background: rgba(245,158,11,0.10); color: #d97706; border-color: rgba(245,158,11,0.25); }
         .tag.gray { background: rgba(100,116,139,0.10); color: #64748b; border-color: rgba(100,116,139,0.2); }
@@ -142,10 +142,6 @@
         .perm-item input { accent-color: #2563eb; }
         .perm-item .perm-code { font-size: 11px; color: #94a3b8; font-family: monospace; }
         .modal .sub { font-size: 12px; color: #94a3b8; margin-top: 2px; }
-        .gov-sep { border: none; border-top: 2px dashed #60a5fa; margin: 20px 0 4px; }
-        .gov-sep-labels { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; margin: 6px 0 14px; user-select: none; }
-        .gov-sep-labels .sep-up { color: #64748b; }
-        .gov-sep-labels .sep-down { color: #2563eb; }
     </style>
 </head>
 <body>
@@ -155,7 +151,7 @@
         <div class="page-header">
             <div>
                 <h2>客户端管理</h2>
-                <div class="hint">OAuth2 客户端治理唯一入口 · 协议配置 + 授权范围(字典明细) + 登录准入一处维护，治理概览只读体检（准入行 / 展开码 / 端点覆盖）</div>
+                <div class="hint">OAuth2 客户端治理唯一入口 · 协议配置 + 授权范围 + 登录准入一处维护，治理概览只读体检（准入行 / 展开码 / 端点覆盖）</div>
             </div>
             <div>
                 <button class="btn btn-primary" onclick="openModal()">＋ 新增客户端</button>
@@ -216,8 +212,9 @@
                 </div>
 
                 <div class="form-row">
-                    <label>保留 Scope (逗号分隔) <span style="color:#94a3b8;font-weight:normal;">(openid/profile 等非业务占位)</span></label>
-                    <input type="text" id="scopesReserved" placeholder="openid,profile,email,read,write">
+                    <label>授权范围 <span style="color:#94a3b8;font-weight:normal;">(勾选即写入, 逗号拼接落地; 标准 scope 与范围组不区分, 勾选什么就是什么)</span></label>
+                    <div class="checkbox-group" id="scopeGroups"></div>
+                    <div class="hint" id="scopeGroupsHint" style="display:none;color:#94a3b8;font-size:11px;">授权范围字典加载失败 — 暂不可勾选 (刷新重试)</div>
                 </div>
                 <div class="form-row">
                     <label>Redirect URIs (逗号分隔)</label>
@@ -256,28 +253,9 @@
                     <div class="hint">ISO8601 持续期, 默认 5 分钟 (PT5M). 仅授权码模式生效.</div>
                 </div>
 
-                <!-- ===== 分界线: 以上 = 标准配置 (OAuth2 协议), 以下 = 扩展配置 (平台治理) ===== -->
-                <div class="gov-sep-wrap">
-                    <hr class="gov-sep">
-                    <div class="gov-sep-labels">
-                        <span class="sep-up">▲ 以上 · 标准配置</span>
-                        <span class="sep-down">▼ 以下 · 扩展配置</span>
-                    </div>
-                </div>
+                <!-- ===== 扩展配置 (平台治理): 登录准入 / 治理概览, 紧随标准配置 ===== -->
 
-                <!-- 授权范围 + 字典明细: 紧随分界线, 两种模式位置一致 (其后才按模式插入治理分区) -->
-                <div class="form-row" style="margin-top:4px;">
-                    <label>授权范围 (客户端维度) <span style="color:#94a3b8;font-weight:normal;">(勾选 = 客户端持有该组)</span></label>
-                    <div class="checkbox-group" id="scopeGroups"></div>
-                    <div class="hint" id="scopeGroupsHint" style="display:none;color:#94a3b8;font-size:11px;">授权范围字典加载失败 — 授权范围组暂不可勾选，仅可编辑上方「保留 Scope」</div>
-                </div>
-                <div class="form-row">
-                    <label>授权范围字典明细 (只读) <span style="color:#94a3b8;font-weight:normal;">(组 → 权限码映射)</span></label>
-                    <div class="dict-box" id="scopeDictBox">字典加载中…</div>
-                    <div class="hint" style="color:#94a3b8;font-size:11px;">映射维护见「权限管理」页的所属授权范围。</div>
-                </div>
-
-                <!-- ===== C-1 治理分区: 置于最后 (仅编辑显示), 保证授权范围在新建/编辑两模式位置不位移 ===== -->
+                <!-- ===== C-1 治理分区: 置于最后, 保证授权范围在新建/编辑两模式位置不位移 ===== -->
                 <div id="govSections" style="display:none;">
                     <div class="form-row">
                         <label>登录准入 (client × 主体 allow-list)
@@ -400,7 +378,9 @@ function getChecked(list, prefix) {
     return list.filter(x => document.getElementById(prefix + x.v).checked).map(x => x.v);
 }
 
-/** 授权范围字典 (只读, /admin/scopes): 勾选式编辑 → 写入 registered_client.scopes */
+/** 授权范围统一勾选 (字典驱动, 标准 scope 与范围组不区分): 勾选集合 → 逗号拼接写入 registered_client.scopes
+ *  字典 = sys_scope 种子 (openid/profile/email 协议组 + admin.full/portal.profile/third.profile 业务组);
+ *  存量注册值不在字典内 (如 read/write 占位) → setScopeChecks 动态补框, 编辑不丢值。 */
 let SCOPE_GROUPS = [];
 async function loadScopeGroups() {
     try { SCOPE_GROUPS = (await App.api("/admin/scopes")) || []; }
@@ -411,8 +391,7 @@ async function loadScopeGroups() {
     }
     const box = document.getElementById("scopeGroups");
     if (!SCOPE_GROUPS.length) {
-        box.innerHTML = '<span style="color:#94a3b8;font-size:12px;">(暂无授权范围字典)</span>';
-        renderScopeDict();
+        box.innerHTML = '<span style="color:#94a3b8;font-size:12px;">(授权范围字典加载失败/为空 — 无法勾选)</span>';
         return;
     }
     box.innerHTML = SCOPE_GROUPS.map(s =>
@@ -420,12 +399,22 @@ async function loadScopeGroups() {
         ` ${App.esc(s.name)} <span style="color:#94a3b8;font-size:11px;">${App.esc(s.code)}</span>` +
         `${s.status === 0 ? ' <span style="color:#dc2626;font-size:11px;">(停用)</span>' : ''}</label>`
     ).join("");
-    document.querySelectorAll("#scopeGroups input").forEach(i => i.addEventListener("change", onScopeToggle));
-    renderScopeDict();
+    box.querySelectorAll("input").forEach(i => i.addEventListener("change", onScopeToggle));
 }
 function scopeGroupCodes() { return SCOPE_GROUPS.map(s => s.code); }
 function setScopeChecks(codes) {
-    document.querySelectorAll("#scopeGroups input").forEach(i => i.checked = codes.includes(i.value));
+    const box = document.getElementById("scopeGroups");
+    // 勾选项不在标准清单/范围组内 (存量自定义 scope) → 动态补勾选框, 避免编辑保存时静默丢失
+    const existing = new Set(Array.from(box.querySelectorAll("input")).map(i => i.value));
+    codes.forEach(c => {
+        if (!existing.has(c)) {
+            const lab = document.createElement("label");
+            lab.innerHTML = `<input type="checkbox" value="${App.esc(c)}"> ${App.esc(c)}`;
+            lab.querySelector("input").addEventListener("change", onScopeToggle);
+            box.appendChild(lab);
+        }
+    });
+    box.querySelectorAll("input").forEach(i => i.checked = codes.includes(i.value));
 }
 function getCheckedScopes() {
     return Array.from(document.querySelectorAll("#scopeGroups input:checked")).map(i => i.value);
@@ -435,7 +424,7 @@ function getCheckedScopes() {
  * ===== C-1 客户端治理聚合 =====
  * 1) 不触发跳转的安全 fetch (降级): 403/失败 → null, 区别于 App.api 的踢登录
  * 2) 登录准入迁入 (数据面自原 login_policy.html 平移, 写接口不变)
- * 3) 授权范围字典明细 (只读, 替代已删除的 scope.html)
+ * 3) 授权范围勾选 (字典驱动, sys_scope 种子; 替代已删除的 scope.html 与原「保留 Scope」文本框)
  * 4) 治理概览只读体检 (铁律1: 概览永远只读, 各分区独立保存)
  * =================================================================== */
 async function safeApi(path) {
@@ -511,37 +500,6 @@ function renderAdmission() {
     });
 }
 
-/* ---------- 授权范围字典明细 (只读, 承接原 scope.html) ---------- */
-function renderScopeDict() {
-    const box = document.getElementById('scopeDictBox');
-    if (!box) return;
-    if (!SCOPE_GROUPS.length) {
-        box.innerHTML = '<span class="muted">(字典为空)</span>';
-        return;
-    }
-    const held = getCheckedScopes();
-    box.innerHTML =
-        '<table><thead><tr><th>组码</th><th>名称 / 状态</th><th>展开权限码 (细粒度)</th><th>引用客户端</th></tr></thead><tbody>' +
-        SCOPE_GROUPS.map(s => {
-            const isHeld = held.includes(s.code);
-            const perms = (s.permissions || []).map(p => p.status === 0
-                ? `<span class="tag red" title="权限码已停用">${App.esc(p.code)}</span>`
-                : `<span class="tag blue" title="${App.esc(p.name || '')}">${App.esc(p.code)}</span>`
-            ).join('') || '<span class="muted">(空映射 → fail-closed, 仅 OIDC 标准能力)</span>';
-            const clients = (s.clientIds || []).map(c =>
-                `<span class="tag amber" style="font-family:monospace;">${App.esc(c)}</span>`
-            ).join('') || '<span class="muted">(无客户端持有)</span>';
-            return `<tr class="${isHeld ? 'held' : ''}" title="${App.esc(s.remark || '')}">
-                <td><span class="tag blue" style="font-family:monospace;">${App.esc(s.code)}</span>${isHeld ? ' <span class="tag green">本客户端持有</span>' : ''}</td>
-                <td>${App.esc(s.name || '-')} <span class="tag ${s.status === 0 ? 'red' : 'green'}">${s.status === 0 ? '停用' : '启用'}</span></td>
-                <td>${perms}</td>
-                <td>${clients}</td>
-            </tr>`;
-        }).join('') +
-        '</tbody></table>' +
-        '<div class="muted" style="margin-top:6px;">蓝底行 = 当前编辑对象持有。</div>';
-}
-
 /* ---------- 治理概览 (只读体检) ---------- */
 let EP_LIST;      // undefined=未加载, null=无权/失败
 async function loadEndpointsCached() {
@@ -615,7 +573,6 @@ async function renderOverview() {
     box.innerHTML = codesHtml + epHtml + flags.map(f => `<div class="gov-flag ${f[0]}">${f[1]}</div>`).join('');
 }
 function onScopeToggle() {
-    renderScopeDict();
     renderOverview();   // 两模式均刷新 (新建=预览展开码/端点覆盖)
 }
 
@@ -764,8 +721,7 @@ function openModal() {
     document.getElementById("clientId").disabled = false;
     document.getElementById("clientName").value = "";
     document.getElementById("clientSecret").value = "";
-    document.getElementById("scopesReserved").value = "openid,profile,email";
-    setScopeChecks([]);
+    setScopeChecks(["openid", "profile", "email"]);
     document.getElementById("redirectUris").value = "";
     document.getElementById("postLogoutUris").value = "";
     document.getElementById("requireProofKey").checked = false;
@@ -798,9 +754,7 @@ async function edit(id) {
     document.getElementById("clientName").value = data.clientName || "";
     document.getElementById("clientSecret").value = "";
     const allScopes = data.scopes || [];
-    const groupCodes = scopeGroupCodes();
-    setScopeChecks(allScopes.filter(c => groupCodes.includes(c)));
-    document.getElementById("scopesReserved").value = allScopes.filter(c => !groupCodes.includes(c)).join(",");
+    setScopeChecks(allScopes);
     document.getElementById("redirectUris").value = data.redirectUris ? data.redirectUris.join(",") : "";
     document.getElementById("postLogoutUris").value = data.postLogoutRedirectUris ? data.postLogoutRedirectUris.join(",") : "";
     document.getElementById("requireProofKey").checked = data.requireProofKey;
@@ -832,10 +786,7 @@ async function save() {
         clientSecret: clientSecret,
         authorizationGrantTypes: grants,
         clientAuthenticationMethods: methods,
-        scopes: Array.from(new Set([
-            ...document.getElementById("scopesReserved").value.split(",").map(s => s.trim()).filter(Boolean),
-            ...getCheckedScopes()
-        ])),
+        scopes: Array.from(new Set(getCheckedScopes())),
         redirectUris: redirectUris,
         postLogoutRedirectUris: document.getElementById("postLogoutUris").value.split(",").map(s => s.trim()).filter(Boolean),
         requireProofKey: document.getElementById("requireProofKey").checked,

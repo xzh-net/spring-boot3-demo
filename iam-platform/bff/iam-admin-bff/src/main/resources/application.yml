@@ -18,7 +18,7 @@ spring:
             client-secret: 123456
             authorization-grant-type: authorization_code
             redirect-uri: http://localhost:8085/login/oauth2/code/admin-app
-            scope: openid,profile,read,write
+            scope: openid,profile
             client-name: 管理后台
         provider:
           iam:

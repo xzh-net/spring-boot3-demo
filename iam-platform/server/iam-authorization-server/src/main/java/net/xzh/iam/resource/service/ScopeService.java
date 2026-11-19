@@ -122,7 +122,7 @@ public class ScopeService {
 
     /**
      * scope 码集合 → 业务权限码 (启用态 scope ∩ 映射 ∩ 启用态权限码).
-     * 非业务 scope (openid/profile/read/write 等未登记进 sys_scope 的) 自然被忽略。
+     * 无映射的 scope (read/write 未登记; openid/profile/email 已入字典但零映射) 展开为空, 自然被忽略。
      */
     public Set<String> expandScopeCodes(Set<String> scopeCodes) {
         if (scopeCodes == null || scopeCodes.isEmpty()) {

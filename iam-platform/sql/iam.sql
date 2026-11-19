@@ -183,12 +183,18 @@ CREATE TABLE `sys_scope_permission`  (
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = 'scope 内含权限码 N:N 映射 (只读, SQL种子演进)' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
--- Records of sys_scope (域信息由 code 前缀表达, 原 domain 列已删; admin.full=16 admin 码 / portal.profile=1 portal 码 / third.profile=空映射 fail-closed)
+-- Records of sys_scope (域信息由 code 前缀表达, 原 domain 列已删;
+--   admin.full=admin 全量域码 / portal.profile=门户域码 / third.profile=空映射 fail-closed /
+--   openid·profile·email=标准协议 scope (驱动 id_token 与 /userinfo, 无业务映射)
+-- remark 约定: 可写谁持有, 不写数量)
 -- ----------------------------
 INSERT INTO `sys_scope` (id, code, name, status, remark) VALUES
-(1, 'admin.full', '管理端全量', 1, '管理后台应用: 含全部 16 个 admin 域码 (admin-app 持有)'),
+(1, 'admin.full', '管理端全量', 1, '管理后台应用: 全部 admin 域业务码 (admin-app 持有)'),
 (2, 'portal.profile', '门户工作台', 1, '门户应用授权范围: 含 portal:client:read (portal-app 持有)'),
-(3, 'third.profile', '三方最小集', 1, '三方/外部客户端: 三方域暂无端点, 空映射 fail-closed (oa-web-app 持有, 仅 OIDC 标准能力)');
+(3, 'third.profile', '三方最小集', 1, '三方/外部客户端: 三方域暂无端点, 空映射 fail-closed (oa-web-app / oa-h5-app 持有, 仅 OIDC 标准能力)'),
+(4, 'openid', '身份认证', 1, 'OIDC 标准 scope: 签发 id_token 的依据 (各客户端持有)'),
+(5, 'profile', '基本资料', 1, 'OIDC 标准 scope: /userinfo 返回昵称/头像 (各客户端持有)'),
+(6, 'email', '电子邮箱', 1, 'OIDC 标准 scope: /userinfo 返回邮箱 (除 admin-app 外均持有)');
 
 INSERT INTO `sys_scope_permission` (scope_id, permission_id) VALUES
 (1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6), (1, 7), (1, 8),

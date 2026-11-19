@@ -216,7 +216,7 @@ cd client/iam-client-h5-demo     && node server.js   # :8084
 |---|---|---|
 | [概要设计](./docs/概要设计.md) | 概要设计 | 系统定位、部署拓扑、模块划分、技术选型、9 项核心决策、数据流 |
 | [详细设计](./docs/详细设计.md) | 详细设计 | 3 条安全链、认证与令牌流程、Redis key、签发/端点准入实现、扫描算法、关键类索引 |
-| [权限与安全设计](./docs/权限与安全设计.md) | 权限维度 | 双维交集、四层裁决链、17 权限码、3 scope、角色绑定、已退役机制 |
+| [权限与安全设计](./docs/权限与安全设计.md) | 权限维度 | 双维交集、四层裁决链、17 权限码、6 scope（3 业务组 + 3 标准协议）、角色绑定、已退役机制 |
 | [数据库设计文档](./docs/数据库设计文档.md) | 数据库设计 | 18 表结构、字典写入语义（谁能写什么）、种子数据速查、落库步骤 |
 | [接口文档](./docs/接口文档.md) | 对外接口 | 协议端点 + 51 个业务接口清单、**三方接入指南**（授权码/设备码/刷新/内省） |
 | [编码规范](./docs/编码规范.md) | 编码规范 | **包结构硬性要求**、8 条红线、命名规范、禁止事项黑名单 |
@@ -266,7 +266,7 @@ cd client/iam-client-h5-demo     && node server.js   # :8084
 
 > 优先级：**P0** = 对外契约失真 / 已具备可修条件，应优先处理；**P1** = 语义缺口，特定条件下爆发；**P2** = 韧性与代码卫生。
 
-- **P0-1 令牌 `scope` claim 与实际授权脱钩（对外契约失真）**：自省裁决只取 `client_id` 查注册表（`RbacAuthoritiesOpaqueTokenIntrospector` L72-73 → `ScopeService.resolveClientBusinessCodes` 读 `oauth2_registered_client.scopes`），**从不读同一批 attributes 里的 `scope`**；但 `RedisOpaqueTokenIntrospector` L110/L118 却把 `authorizedScopes` 写进 claim，`EnrichedOAuth2TokenIntrospectionAuthenticationProvider` L132-135 还「无条件补齐」给外部消费方。后果：① RFC 7662 `/oauth2/introspect` 返回的 `scope` 与平台实际放行的业务码不一致——**实证**：`iam-admin-bff` 申请 `openid,profile,read,write`（无 `admin.full`），令牌 claim 无管理权限却实际注入 16 个管理码；② 标准 OAuth2「按令牌收窄 scope」能力在业务码维度失效；③ 外部资源方按 RFC 语义实现会得出与平台相反的结论。安全底线未破（业务码 ⊆ 注册 scope 展开上限，请求侧无法提权）。**建议方向**：内省响应回传实际生效业务码（自定义 `permissions` claim），或明文声明 `scope` claim 不参与裁决、外部方不得依赖。
+- **P0-1 令牌 `scope` claim 与实际授权脱钩（对外契约失真）**：自省裁决只取 `client_id` 查注册表（`RbacAuthoritiesOpaqueTokenIntrospector` L72-73 → `ScopeService.resolveClientBusinessCodes` 读 `oauth2_registered_client.scopes`），**从不读同一批 attributes 里的 `scope`**；但 `RedisOpaqueTokenIntrospector` L110/L118 却把 `authorizedScopes` 写进 claim，`EnrichedOAuth2TokenIntrospectionAuthenticationProvider` L132-135 还「无条件补齐」给外部消费方。后果：① RFC 7662 `/oauth2/introspect` 返回的 `scope` 与平台实际放行的业务码不一致——**实证**：`iam-admin-bff` 申请 `openid,profile`（2026-11-19 配置清理后；此前为 `openid,profile,read,write`，注册表另有 `admin.full` 但从不申请），令牌 claim 不含 `admin.full` 却实际注入 16 个管理码；② 标准 OAuth2「按令牌收窄 scope」能力在业务码维度失效；③ 外部资源方按 RFC 语义实现会得出与平台相反的结论。安全底线未破（业务码 ⊆ 注册 scope 展开上限，请求侧无法提权）。**建议方向**：内省响应回传实际生效业务码（自定义 `permissions` claim），或明文声明 `scope` claim 不参与裁决、外部方不得依赖。
 
 - ~~**P0-2 表驱动端点准入「两头不占」**~~ **已落地并经同日复盘调整为直查+页面维护路线（2026-11-18）**：地基 = `permission_id` 稳定身份 + `FK RESTRICT`（V6.17）取代字符串引用（改名自动跟随、被引用权限禁删，应用双守卫+数据库兜底）——页面可安全维护端点表正靠它；运行时 = **每请求直查 DB**（拆物化快照与启动严格校验），改权限码零窗口、多实例天然同步、服务无本地业务内存态；配置通道 = **种子初始化 + 页面维护**（保存即时生效），启动仅打漂移告警不拦截（配置=运维职责）。详见 §六 第 5/6 条。
 
