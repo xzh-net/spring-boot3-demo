@@ -20,7 +20,7 @@ const PORTAL_URL = 'http://localhost:8000';
 const CLIENT_ID = 'oa-h5-app';
 const CLIENT_SECRET = '123456';
 const REDIRECT_URI = 'http://localhost:8084/callback';
-const SCOPES = 'openid profile email read write';
+const SCOPES = 'openid profile email';
 
 // ========== 返回门户: prompt=none 静默 SSO 回流 (与 web-demo 同款) ==========
 const PORTAL_CLIENT_ID = 'portal-app';

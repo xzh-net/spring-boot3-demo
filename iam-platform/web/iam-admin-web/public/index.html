@@ -96,7 +96,7 @@
                             post_logout: http://localhost:8081/logout
                         </div>
                         <div class="client-openid supported">
-                            ✅ 注册 scope: <code>openid,profile,email,read,write</code><br>
+                            ✅ 注册 scope: <code>openid,profile,email,third.profile</code><br>
                             ✅ 授权码/Password 模式 → 返回 id_token
                         </div>
                     </div>
@@ -118,7 +118,7 @@
                             redirect: 无 (设备码流程不需要回调地址)
                         </div>
                         <div class="client-openid supported">
-                            ✅ 注册 scope: <code>openid,profile,email,read</code><br>
+                            ✅ 注册 scope: <code>openid,profile,email</code><br>
                             ✅ 设备码模式 → 返回 id_token
                         </div>
                     </div>
@@ -141,7 +141,7 @@
                             redirect: com.example.mobileapp://oauth2/redirect (原生 scheme, 预留)
                         </div>
                         <div class="client-openid supported">
-                            ✅ 注册 scope: <code>openid,profile,email,read,write</code><br>
+                            ✅ 注册 scope: <code>openid,profile,email</code><br>
                             ✅ 授权码模式 → 返回 id_token
                         </div>
                     </div>
@@ -220,7 +220,7 @@
                 <pre>// 授权请求时必须带 openid
 GET /oauth2/authorize?response_type=code&client_id=oa-web-app
     &redirect_uri=http://localhost:8081/callback
-    &scope=openid profile email read write   ← openid 必须在此处
+    &scope=openid profile email        ← openid 必须在此处
     &state=demo
 
 // token 响应中会多出 id_token 字段

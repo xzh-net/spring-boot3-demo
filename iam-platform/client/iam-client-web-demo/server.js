@@ -75,7 +75,7 @@ function getAuthorizationUrl() {
     const codeChallenge = _computeS256Challenge(codeVerifier);
     return `${AUTH_SERVER}/oauth2/authorize?response_type=code&client_id=${CLIENT_ID}` +
         `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
-        `&scope=openid%20profile%20email%20read%20write` +
+        `&scope=openid%20profile%20email` +
         `&state=${state}` +
         `&code_challenge=${codeChallenge}&code_challenge_method=S256`;
 }

@@ -109,7 +109,8 @@
     <div class="card">
         <div class="header">
             <h1>🔐 授权请求</h1>
-            <p>应用请求访问您的部分信息</p>
+            <p th:if="${grantedCodes.isEmpty()}">应用请求访问您的信息（该应用无业务权限）</p>
+            <p th:unless="${grantedCodes.isEmpty()}">应用请求访问您的信息，授权后将获得以下权限</p>
         </div>
         <form th:action="${requestURI}" method="post">
             <input type="hidden" name="client_id" th:value="${clientId}"/>
@@ -130,7 +131,7 @@
                     <span style="font-size:12px;">请确认此用户码与设备上显示的一致</span>
                 </div>
 
-                <div class="section-title">📋 请求的权限</div>
+                <div class="section-title">📋 请求的授权范围</div>
                 <ul class="scope-list">
                     <li class="scope-item" th:each="entry : ${scopes}">
                         <input type="hidden" name="scope" th:value="${entry.key}"/>
@@ -141,6 +142,20 @@
                         </div>
                     </li>
                 </ul>
+
+                <div class="section-title">✅ 授权后实际获得的业务权限</div>
+                <ul class="scope-list" th:if="${!grantedCodes.isEmpty()}">
+                    <li class="scope-item" th:each="entry : ${grantedCodes}">
+                        <div class="scope-check"></div>
+                        <div class="scope-text">
+                            <div class="scope-name" th:text="${entry.key}">code</div>
+                            <div class="scope-desc" th:text="${entry.value}"></div>
+                        </div>
+                    </li>
+                </ul>
+                <div class="scope-list" th:if="${grantedCodes.isEmpty()}" style="padding:12px 16px;">
+                    <span class="scope-desc">该应用不获得任何业务权限（仅标准身份信息）</span>
+                </div>
 
                 <div class="privacy-tip">您可随时在认证中心撤销此授权</div>
             </div>

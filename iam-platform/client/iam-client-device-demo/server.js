@@ -18,7 +18,7 @@ const PORT = 8082;
 const AUTH_SERVER = 'http://localhost:9000';
 const PORTAL_URL = 'http://localhost:8000';
 const CLIENT_ID = 'device-app';
-const SCOPE = 'openid profile email read';
+const SCOPE = 'openid profile email';
 // 说明: 设备码流程现在携带 openid scope, 以获取 OIDC id_token (JWT).
 // 自定义 DeviceCodeGrantAuthenticationProvider 模拟授权码 OIDC 上下文
 // (生成一次性 OAuth2AuthorizationCode + nonce + id_token), 使 refresh_token 时

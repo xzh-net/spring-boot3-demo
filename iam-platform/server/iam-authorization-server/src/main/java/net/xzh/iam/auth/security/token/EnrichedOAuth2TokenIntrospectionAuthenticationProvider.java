@@ -109,6 +109,8 @@ public final class EnrichedOAuth2TokenIntrospectionAuthenticationProvider implem
 		Map<String, Object> existingClaims = CollectionUtils.isEmpty(authorizedToken.getClaims()) ? null
 				: convertClaimsIfNecessary(authorizedToken.getClaims());
 		if (existingClaims != null) {
+			// P0-1: 剔除元数据中的 scope — claim 恒由下方按注册表写入, 保证与授予同源
+			existingClaims.remove(OAuth2TokenIntrospectionClaimNames.SCOPE);
 			tokenClaims = OAuth2TokenIntrospection.withClaims(existingClaims).active(true);
 		} else {
 			tokenClaims = OAuth2TokenIntrospection.builder(true);
@@ -129,10 +131,15 @@ public final class EnrichedOAuth2TokenIntrospectionAuthenticationProvider implem
 				: authorization.getRegisteredClientId();
 		tokenClaims.clientId(clientId);
 
-		// 【增强】无条件写入 scope (若 token 元数据 claims 中缺失)
-		if ((existingClaims == null || !existingClaims.containsKey(OAuth2TokenIntrospectionClaimNames.SCOPE))
-				&& !CollectionUtils.isEmpty(authorization.getAuthorizedScopes())) {
-			tokenClaims.scopes(list -> list.addAll(authorization.getAuthorizedScopes()));
+		// 【P0-1 修复】scope claim = 注册表 scope (客户端配置的授权范围) — 与平台实际授予同源
+	//      (授予 = 注册表展开 ∩ 用户 RBAC), 取代原 authorizedScopes (请求值)。
+	//      请求值与实际放行脱钩曾致: RFC 7662 响应 scope 不含 admin.full 却实际注入 16 管理码,
+	//      外部方按 RFC 语义实现会得出与平台相反的结论。
+		List<String> platformScope = (authorizedClient != null && !CollectionUtils.isEmpty(authorizedClient.getScopes()))
+				? new java.util.ArrayList<>(authorizedClient.getScopes())
+				: new java.util.ArrayList<>(authorization.getAuthorizedScopes());
+		if (!platformScope.isEmpty()) {
+			tokenClaims.scopes(list -> list.addAll(platformScope));
 		}
 
 		// 【增强】无条件写入 aud (Opaque token 无 claims 元数据, 补齐约定的资源受众)

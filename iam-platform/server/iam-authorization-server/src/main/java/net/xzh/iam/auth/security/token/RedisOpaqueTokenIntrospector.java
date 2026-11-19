@@ -107,10 +107,13 @@ public final class RedisOpaqueTokenIntrospector implements OpaqueTokenIntrospect
         }
 
         String principalName = authorization.getPrincipalName();
-        Set<String> scopes = authorization.getAuthorizedScopes();
 
         // 解析对外 client_id (授权记录只存注册ID, 需经仓库还原为 client_id)
         String clientId = resolveClientId(authorization);
+
+        // 【P0-1/P2-2 修复】scope 属性 = 注册表 scope (与 RFC 7662 claim 及实际授予同源),
+        // 取代原 authorizedScopes (请求值)。消费方: /userinfo 的 profile/email claim 门控 (UserInfoController)。
+        Set<String> scopes = resolveRegisteredScopes(authorization);
 
         // 构造 principal attributes (模拟 JWT 模式下的 claims 结构)
         Map<String, Object> attributes = new HashMap<>();
@@ -132,6 +135,23 @@ public final class RedisOpaqueTokenIntrospector implements OpaqueTokenIntrospect
 
         log.debug("Opaque token introspect success, sub={}, scope={}", principalName, scopes);
         return new OpaquePrincipal(principalName, attributes, authorities);
+    }
+
+    /**
+     * 注册表 scope = 客户端配置的授权范围 (oauth2_registered_client.scopes)。
+     * P0-1/P2-2: scope 语义统一为「配置值」——与 RFC 7662 内省 claim、业务码授予同源。
+     * 仓库查询失败时退回授权记录值, 保证属性非空。
+     */
+    private Set<String> resolveRegisteredScopes(OAuth2Authorization authorization) {
+        try {
+            RegisteredClient client = clientRepository.findById(authorization.getRegisteredClientId());
+            if (client != null && client.getScopes() != null && !client.getScopes().isEmpty()) {
+                return client.getScopes();
+            }
+        } catch (Exception e) {
+            log.warn("读取注册表 scope 失败, 退回授权记录值: {}", authorization.getRegisteredClientId());
+        }
+        return authorization.getAuthorizedScopes();
     }
 
     /**
