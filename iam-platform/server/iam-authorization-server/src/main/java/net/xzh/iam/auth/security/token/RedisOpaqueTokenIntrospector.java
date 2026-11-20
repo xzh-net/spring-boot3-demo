@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -58,15 +59,19 @@ public final class RedisOpaqueTokenIntrospector implements OpaqueTokenIntrospect
     private final UserDetailsService platformUserDetailsService;
     /** 客户端仓库, 用于将授权记录的注册ID解析为对外 client_id. */
     private final RegisteredClientRepository clientRepository;
+    /** OIDC 发行者标识, 与 AuthorizationServerSettings / id_token iss 同源. */
+    private final String issuer;
 
     public RedisOpaqueTokenIntrospector(
             RedisOAuth2AuthorizationService authorizationService,
             @Qualifier("platformUserDetailsService")
             UserDetailsService platformUserDetailsService,
-            RegisteredClientRepository clientRepository) {
+            RegisteredClientRepository clientRepository,
+            @Value("${iam.issuer:http://localhost:9000}") String issuer) {
         this.authorizationService = authorizationService;
         this.platformUserDetailsService = platformUserDetailsService;
         this.clientRepository = clientRepository;
+        this.issuer = issuer;
     }
 
     @Override
@@ -121,7 +126,7 @@ public final class RedisOpaqueTokenIntrospector implements OpaqueTokenIntrospect
         attributes.put("scope", String.join(" ", scopes));
         attributes.put("aud", List.of(CONTACTS_API_AUD));
         attributes.put("client_id", clientId);
-        attributes.put("iss", "http://localhost:9000");
+        attributes.put("iss", issuer);
         if (authorization.getAuthorizationGrantType() != null) {
             // 授权类型: 资源中心据此区分「用户令牌」与「服务令牌 (client_credentials)」
             attributes.put("grant_type", authorization.getAuthorizationGrantType().getValue());
@@ -175,7 +180,7 @@ public final class RedisOpaqueTokenIntrospector implements OpaqueTokenIntrospect
      * 解析权限: 优先从 UserDetailsService 查 roles; client_credentials 模式无用户时,
      * 把 scope 转成 ROLE_ 前缀的权限 (便于 @PreAuthorize 统一处理).
      * <p>
-     * V6.2: principal name 为业务用户编码 user_code, 需按 user_code 反查;
+     * principal name 为业务用户编码 user_code, 需按 user_code 反查;
      * 兼容历史遗留令牌 (principal name 为用户名), 两者都失败才退回 scope 映射。
      */
     private Collection<GrantedAuthority> resolveAuthorities(String principalName, Set<String> scopes) {

@@ -9,7 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.xzh.iam.resource.service.EndpointPolicyService;
 
 /**
- * 接口准入配置漂移告警初始化器 (方案调整 2026-11-18; 表结构由基线 SQL / 迁移脚本就绪).
+ * 接口准入配置漂移告警初始化器 (表结构由基线 SQL / 迁移脚本就绪).
  * <p>
  * 启动时推导白名单域接口清单与 iam_endpoint 资源行比对, 打印缺行 / 幽灵行 / 绑定缺失 / 权限不可解析告警。
  * <b>只告警不拦截</b> (D1 裁定: 配置完整性属运维职责, 程序不以拒绝启动强制; 运行期规则每请求直查 DB,

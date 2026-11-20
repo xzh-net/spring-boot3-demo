@@ -3,3 +3,7 @@
 **/*.log
 **/*.err
 **/*.out
+
+# JWT 签名密钥库（含私钥，禁止提交）
+**/jwks.json
+**/jwks-*.json.tmp

@@ -27,13 +27,13 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 资源接口准入策略服务 (iam_endpoint + iam_endpoint_permission, V6.20 拆表).
+ * 资源接口准入策略服务 (iam_endpoint + iam_endpoint_permission).
  * <p>
  * <b>实时直查模式</b>: 每个请求 {@link #findRule} 现查数据库 —— 资源行 → (PERMISSION 行再查) 绑定表
  * → 权限表取当前权限码集合, 与令牌内省口径一致: <b>改权限码零窗口</b>、多实例天然同步、
  * 服务无本地业务内存态 (D4A: 三查直白实现, 档位行只一查)。
  * <p>
- * <b>1:N 权限组合</b> (V6.20): 一个端点可绑 1..N 个权限码, 组合语义 permission_logic —
+ * <b>1:N 权限组合</b>: 一个端点可绑 1..N 个权限码, 组合语义 permission_logic —
  * ALL=同时具备 / ANY=任一即可; 档位行 (AUTHENTICATED/PERMIT_ALL) 无绑定留资源表。
  * <p>
  * <b>写入语义</b>: 种子初始化 + 管理页面维护, 资源与绑定<b>两表同一事务</b>提交 (要么都成功要么都回滚);
@@ -61,7 +61,7 @@ public class EndpointPolicyService {
     public static final String LOGIC_ALL = "ALL";
     public static final String LOGIC_ANY = "ANY";
 
-    /** 服务命名空间固定值 (多服务共表预留; 与 iam.sql 列默认值 / V6.17 默认值三处同步) */
+    /** 服务命名空间固定值 (多服务共表预留) */
     public static final String SERVICE_KEY = "iam-authorization-server";
 
     private final IamEndpointPolicyMapper endpointPolicyMapper;

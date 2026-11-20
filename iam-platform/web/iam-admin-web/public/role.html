@@ -165,7 +165,7 @@ let permList = [];
 let editingRoleId = null;      // 编辑中的角色 ID (null = 新增)
 let bindingRoleId = null;      // 分配权限的角色 ID
 
-// 内置角色 (ADMIN/USER): code 被认证中心/资源中心硬编码引用, 禁止编辑与删除
+// 内置角色 (ADMIN/PORTAL/THIRD_PARTY): 系统内置，禁止编辑与删除
     const BUILTIN_ROLE_CODES = ['ADMIN', 'PORTAL', 'THIRD_PARTY'];
 function isBuiltinRole(code) {
     return BUILTIN_ROLE_CODES.includes(code);
@@ -224,7 +224,7 @@ function openRoleModal(id) {
     editingRoleId = id || null;
     const r = id ? roleList.find(x => x.id === id) : null;
     if (r && isBuiltinRole(r.code)) {
-        alert('内置角色 ' + r.code + ' 不允许编辑 (其编码被系统硬编码引用)');
+        alert('内置角色 ' + r.code + ' 不允许编辑（系统内置角色）');
         return;
     }
     document.getElementById('roleModalTitle').textContent = id ? '编辑角色' : '新增角色';
@@ -273,7 +273,7 @@ async function saveRole() {
 async function deleteRole(id) {
     const r = roleList.find(x => x.id === id);
     if (r && isBuiltinRole(r.code)) {
-        alert('内置角色 ' + r.code + ' 不允许删除 (其编码被系统硬编码引用)');
+        alert('内置角色 ' + r.code + ' 不允许删除（系统内置角色）');
         return;
     }
     if (!confirm(`确认删除角色 "${r ? r.name : id}" ?\n将同时解除该角色与所有用户、权限的绑定关系`)) return;

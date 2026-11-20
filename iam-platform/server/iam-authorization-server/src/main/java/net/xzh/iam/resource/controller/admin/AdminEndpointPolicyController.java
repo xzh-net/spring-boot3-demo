@@ -18,12 +18,12 @@ import net.xzh.iam.resource.entity.IamEndpointPolicy;
 import net.xzh.iam.resource.service.EndpointPolicyService;
 
 /**
- * 资源接口准入策略 API (<b>读写</b>, 方案调整 2026-11-18 开放页面维护).
+ * 资源接口准入策略 API (<b>读写</b>).
  * <p>
  * 写入语义: 种子 (iam.sql) 一次性初始化 + 本 API 页面维护, <b>上线后以库数据为准</b> (种子不再执行,
  * 只存在增量变更或全量重置); 运行期规则每请求直查 DB, 写入即刻对全部实例生效。
  * 校验为轻量入参校验 (类型/权限存在性/唯一键由数据库兜底), 配置完整性属运维职责,
- * 启动仅打漂移告警不拦截。写操作按准入表受 policy:write 控制 (V6.18 补三条端点行)。
+ * 启动仅打漂移告警不拦截。写操作按准入表受 policy:write 控制。
  * </p>
  */
 @Slf4j

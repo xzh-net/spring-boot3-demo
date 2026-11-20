@@ -76,6 +76,15 @@ mybatis-plus:
 # 客户端维度隔离由令牌双维交集 (用户 RBAC 码 ∩ 客户端 scope 展开码) 承担, 无独立白名单闸门;
 # 端点准入全部按权限码组合裁决 (见 iam_endpoint/iam_endpoint_permission 与 EndpointAdmissionManager)。
 
+iam:
+  # OIDC 发行者标识 (discovery / id_token iss / 内省 iss 同源).
+  # 对外部署时必须通过 IAM_ISSUER 覆盖为外部可访问地址, 否则客户端按 issuer 校验会失败.
+  issuer: ${IAM_ISSUER:http://localhost:9000}
+  jwk:
+    # JWT 签名密钥库文件: 首次启动自动生成并落盘, 后续启动复用同一份密钥.
+    # 多实例部署需挂载共享卷指向同一文件; 该文件含私钥, 注意访问权限.
+    keystore-path: ${IAM_JWK_KEYSTORE:${user.home}/.iam-platform/jwks.json}
+
 logging:
   level:
     root: INFO

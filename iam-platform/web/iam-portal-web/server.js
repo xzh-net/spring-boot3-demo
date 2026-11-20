@@ -128,7 +128,7 @@ function layout(title, content, isLoggedIn = false) {
 </head>
 <body>
     <div class="navbar">
-        <div class="brand">🔐 员工门户</div>
+        <a href="/" class="brand" style="color:#fff;text-decoration:none;">🔐 员工门户</a>
         <div class="nav-right">
             ${isLoggedIn ? '<span class="user-info" id="userInfo"></span>' : ''}
             ${loginBtn}${logoutBtn}

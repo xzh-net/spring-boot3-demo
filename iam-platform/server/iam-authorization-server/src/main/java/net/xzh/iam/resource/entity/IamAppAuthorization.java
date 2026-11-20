@@ -11,7 +11,6 @@ import java.time.LocalDateTime;
  * 应用授权实体 (iam_app_authorization).
  * <p>哪些主体可见/可访问哪些应用。channel_id=0 表示整个应用全渠道授权, &gt;0 表示仅该渠道。
  * subject_type: ROLE=角色 (subject_id=角色编码 sys_role.code) / USER=用户 (subject_id=业务用户编码 user_code) / ORG=组织 (subject_id=组织编码 iam_org.org_code)。
- * <p>V6.4: ROLE 主体由 sys_role.id 统一为 sys_role.code, 与 USER=user_code 的编码寻址风格一致。
  */
 @Data
 @TableName("iam_app_authorization")

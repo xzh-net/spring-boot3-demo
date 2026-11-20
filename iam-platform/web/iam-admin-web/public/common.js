@@ -100,7 +100,7 @@ window.App = (() => {
             ? `<span style="color:#dbeafe;font-size:13px;white-space:nowrap;" title="${esc(user.email || '')}">👤 ${esc(user.username || user.nickname)}</span>`
             : '';
         el.innerHTML =
-            `<div class="brand">🚀 统一认证中心</div>` +
+            `<a href="/index.html" class="brand" style="padding:0;">🚀 统一认证中心</a>` +
             NAV_ITEMS.map(function (item) {
                 const [key, href, label] = item;
                 return `<a href="${href}"${key === active ? ' class="active"' : ''}>${label}</a>`;

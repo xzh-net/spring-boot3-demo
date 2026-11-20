@@ -180,7 +180,7 @@ public class RbacService {
     public void updatePermission(Long id, SysPermission permission) {
         SysPermission existing = permissionMapper.selectById(id);
         if (existing == null) throw new IllegalArgumentException("权限不存在: " + id);
-        // 改名守卫已按终稿承诺放开 (P0-2 包1, V6.17 permission_id 化完成): 端点准入经稳定 id 关联,
+        // 改名守卫已放开: 端点准入经稳定 id 关联,
         // 改名只改 sys_permission.code, 引用自动跟随不再失联。生效边界: 运行中实例的内存快照仍是
         // 启动时解析的旧码 → 新签发令牌 (内省读当前码) 与旧快照不匹配, 滚动重启后恢复;
         // 旧令牌携带旧码的窗口属令牌契约问题 (归 P0-1)。角色码改名守卫见 updateRole (subject_id 仍按码引用)。
@@ -251,7 +251,7 @@ public class RbacService {
     public void deletePermission(Long id) {
         SysPermission permission = permissionMapper.selectById(id);
         if (permission == null) throw new IllegalArgumentException("权限不存在: " + id);
-        // 删除守卫 (V6.20 拆表后按绑定表计数; 两处均有 FK 兜底):
+        // 删除守卫 (两处均有 FK 兜底):
         // ① 端点准入绑定 iam_endpoint_permission (endpoint 维度) — 直接删码会使绑定悬空;
         // ② 授权范围 sys_scope_permission — "删只在范围组、不在端点的码 → 悬空映射"窄缝。
         long refs = endpointPermissionMapper.selectCount(new QueryWrapper<IamEndpointPermission>()

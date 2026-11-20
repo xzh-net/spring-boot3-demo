@@ -6,9 +6,9 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
-import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -64,12 +64,9 @@ import org.springframework.security.web.session.HttpSessionEventPublisher;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.security.web.util.matcher.MediaTypeRequestMatcher;
 
-import com.nimbusds.jose.jwk.Curve;
 import com.nimbusds.jose.jwk.ECKey;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
-import com.nimbusds.jose.jwk.gen.ECKeyGenerator;
-import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
 
@@ -82,6 +79,7 @@ import net.xzh.iam.auth.mapper.SysUserMapper;
 import net.xzh.iam.auth.security.repository.RedisOAuth2AuthorizationService;
 import net.xzh.iam.auth.security.authentication.client.DeviceClientAuthenticationProvider;
 import net.xzh.iam.auth.security.authentication.grant.DeviceCodeGrantAuthenticationProvider;
+import net.xzh.iam.auth.security.jwk.PersistentJwkStore;
 import net.xzh.iam.auth.security.session.RedisSessionRegistry;
 import net.xzh.iam.auth.security.token.EnrichedOAuth2TokenIntrospectionAuthenticationProvider;
 import net.xzh.iam.auth.security.web.ActiveClientTrackingFilter;
@@ -103,7 +101,7 @@ import net.xzh.iam.resource.service.LoginAdmissionService;
  * <li>管理安全上下文隔离：OAuth2 授权登录 / 设备验证使用独立的 SecurityContext Key。</li>
  * </ol>
  *
- * 全局 FilterChain 概览 (阶段 3 三链合一)：
+ * 全局 FilterChain 概览:
  * <ul>
  * <li><b>Order(1) 本类</b> — 协议链：/oauth2/** + /login* + /consent + /logout + /userinfo + /.well-known/**</li>
  * <li><b>Order(2) 本类</b> — 设备验证链：/activate、/device-login（独立 SecurityContext Key）</li>
@@ -145,22 +143,18 @@ public class AuthorizationServerConfig {
 		return new HttpSessionEventPublisher();
 	}
 
+	/**
+	 * JWT 签名密钥：由 PersistentJwkStore 从密钥库文件加载（首次启动生成并落盘），
+	 * 保证重启后存量 id_token 仍可验签。
+	 */
 	@Bean
-	public RSAKey rsaKey() {
-		try {
-			return new RSAKeyGenerator(2048).keyID(UUID.randomUUID().toString()).generate();
-		} catch (Exception e) {
-			throw new RuntimeException("生成 RSA 密钥失败", e);
-		}
+	public RSAKey rsaKey(PersistentJwkStore jwkStore) {
+		return jwkStore.getRsaKey();
 	}
 
 	@Bean
-	public ECKey ecKey() {
-		try {
-			return new ECKeyGenerator(Curve.P_256).keyID(UUID.randomUUID().toString()).generate();
-		} catch (Exception e) {
-			throw new RuntimeException("生成 EC 密钥失败", e);
-		}
+	public ECKey ecKey(PersistentJwkStore jwkStore) {
+		return jwkStore.getEcKey();
 	}
 
 	@Bean
@@ -176,9 +170,10 @@ public class AuthorizationServerConfig {
 	/** 仅用于 id_token 校验，access_token 走 Opaque introspect */
 	@Bean
 	@Primary
-	public JwtDecoder jwtDecoder(JWKSource<SecurityContext> jwkSource) {
+	public JwtDecoder jwtDecoder(JWKSource<SecurityContext> jwkSource,
+			@Value("${iam.issuer:http://localhost:9000}") String issuer) {
 		NimbusJwtDecoder decoder = (NimbusJwtDecoder) OAuth2AuthorizationServerConfiguration.jwtDecoder(jwkSource);
-		decoder.setJwtValidator(JwtValidators.createDefaultWithIssuer("http://localhost:9000"));
+		decoder.setJwtValidator(JwtValidators.createDefaultWithIssuer(issuer));
 		return decoder;
 	}
 
@@ -224,7 +219,7 @@ public class AuthorizationServerConfig {
 	 * preferred_username. 处理两种 principal 类型: UserDetails (授权码) 和
 	 * UsernamePasswordAuthenticationToken (密码/刷新).
 	 * <p>
-	 * V6.2: principal name 为业务用户编码 user_code (令牌 sub), roles 来自资源中心 RBAC;
+	 * principal name 为业务用户编码 user_code (令牌 sub), roles 来自资源中心 RBAC;
 	 * preferred_username 保持真实登录用户名 (按 user_code 反查 sys_user)。
 	 */
 	@Bean
@@ -305,7 +300,8 @@ public class AuthorizationServerConfig {
 			@Qualifier("platformUserDetailsService") UserDetailsService platformUserDetailsService,
 			@Qualifier("platformDaoProvider") DaoAuthenticationProvider platformDaoProvider,
 			SessionRegistry sessionRegistry,
-			LoginAdmissionService loginAdmissionService) throws Exception {
+			LoginAdmissionService loginAdmissionService,
+			@Value("${iam.issuer:http://localhost:9000}") String issuer) throws Exception {
 
 		// 1. 准备自定义的认证组件
 		// 创建用于设备授权流程的客户端认证转换器，指定其处理的端点路径
@@ -319,7 +315,7 @@ public class AuthorizationServerConfig {
 		OAuth2AuthorizationServerConfigurer authzConfigurer = OAuth2AuthorizationServerConfigurer.authorizationServer();
 
 		// 3. 开始配置 HttpSecurity
-		// 【目的】明确指定这条安全链处理 OAuth2/OIDC 端点 + 登录流程 (阶段 3 链合一:
+		// 【目的】明确指定这条安全链处理 OAuth2/OIDC 端点 + 登录流程 (链合一:
 		// /oauth2/** 覆盖全部授权/令牌/内省/设备端点(含两层路径), /login* 覆盖登录页与登录处理。
 		// /userinfo 不入链: 由自定义 UserInfoController 自鉴权(本地 Redis 内省),
 		// 避免 SAS OidcUserInfoFilter 抢占并引入 introspection-uri HTTP 自回环依赖)
@@ -328,7 +324,7 @@ public class AuthorizationServerConfig {
 						authzConfigurer, as -> as
 								// 3.1 配置授权服务器的各项设置
 								.authorizationServerSettings(
-										AuthorizationServerSettings.builder().issuer("http://localhost:9000") // 设置发行者标识
+										AuthorizationServerSettings.builder().issuer(issuer) // 发行者标识, 由 iam.issuer 配置
 												.authorizationEndpoint("/oauth2/authorize") // 授权端点
 												.tokenEndpoint("/oauth2/token") // 令牌端点
 												.deviceAuthorizationEndpoint("/oauth2/device_authorization")
@@ -357,8 +353,7 @@ public class AuthorizationServerConfig {
 													platformUserDetailsService, tokenGenerator,
 													loginAdmissionService));
 											// 授权码兑换/刷新令牌: 保留 SAS 默认提供者
-											// (旧 "客户端×身份类型" 登录边界策略已随 iam_client_policy 退役,
-											//  双维准入由自省层 scope∧RBAC 交集承担, 见 RbacAuthoritiesOpaqueTokenIntrospector)
+											// (自省层 scope∧RBAC 交集承担, 见 RbacAuthoritiesOpaqueTokenIntrospector)
 										})
 										// 【目的】组合多种认证转换器，确保能处理授权码、刷新令牌、设备码、客户端凭证等多种请求
 										.accessTokenRequestConverter(new DelegatingAuthenticationConverter(
@@ -429,8 +424,7 @@ public class AuthorizationServerConfig {
 	}
 
 	// ------------------------------------------------------------------
-	// 链 2: 设备验证链 (阶段 3: 原 adminApi 链已删, 其 JSON 401/403 异常处理与
-	// admin-client-ids 白名单语义并入 ResourceServerConfig 的统一 API 链)
+	// 链 2: 设备验证链
 	// ------------------------------------------------------------------
 
 	@Bean

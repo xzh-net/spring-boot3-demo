@@ -20,7 +20,7 @@ import java.util.List;
  * <p>
  * 三档模型 (资源链仅接管三前缀):
  * <ul>
- *   <li><b>每请求 Fail-Closed</b> (方案调整 2026-11-18): 准入查询/权限解析异常一律拒绝, 绝不放行;</li>
+ *   <li><b>每请求 Fail-Closed</b>: 准入查询/权限解析异常一律拒绝, 绝不放行;</li>
  *   <li><b>表内</b> (每请求直查 DB): 档位行按 policy_type 裁决, PERMISSION 行按权限码组合 (ALL/ANY) 裁决
  *       (PERMISSION 行=现查权限表的当前权限码, 改码零窗口; 档位行为常量)。客户端维度隔离由令牌双维交集承担, 无独立白名单闸;</li>
  *   <li><b>表外</b> (三前缀其余端点): 走认证档 — 持有效内省令牌 (OAuth2AuthenticatedPrincipal)
@@ -47,7 +47,7 @@ public class EndpointAdmissionManager implements AuthorizationManager<RequestAut
         String uri = request.getRequestURI();
         Authentication auth = authenticationSupplier.get();
 
-        // 实时直查 + 每请求 Fail-Closed (方案调整 2026-11-18): 查询/权限解析异常一律拒绝, 绝不放行
+        // 实时直查 + 每请求 Fail-Closed: 查询/权限解析异常一律拒绝, 绝不放行
         Rule rule;
         try {
             rule = endpointPolicyService.findRule(method, uri);
@@ -85,7 +85,7 @@ public class EndpointAdmissionManager implements AuthorizationManager<RequestAut
                 default -> false; // 未知档位 → 拒绝 (防御, Fail-Closed)
             };
         }
-        // PERMISSION 行: ALL=同时具备 / ANY=任一满足 (V6.20 权限组合)
+        // PERMISSION 行: ALL=同时具备 / ANY=任一满足
         if (!authenticated(auth)) {
             return false;
         }

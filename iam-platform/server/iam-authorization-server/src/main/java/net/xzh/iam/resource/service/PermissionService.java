@@ -13,7 +13,7 @@ import net.xzh.iam.resource.mapper.SysRoleMapper;
 /**
  * 身份/权限解析服务 (DB 版).
  * <p>
- * V6.2: 移除影子用户表 sys_user, 以 token sub (业务用户编码 user_code)
+ * 以 token sub (业务用户编码 user_code)
  * 直接经 sys_user_role → sys_role/sys_permission 解析角色与权限。
  * </p>
  */

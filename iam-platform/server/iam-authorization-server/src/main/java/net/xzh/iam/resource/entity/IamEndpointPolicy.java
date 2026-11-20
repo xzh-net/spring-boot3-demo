@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * 资源接口准入策略实体 (iam_endpoint, V6.20 拆表后为纯资源行).
+ * 资源接口准入策略实体 (iam_endpoint, 纯资源行).
  * <p>
  * 每行 = 一个资源接口准入点: (service_key, method, path) 唯一 (uk_endpoint)。
  * <p>P0-2 演进: policy_type 显式声明裁决档 —— PERMISSION 行的具体权限码在绑定表

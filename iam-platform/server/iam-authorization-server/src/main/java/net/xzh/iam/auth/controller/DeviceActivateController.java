@@ -105,7 +105,7 @@ public class DeviceActivateController {
             if (client == null) {
                 return true;
             }
-            // principal name 即业务用户编码 user_code (V6.2 起)
+            // principal name 即业务用户编码 user_code
             return loginAdmissionService.canLogin(client.getClientId(), auth.getName());
         } catch (Exception e) {
             log.error("[签发准入] 设备激活准入判定异常 (fail-closed 拒绝): userCode={}, err={}",

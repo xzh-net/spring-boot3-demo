@@ -33,7 +33,6 @@ import net.xzh.iam.resource.service.ScopeService;
  *         <li>用户有码、客户端 scope 未含 → 不注入 (403), 反之亦然; 客户端无业务 scope → 一码不放;</li>
  *       </ul>
  * </ul>
- * 粗档常量 (ADMIN_SERVICE_TOKEN / PORTAL_SERVICE_TOKEN) 与 M2M 服务令牌分支已退役:
  * 端点准入全部按权限码裁决 (见 EndpointAdmissionManager), 客户端维度隔离由 scope 交集承担。
  */
 @Slf4j

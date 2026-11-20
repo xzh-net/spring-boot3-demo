@@ -24,9 +24,7 @@ import net.xzh.iam.resource.service.RbacService;
  *   <li>{@code iam_app_authorization} — subject_type=USER 的主体授权 (subject_id=user_code)。</li>
  * </ul>
  * 管理台管理员令牌 (admin-app 签发, 角色含 ADMIN → 注入 ADMIN_SERVICE_TOKEN) 可调, 幂等。
- * <b>历史说明</b>: 原调用方为跨服务链路 (认证中心以 {@code admin-m2m} client_credentials 换服务令牌
- * 联动清理), 合并单服务后删除链已本地化 ({@code UserService} 直调 {@code RbacService} /
- * {@code ApplicationService}), admin-m2m 凭证通道已退役, 本接口保留为管理端手工/运维幂等清理入口。
+ * 管理端手工/运维幂等清理入口, 按业务用户编码 (user_code) 清理其角色绑定与应用授权
  */
 @Slf4j
 @RestController

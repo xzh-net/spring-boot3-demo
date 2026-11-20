@@ -18,7 +18,7 @@ import net.xzh.iam.resource.service.RbacService;
 /**
  * 用户-角色绑定 API（资源中心管理端能力域）.
  * <p>仅面向管理后台（iam-admin-bff），路径由 /api/admin/** 规则保护: Bearer + ADMIN_SERVICE_TOKEN 管理服务凭证。
- * <p>V6.2: 用户标识 username 改为业务用户编码 user_code (token sub), 影子用户表已删除。
+ * <p>用户标识为业务用户编码 user_code (token sub), 影子用户表已删除。
  */
 @Slf4j
 @RestController

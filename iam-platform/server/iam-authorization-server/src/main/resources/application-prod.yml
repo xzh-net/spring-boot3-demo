@@ -19,3 +19,10 @@ logging:
     org.springframework.security: WARN
     org.springframework.security.oauth2: WARN
     org.springframework.security.authorization: WARN
+
+iam:
+  # 生产必须显式提供对外可访问的 issuer
+  issuer: ${IAM_ISSUER:https://iam.example.com}
+  jwk:
+    # 建议挂载持久化卷; 多实例需共享同一文件
+    keystore-path: ${IAM_JWK_KEYSTORE:/opt/iam-platform/jwks.json}

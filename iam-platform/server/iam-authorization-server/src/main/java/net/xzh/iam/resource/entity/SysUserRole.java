@@ -7,7 +7,7 @@ import lombok.Data;
 
 /**
  * 用户-角色关联实体 (sys_user_role).
- * <p>V6.2: user_id → user_code (业务用户编码), 不再依赖影子用户表 sys_user。</p>
+ * <p>user_id → user_code (业务用户编码), 不再依赖影子用户表 sys_user。</p>
  */
 @Data
 @TableName("sys_user_role")

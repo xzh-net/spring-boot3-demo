@@ -24,7 +24,7 @@ import net.xzh.iam.resource.service.PermissionService;
  * 单库合并版：用户凭据收归 {@code iam.sys_user}（本地库查询 + BCrypt 校验，登录零远程调用）。
  * principal name 采用业务用户编码 {@code user_code}（即令牌 sub），业务 RBAC 角色由同库
  * {@link PermissionService#findRoleCodes} 按 user_code 供给 (角色编码原样, 不拼 ROLE_ 前缀);
- * 本地角色查询异常时降级为空角色 (fail-closed, 粗档令牌与 user_label 降级猜测均已退役)。
+ * 本地角色查询异常时降级为空角色 (fail-closed)。
  * 登录准入由签发准入过滤器按 client_login_policy 准入表 fail-closed 把关,
  * 令牌业务码由自省层双维交集承担。
  * <p>
@@ -57,7 +57,7 @@ public final class PlatformUserDetailsService implements UserDetailsService {
      *   <li>按用户名精确查询，未命中时抛出 {@link UsernameNotFoundException}；</li>
      *   <li>以业务用户编码 user_code 作为 principal name（令牌 sub），业务 RBAC 角色经
      *       {@link PermissionService#findRoleCodes} 按 user_code 同库获取（角色编码原样返回）；</li>
-     *   <li>角色查询异常时降级为空角色（fail-closed，粗档令牌与 user_label 降级猜测均已退役）；</li>
+     *   <li>角色查询异常时降级为空角色（fail-closed）；</li>
      *   <li>构建并返回 Spring Security 的 {@link UserDetails} 实体，包含启用状态、账户过期、凭证过期、锁定等完整属性。</li>
      * </ol>
      *
@@ -111,8 +111,7 @@ public final class PlatformUserDetailsService implements UserDetailsService {
         String userCode = user.getUserCode();
 
         // 业务 RBAC 角色: 同库 sys_user_role 按 user_code 供给 (角色编码原样, 不拼 ROLE_ 前缀)。
-        // 粗档 ADMIN_SERVICE_TOKEN 与 user_label 降级猜测均已退役: 角色查询异常时降级为空角色
-        // (fail-closed, 无 user_label 依赖), 令牌业务码由自省层双维交集把关,
+        // 角色查询异常时降级为空角色 (fail-closed), 令牌业务码由自省层双维交集把关,
         // 登录资格由 client_login_policy 准入表把关 (见 LoginAdmissionService)。
         List<SimpleGrantedAuthority> authorities;
         try {

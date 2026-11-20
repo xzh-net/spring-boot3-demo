@@ -12,17 +12,17 @@ import org.springframework.security.web.SecurityFilterChain;
 import jakarta.servlet.http.HttpServletResponse;
 
 /**
- * 统一 API 资源服务器安全链 (阶段 3 三链合一: Order(3)).
+ * 统一 API 资源服务器安全链 (Order(3)).
  * <p>
  * 只接管业务端点三前缀 {@code /admin/** | /biz/** | /permitall/**}
  * (按 controller 分包命名: admin=管理端 / portal=业务(门户+三方) / permitall=免权限),
  * 其余路径由协议链 (Order(1)) 与设备验证链 (Order(2)) 处理,
- * 不再有兜底 catch-all 链 (旧 /api/** 前缀已退役, 不入链未认证即 404)。准入分三档:
+ * 准入分三档:
  * <ul>
  *   <li>{@code /permitall/**} — 链层 permitAll, 免令牌不经裁决;</li>
  *   <li>表内端点 (启动扫描播种) — 由
  *       {@link EndpointAdmissionManager} 按 policy_type + 权限码组合 (ALL/ANY) 裁决
- *       (全部为权限码, 粗档常量与客户端白名单闸均已退役, 客户端维度隔离由令牌双维交集承担);</li>
+ *       (客户端维度隔离由令牌双维交集承担);</li>
  *   <li>表外其余三前缀端点 — 走认证档, 持有效 Bearer Token 即放行。</li>
  * </ul>
  * Bearer Token 由 {@link RbacAuthoritiesOpaqueTokenIntrospector} 同进程本地内省
@@ -54,7 +54,7 @@ public class ResourceServerConfig {
                         .anyRequest().access(endpointAdmissionManager))
                 .oauth2ResourceServer(oauth2 -> oauth2.opaqueToken(
                         token -> token.introspector(rbacAuthoritiesOpaqueTokenIntrospector)))
-                // 认证/授权失败分别以 JSON 401 / 403 返回 (原 adminApi 链语义),
+                // 认证/授权失败分别以 JSON 401 / 403 返回,
                 // 避免与协议链的登录页跳转冲突
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((req, res, e) -> {

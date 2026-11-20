@@ -259,7 +259,7 @@
                 <div id="govSections" style="display:none;">
                     <div class="form-row">
                         <label>登录准入 (client × 主体 allow-list)
-                            <span style="color:#94a3b8;font-weight:normal;">fail-closed：无启用行 = 拒绝所有登录</span></label>
+                            <span style="color:#94a3b8;font-weight:normal;">未配置任何主体 = 该客户端无法登录</span></label>
                         <div class="dict-box" id="admissionBox">加载中…</div>
                         <div style="margin-top:8px;">
                             <button type="button" class="btn btn-primary btn-sm" id="configAdmissionBtn" onclick="openPolicyModal()">⚙ 配置准入</button>
@@ -424,7 +424,7 @@ function getCheckedScopes() {
  * ===== C-1 客户端治理聚合 =====
  * 1) 不触发跳转的安全 fetch (降级): 403/失败 → null, 区别于 App.api 的踢登录
  * 2) 登录准入迁入 (数据面自原 login_policy.html 平移, 写接口不变)
- * 3) 授权范围勾选 (字典驱动, sys_scope 种子; 替代已删除的 scope.html 与原「保留 Scope」文本框)
+ * 3) 授权范围勾选 (字典驱动)
  * 4) 治理概览只读体检 (铁律1: 概览永远只读, 各分区独立保存)
  * =================================================================== */
 async function safeApi(path) {
@@ -449,7 +449,7 @@ function policiesOf(cid) { return POLICY_LIST.filter(p => p.clientId === cid); }
 /** 列表页「登录准入」列 */
 function admissionCell(cid) {
     const rows = policiesOf(cid);
-    if (!rows.length) return '<span class="tag red" title="fail-closed: 未配置 = 拒绝所有登录">未配置</span>';
+    if (!rows.length) return '<span class="tag red" title="未配置任何主体 → 所有用户无法登录该客户端">未配置</span>';
     const any = rows.some(r => (r.subjectType || '').toUpperCase() === 'ANY');
     return `<span class="tag green">${rows.length} 行</span>` + (any ? '<span class="tag amber">ANY</span>' : '');
 }
@@ -484,12 +484,12 @@ function renderAdmission() {
             box.innerHTML = rows.length
                 ? admissionTagsHtml(rows) + '<div class="muted" style="margin-top:4px;">同名已存在客户端的准入行（仅展示）</div>'
                 : '<span class="tag gray">新建模式</span>' +
-                  '<span class="muted"> — 保存客户端后可点「配置准入」；未配置 = 拒绝所有登录 (fail-closed)</span>';
+                  '<span class="muted"> — 保存客户端后可点「配置准入」；未配置 = 所有用户无法登录该客户端</span>';
             if (clearBtn) clearBtn.style.display = 'none';
             return;
         }
         if (!rows.length) {
-            box.innerHTML = '<span class="tag red">未配置 → 拒绝所有登录 (fail-closed)</span> ' +
+            box.innerHTML = '<span class="tag red">未配置 → 所有用户无法登录</span> ' +
                 '<span class="muted">点「配置准入」添加角色 / 用户 / ANY 行</span>';
             if (clearBtn) clearBtn.style.display = 'none';
             return;
@@ -529,7 +529,7 @@ async function renderOverview() {
         flags.push(['info', 'ℹ 新建模式：保存客户端后生成准入行并完成准入体检；下方展开码 / 端点覆盖可先行预览']);
     } else {
         const rows = policiesOf(cid);
-        if (rows.length === 0) flags.push(['bad', '✗ 登录准入未配置 — fail-closed：所有用户都无法登录该客户端']);
+        if (rows.length === 0) flags.push(['bad', '✗ 登录准入未配置 — 所有用户都无法登录该客户端']);
         else if (!rows.some(r => r.status === 1)) flags.push(['bad', '✗ 登录准入全部停用 — 等同未配置，拒绝所有登录']);
         else flags.push(['ok', `✓ 登录准入 ${rows.filter(r => r.status === 1).length} 行启用中`]);
     }
@@ -646,7 +646,7 @@ async function savePolicy() {
             rows.push({ subjectType: 'USER', subjectId: u, status: 1, remark }));
     }
     if (rows.length === 0) {
-        if (!confirm('未选择任何主体。\n保存 = 清空该客户端准入 = 【所有用户都无法登录它】(fail-closed)。\n确认保存？')) return;
+        if (!confirm('未选择任何主体。\n保存 = 清空该客户端准入 = 【所有用户都无法登录它】。\n确认保存？')) return;
     }
     try {
         await App.api('/admin/login-policies/' + encodeURIComponent(cid), { method: 'PUT', body: rows });
@@ -660,7 +660,7 @@ async function savePolicy() {
 async function clearPolicy() {
     const cid = document.getElementById('clientId').value.trim();
     if (!cid) return;
-    if (!confirm(`确认清空 "${cid}" 的登录准入？\n清空后所有用户都无法登录该客户端 (fail-closed)。`)) return;
+    if (!confirm(`确认清空 "${cid}" 的登录准入？\n清空后所有用户都无法登录该客户端。`)) return;
     try {
         await App.api('/admin/login-policies/' + encodeURIComponent(cid), { method: 'PUT', body: [] });
         alert('✅ 已清空, 该客户端现在拒绝所有登录');

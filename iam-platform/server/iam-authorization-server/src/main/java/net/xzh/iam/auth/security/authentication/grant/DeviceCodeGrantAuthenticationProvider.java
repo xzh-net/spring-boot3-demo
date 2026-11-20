@@ -188,7 +188,7 @@ public final class DeviceCodeGrantAuthenticationProvider implements Authenticati
 
         // 重新加载真实用户：获取真实 authorities（id_token roles claim）并校验用户未停用
         // 不依赖 Redis 反序列化的 stub Principal（其 authorities 仅 ROLE_USER）
-        // V6.2: principal name = 业务用户编码 user_code, 需按 user_code 反查
+        // principal name = 业务用户编码 user_code, 需按 user_code 反查
         String principalName = authorization.getPrincipalName();
         UserDetails user;
         try {

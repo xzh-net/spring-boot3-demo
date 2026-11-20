@@ -48,7 +48,7 @@ public class AuthSessionService {
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
             .withZone(ZoneId.systemDefault());
 
-    /** 管理端角色编码 (sys_role.code): 会话 authorities 含此码即视为管理员 (原 ADMIN_SERVICE_TOKEN 粗档已退役) */
+    /** 管理端角色编码 (sys_role.code): 会话 authorities 含此码即视为管理员 */
     private static final String ADMIN_ROLE = "ADMIN";
 
     private static <T extends OAuth2Token> T unwrap(
@@ -302,7 +302,7 @@ public class AuthSessionService {
         // 2. 过滤: 只保留 sys_user 表中存在的用户 (排除 OAuth2 client_id 等非用户 principal)
         //    场景: OAuth2 token 端点会将 client_id 注册为 session principal,
         //    这些出现在 sessionRegistry.getAllPrincipals() 中但不是真正的用户
-        //    V6.2: session principal name = 业务用户编码 user_code, 故按 user_code 反查
+        //    session principal name = 业务用户编码 user_code, 故按 user_code 反查
         List<OnlineUserVO> result = new ArrayList<>();
         for (String principal : allPrincipals) {
             SysUser user = userMapper.selectOne(new QueryWrapper<SysUser>().eq("user_code", principal));
@@ -529,7 +529,7 @@ public class AuthSessionService {
      */
     private List<SessionInformation> getSessionsForPrincipal(String principalName) {
         try {
-            // V6.2: principal name = 业务用户编码 user_code; RedisSessionRegistry 按 username 做键,
+            // principal name = 业务用户编码 user_code; RedisSessionRegistry 按 username 做键,
             // 桩对象 authority 不参与查找 (getAllSessions 仅 extractUsername), 任意常量即可
             UserDetails userDetails = User.withUsername(principalName)
                     .password("[PROTECTED]")
