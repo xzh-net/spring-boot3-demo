@@ -84,6 +84,7 @@ import net.xzh.iam.auth.security.session.RedisSessionRegistry;
 import net.xzh.iam.auth.security.token.EnrichedOAuth2TokenIntrospectionAuthenticationProvider;
 import net.xzh.iam.auth.security.web.ActiveClientTrackingFilter;
 import net.xzh.iam.auth.security.web.AuthorizeIssuanceFilter;
+import net.xzh.iam.auth.security.web.ClientRegistrationDenyFilter;
 import net.xzh.iam.auth.security.web.CompositeSecurityContextRepository;
 import net.xzh.iam.auth.security.web.SessionExpirationFilter;
 import net.xzh.iam.auth.security.web.converter.DeviceClientAuthenticationConverter;
@@ -330,6 +331,9 @@ public class AuthorizationServerConfig {
 												.deviceAuthorizationEndpoint("/oauth2/device_authorization")
 												.deviceVerificationEndpoint("/oauth2/device/verify")
 												.oidcUserInfoEndpoint("/userinfo")
+												// DCR (动态客户端注册) 路径: 仅作显式声明保留 —— 端点本身刻意关闭,
+												// 协议链首的 ClientRegistrationDenyFilter 对该配置路径一律 404;
+												// 客户端注册唯一通道 = 管理端「客户端管理」页
 												.oidcClientRegistrationEndpoint("/oauth2/connect/register")
 												// OIDC RP-Initiated Logout 端点。
 												// OidcLogoutEndpointFilter 的匹配路径设为 /oidc/logout 以避免拦截
@@ -385,11 +389,12 @@ public class AuthorizationServerConfig {
 						.defaultAuthenticationEntryPointFor(new LoginUrlAuthenticationEntryPoint("/login.html"),
 								new MediaTypeRequestMatcher(MediaType.TEXT_HTML)))
 				.authorizeHttpRequests(auth -> auth
-						// 【目的】放行所有 OAuth2 端点和登录页，让请求能到达对应的过滤器进行处理
+						// 【目的】放行 OAuth2 端点和登录页，让请求能到达对应的过滤器进行处理
+						// (/oauth2/connect/register 不在此列 —— DCR 已关闭, 见 ClientRegistrationDenyFilter)
 						.requestMatchers("/login.html", "/login", "/error", "/.well-known/openid-configuration",
 								"/.well-known/oauth-authorization-server", "/oauth2/token", "/oauth2/introspect",
 								"/oauth2/revoke", "/oauth2/device_authorization", "/oauth2/jwks",
-								"/oauth2/connect/register", "/userinfo", "/logout")
+								"/userinfo", "/logout")
 						.permitAll()
 						// 其他所有请求都需要认证
 						.anyRequest().authenticated())
@@ -411,6 +416,9 @@ public class AuthorizationServerConfig {
 						new CompositeSecurityContextRepository(DEVICE_CONTEXT_KEY, OAUTH2_CONTEXT_KEY)))
 				// 在 SecurityContextHolderFilter 之后添加自定义的会话过期过滤器
 				.addFilterAfter(new SessionExpirationFilter(sessionRegistry), SecurityContextHolderFilter.class)
+				// 【DCR 关闭】协议链最早拦截动态客户端注册端点的配置路径,
+				// 先于 SAS 端点过滤器/CSRF/授权判定 —— 删 permitAll 只挡匿名, 已登录会话仍可穿过授权层, 此过滤器一律 404
+				.addFilterBefore(new ClientRegistrationDenyFilter(), SecurityContextHolderFilter.class)
 				// 跟踪当前活跃客户端 (解析 Bearer Token, 存入 Session)
 				.addFilterAfter(new ActiveClientTrackingFilter(authorizationService), SecurityContextHolderFilter.class)
 				// 【登录隔离】授权端点发码前先做「该用户能否登录该客户端」判定

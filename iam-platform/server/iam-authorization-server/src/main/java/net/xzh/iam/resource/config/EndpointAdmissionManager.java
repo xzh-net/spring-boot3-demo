@@ -5,7 +5,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.security.authorization.AuthorizationManager;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal;
 import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 import org.springframework.stereotype.Component;
 
@@ -14,6 +13,8 @@ import net.xzh.iam.resource.service.EndpointPolicyService;
 import net.xzh.iam.resource.service.EndpointPolicyService.Rule;
 
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 表驱动接口准入路由器 (AuthorizationManager, 实时直查模式).
@@ -23,8 +24,8 @@ import java.util.List;
  *   <li><b>每请求 Fail-Closed</b>: 准入查询/权限解析异常一律拒绝, 绝不放行;</li>
  *   <li><b>表内</b> (每请求直查 DB): 档位行按 policy_type 裁决, PERMISSION 行按权限码组合 (ALL/ANY) 裁决
  *       (PERMISSION 行=现查权限表的当前权限码, 改码零窗口; 档位行为常量)。客户端维度隔离由令牌双维交集承担, 无独立白名单闸;</li>
- *   <li><b>表外</b> (三前缀其余端点): 走认证档 — 持有效内省令牌 (OAuth2AuthenticatedPrincipal)
- *       即放行, 匿名主体不算 (配置缺省行为, 完整性由运维负责, 启动仅打漂移告警);</li>
+ *   <li><b>表外</b> (三前缀其余端点): 一律拒绝 (fail-closed) —— 未配准入行即 403,
+ *       补行保存即时生效; 启动漂移告警提示缺行 (配置完整性属运维职责, 但运行时不降级);</li>
  *   <li><b>/permitall/**}: 链层 permitAll, 不经本路由器。</li>
  * </ul>
  * </p>
@@ -34,6 +35,9 @@ import java.util.List;
 public class EndpointAdmissionManager implements AuthorizationManager<RequestAuthorizationContext> {
 
     private final EndpointPolicyService endpointPolicyService;
+
+    /** 已对未配准入行的路径打过 warn (按路径去重, 防扫描刷日志) */
+    private final Set<String> unregisteredWarned = ConcurrentHashMap.newKeySet();
 
     public EndpointAdmissionManager(EndpointPolicyService endpointPolicyService) {
         this.endpointPolicyService = endpointPolicyService;
@@ -56,10 +60,16 @@ public class EndpointAdmissionManager implements AuthorizationManager<RequestAut
             return new AuthorizationDecision(false);
         }
         if (rule == null) {
-            // 表外走认证档: 有效内省令牌 (真实主体) 即放行; AnonymousAuthenticationToken 不算
-            boolean allowed = auth != null && auth.getPrincipal() instanceof OAuth2AuthenticatedPrincipal;
-            log.debug("[Admission] 未登记准入点, 走认证档 {} {} -> {}", method, uri, allowed);
-            return new AuthorizationDecision(allowed);
+            // 表外 (未配准入行): 一律拒绝 —— fail-closed, 无猜解放行路径 (A-P0-4 方案A)。
+            // 启动漂移告警负责提示补行 (EndpointPolicyScanInitializer), 请求侧不再降级认证档;
+            // D1 裁定仅保留启动维度 (不阻塞启动), 运行时子句改判为 deny。
+            // 按路径去重: 每路径仅首见打 warn, 后续降 debug, 防扫描刷日志
+            if (unregisteredWarned.add(uri)) {
+                log.warn("[Admission] 未配准入行(拒绝) {} {} — 请在「资源准入」页补行", method, uri);
+            } else {
+                log.debug("[Admission] 未配准入行(拒绝) {} {} — 请在「资源准入」页补行", method, uri);
+            }
+            return new AuthorizationDecision(false);
         }
 
         if (!rule.enabled()) {

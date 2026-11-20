@@ -7,6 +7,38 @@
 
 ## 2026-11-20
 
+### A-P0-3 拆弹：OIDC 动态客户端注册 (DCR) 端点关闭
+
+- **事实修正**：原审计「任何人 POST 即可注册客户端」经端到端探测不成立——过滤器实际**未装配**（discovery 未通告 `registration_endpoint`、`OidcConfigurer` 字节码证实惰性装配且本项目未调用、空体 POST 落到 CSRF 403）。但 settings 路径行 + permitAll 许可构成「引信」：未来任何一行代码装配过滤器即裸奔。
+- **双层收口（方案 A）**：① permitAll 名单摘除 `/oauth2/connect/register`；② 新增 `ClientRegistrationDenyFilter`（`auth.security.web`，`OncePerRequestFilter`）置于协议链 `SecurityContextHolderFilter` **之前**——对配置路径 `/oauth2/connect/register` 任意 HTTP 方法直接返回 404，响应体模仿 Spring Boot 默认错误格式（探测者无法区分「被拒」与「不存在」）；settings 路径行保留（显式可审计）+ 注释注明刻意关闭。
+- **为什么删 permitAll 不够**（关键认知）：启动日志证实 SAS 端点过滤器位于 `AuthorizationFilter` **之后**——删 permitAll 只挡匿名请求，**已登录会话仍穿过授权层进入注册过滤器**；且 CSRF「意外拦截」随 SAS 装配自动豁免而消失（SAS 为已装配端点自动加 CSRF 豁免）。拒绝过滤器与装配状态、过滤器顺序、CSRF 豁免均无关。
+- **【校正】** 上一条方向正确，此前一版【校正】（称 `addFilterBefore`、实为「之前」）系看错 Configurer——**终审取证（javap 全量提取 SAS 1.4.1 boot jar 内 11 个 `*EndpointConfigurer`）**：`OidcClientRegistrationEndpointConfigurer` 与令牌/内省/撤销/用户信息/设备授权端点均为 `addFilterAfter(AuthorizationFilter)`（在授权层**之后**）；`addFilterBefore` 的是授权/设备验证/登出/OIDC 元数据端点，且锚点为 `AbstractPreAuthenticatedProcessingFilter`/`LogoutFilter`，非 `AuthorizationFilter`。旁证：本项目 `/oauth2/token`、`/oauth2/introspect` 必须放 permitAll 才可用——若在之前则这些许可无必要。故正确论证 = **删 permitAll 只挡匿名，已登录会话仍穿过授权层**。另：`/connect/register` 不在任何安全链 securityMatcher 内，其 404 来自「无链匹配 + 无 MVC 路由」，非过滤器拦截；该分支保留为未来协议链 securityMatcher 扩展时的保险。
+- **验证**：匿名 POST/GET 配置路径 → 404；默认路径 POST → 404；**已登录同源 POST → 404**（关键用例）；discovery/jwks/introspect(`{"active":false}`)/登录链/管理 API 5×200 全正常。README A-P0-3 移入已解决表 ✅9；`详细设计.md` §1.1 补「DCR 关闭」小节。
+
+### A-P0-4 拆弹：表外端点运行时降级翻转为 fail-closed
+
+- **改动**：`EndpointAdmissionManager` 的 `rule == null` 分支（未配准入行）由「认证档放行（有效内省令牌即过）」**翻转为一律拒绝 403**，日志 `debug` → `warn` 且**按路径去重**（每路径首见 warn、后续 debug，防扫描刷日志）。类 javadoc「表外」行同步。
+- **D1 裁定收敛（非推翻）**：D1 保留**启动维度**（启动不阻塞、`EndpointPolicyScanInitializer` 漂移告警提示补行）不变，仅改判**运行时子句**（请求侧不再降级）——D1 管"启动不拦"，deny 管"请求不放"，两者不冲突。开发流程不变：新端点忘配行 → 启动漂移告警 + 页面可见 → 补行保存即时生效；漏看的后果是 403（fail-closed）而非静默裸奔。
+- **零现实回归依据**：启动漂移检查连续实测 56 接口 = 56 准入行无漂移，null 分支从未执行过——把一个从没走过的分支从放行改拒绝，对现有功能零影响；`/permitall/**` 链层短路不进管理器；未映射路径 404→403 无数据差异。
+- **三方立场收敛**：原 D1（认证档=配置缺省）/ 审计 A-P0-4（P0 fail-open）/ README §六「任一缺口即拒绝」互斥 → 方案 A 落地后代码与 fail-closed 承诺一致，README P0 表**清零**（A-P0-4 移入已解决 ✅10）。
+- **文档同步**：README（P0 表清零 + ✅10 + 数据表行）、详细设计 §5.2/§5.3、权限与安全设计（④ 层 + 裁决表 + 包路径行）、数据库设计文档（两步流程）、操作说明（排查 403 + 新端点章节）——所有"表外走认证档"表述改为"拒绝 403，补行即生效"。
+- **验证**（打包重启 9000 后实测）：
+  - **新行为**：带有效令牌（授权码流程真实 access_token）直连 9000——`GET/POST /admin/__ap04_no_row_test`、`GET /biz/__ap04_no_row_test`（三前缀下无准入行路径）→ **403** `{"code":403,"msg":"无权访问"}`（改前该场景被认证档放行落 MVC 404）；经 8001 BFF 同测 → 403。
+  - **零回归**：表内端点 `GET /admin/users`、`/admin/endpoint-policies` 直连 200，8001 BFF 会话下 `/admin/users|roles|clients|endpoint-policies` 4×200；完整登录链（8001→8085 OAuth→9000 授权→回调）走通；`/permitall/time` 200（链层短路不受影响）；discovery/jwks 200；匿名态 9000 各路径 401（与改前一致）。
+  - **行为差异（fail-closed 方向，记录备查）**：三前缀下**未在准入表注册的方法**（如 `HEAD/OPTIONS /admin/users`——表内只有 GET 行、扫描器按 `@XxxMapping` 注解方法生成行、HEAD 为 Spring 隐式支持不入表）改前走认证档落 MVC（HEAD=200/PUT=405），改后统一 **403**。平台内无 HEAD/OPTIONS 消费方（前端/BFF 脚本全量扫描 0 命中），9000 未配置 CORS（无跨域预检），无实际影响；语义上与"未配行即拒绝"自洽。
+
+### README 待办补录（修复上轮重排丢失的 6 项）
+
+上轮「按代码审计重排待办」误删若干条目，按当前事实核实后补回（不照抄旧文，逐项复核状态）：
+
+- **A-P1-7** `device/verify` 返回 400（TC-12 已知 bug，根因未排查；标注"接手先复现"）
+- **A-P2-7** 代码卫生残留（resolveDomain 判空用途、`/users/{code}/data` 死接口、iam.sql capability 死块 + iam_client_policy 遗留 DROP）——原同条的孤儿权限码 `policy:write` **核实已不成立**（V6.18 已建 3 条端点行），剔除
+- **B-10**（触发式）三方域首个业务端点开通（触发时必须先补 sys_scope_permission 映射 + 端点准入，否则恒 403）
+- **B-11** 文档配图（IMG-1~6 / SHOT-1~9 清单在各文档、产出全无）
+- **⛔ C-1 三条铁律**恢复为 B 组前置约束块——尤其铁律3「聚合写必须先落操作级审计」：P0-2 引用完整性已 ✅、A-P1-3 未做 → **约束当前生效**（重排后 B-4 编号已他指，铁律引用同步改为 A-P1-3）
+- **原「YAML 配置分类」**：按 auth/resource 拆分的旧设想已随单服务合并过时，其实质（密码硬编码→环境变量）已由 A-P1-5 覆盖，在该条目内注明继承关系，不单列
+- **原「用户编码字段治理」**：user_code 格式统一**实测已完成**（存量 3 用户全标准 UUID，`check` 脚本核验）；剩余的 username/principalName 双职分离属**活约定**，落入 `编码规范.md` 命名表「展示与取值分离」行，不挂待办
+
 ### 管理端首页改版为 Dashboard + 说明内容分流 + 界面文案规则
 
 - **内容分流**（index.html 原三块说明迁至对应文档）：「OIDC 令牌分工 / openid 用法 / id_token 三要素」→ `详细设计.md` §4.0；「退出登录对接指南（两步退出、四种场景对比）」→ `接口文档.md` §5.7；「默认客户端类型与 OIDC 支持（四客户端选型卡）」→ `接口文档.md` §5.0.1 客户端类型与选型参考

@@ -180,7 +180,7 @@ cd client/iam-client-h5-demo     && node server.js   # :8084
 |---|---|---|
 | `sys_scope` | 仅 SQL 种子 | 组定义（三域）走种子，架构级契约 |
 | `sys_scope_permission` | 种子初始化 + 权限管理页维护 | 组→码映射是配置级，页面可增删 |
-| `iam_endpoint` / `iam_endpoint_permission` | 种子初始化 + 资源准入页维护 | 保存即时生效；未配行的端点走表外认证档 |
+| `iam_endpoint` / `iam_endpoint_permission` | 种子初始化 + 资源准入页维护 | 保存即时生效；未配行的端点一律拒绝（403），启动漂移告警提示补行 |
 | `oauth2_registered_client.scopes` | 客户端管理页 | 标准 Spring 列作客户端↔scope 连接表 |
 
 > **新增一个受管控接口**：`sys_permission` 加码（若有新码）并绑角色/scope → **资源准入页新增准入行**（保存即时生效，无需重启）；未配行的端点启动日志会打**漂移告警**提示补齐（仅提示、不拦截）。
@@ -230,10 +230,7 @@ cd client/iam-client-h5-demo     && node server.js   # :8084
 
 #### 🔴 P0 — 生产阻塞 / 对外契约破坏
 
-| # | 问题 | 现状 | 位置 | 影响 |
-|---|---|---|---|---|
-| A-P0-3 | **OIDC Client Registration 端点 permitAll** | `oidcClientRegistrationEndpoint("/oauth2/connect/register")` + permitAll | `AuthorizationServerConfig.java` | 任何人 POST 即可向系统注册新 OAuth2 客户端，无任何认证保护。与平台"allow-list 未配置即拒绝"设计哲学完全相悖 |
-| A-P0-4 | **表外端点自动降级认证档 → 隐式权限提升** | `EndpointAdmissionManager` 查询准入行返回 null 时，降级为"只要有有效令牌即可" | `EndpointAdmissionManager.java` | 开发者忘记给新端点配准入行 → 端点自动变成"只需认证"而无需特定权限码 → 静默权限上抬。这是 fail-open 而非 fail-closed，上线后会出现"新加的写接口不知为啥谁都能调" |
+**已清零** — 最后一项 A-P0-4 已修复（见已解决表 ✅10）。
 
 #### 🟠 P1 — 严重但不阻塞核心流程
 
@@ -243,8 +240,9 @@ cd client/iam-client-h5-demo     && node server.js   # :8084
 | A-P1-2 | **登录防爆破完全未实现** | 登录端点无失败计数、无账号临时锁定机制 | 登录表单流程 | 账号暴力破解无防线 |
 | A-P1-3 | **敏感操作审计完全未实现** | 所有 Admin Controller 的写操作（用户/客户端/角色/权限/准入的增删改）裸写无审计记录 | 全栈 | 与 P0-4 "改权限码零窗口" 特性结合 = **无审计的即时生效变更** |
 | A-P1-4 | **maximumSessions(-1) 无限并发** | Spring Security 会话并发限制设为 -1（不限制），SSO 会话可无限创建 | `AuthorizationServerConfig.java` | 账号被盗用可无限会话 |
-| A-P1-5 | **Redis / MySQL 密码硬编码无环境变量** | `application-local.yml` 中数据库地址 `192.168.31.161:3306`、密码 `123456` 硬编码，无 `${DB_HOST}` / `${DB_PASSWORD}` 占位符 | `application-local.yml` | 生产部署必须手动改配置文件，易出错且不利于容器化 |
+| A-P1-5 | **Redis / MySQL 密码硬编码无环境变量** | `application-local.yml` 中数据库地址 `192.168.31.161:3306`、密码 `123456` 硬编码，无 `${DB_HOST}` / `${DB_PASSWORD}` 占位符（原「YAML 配置分类」待办的实质继承——按 auth/resource 拆分配置文件的旧设想已随单服务合并过时） | `application-local.yml` | 生产部署必须手动改配置文件，易出错且不利于容器化 |
 | A-P1-6 | **ALLOWED_REDIRECT_HOSTS 白名单硬编码 localhost 端口** | 只覆盖 localhost/127.0.0.1 的固定端口列表 | `AuthorizationServerConfig.java` | 非 localhost 或端口不在列表的 redirect_uri 全部被拒。为演示方便写死、上线必炸 |
+| A-P1-7 | **`device/verify` 返回 400（TC-12 记录）** | 设备码验证端点特定请求场景返回 400，早于 SavedRequest/P0-2 各轮即存在，根因未排查（请求参数校验链 / 端点契约） | 设备码验证端点 | 与准入改造无耦合、独立修复；**接手时先复现确认是否仍存在** |
 
 #### 🟡 P2 — 架构质量 / 扩展性
 
@@ -256,6 +254,7 @@ cd client/iam-client-h5-demo     && node server.js   # :8084
 | A-P2-4 | **两层 introspector 双重 authorities 注入** | `RedisOpaqueTokenIntrospector` → `resolveAuthorities()` 注入 UserDetails authorities；`RbacAuthoritiesOpaqueTokenIntrospector` → 在此基础上**追加** RBAC 角色码 + scope 交集业务码。两层都改 authorities | 两个 Introspector | authorities 是合并副本，容易导致 authority 重复注入或逻辑混乱。推荐收敛到单一 Introspector |
 | A-P2-5 | **密码策略缺失** | 无密码历史检查（禁止近期复用）、无过期策略 | 用户模块 | 账号长期安全性无保障 |
 | A-P2-6 | **客户端密钥回显给调用方** | `GET /admin/clients/{id}` 接口回显 client_secret 明文 + BCrypt 哈希给前端 | AdminClientApiController | 应对外掩码，密钥改由环境变量/密钥管理注入 |
+| A-P2-7 | **代码卫生残留** | ① `EndpointPolicyService.resolveDomain()` 返回值只剩判空用途（应改 `isManagedPackage()`）② `AdminUserDataController` 的 `/users/{code}/data` 无前端调用方（级联已本地化，可删）③ `iam.sql` 内注释掉的 capability 死块与 `iam_client_policy` 遗留 `DROP` 语句 | `EndpointPolicyService.java` / `AdminUserDataController.java` / `sql/iam.sql` | 死代码与死 SQL 误导维护者。（原同条的孤儿权限码 `policy:write` 已随 V6.18 建 3 条端点行解决，不再孤儿） |
 
 ---
 
@@ -272,6 +271,13 @@ cd client/iam-client-h5-demo     && node server.js   # :8084
 | B-7 | **门户通知 / 新闻** | 门户首页"新闻动态"全是演示硬编码数据 | 演示功能，生产不可用 |
 | B-8 | **服务自愈** | 当前机器重启后三服务全灭，需手工重启 | 无自启 + 健康检查自动拉起 |
 | B-9 | **CSRF 豁免** | `AuthorizationServerConfig` 仍对 `/login` POST 和 `/oauth2/device/verify` 豁免 CSRF | 登录表单无 CSRF token，存在潜在风险 |
+| B-10 | **（触发式）三方域首个业务端点开通** | `third.profile` 当前「准入 ANY + 字典空映射」是**留白而非缺陷**（三方域暂无端点、空展开 fail-closed、仅 OIDC 标准能力）；触发点此前无条目挂靠 | 三方域开第一个业务端点时**必须先补 `sys_scope_permission` 映射并配资源端点准入**，否则该端所有业务接口恒 403 |
+| B-11 | **文档配图** | 6 张架构/时序图（IMG-1~6，各设计文档内已列清单）+ 9 张管理端截图（SHOT-1~9，`操作说明` §七已列）均未产出 | 文档以纯文字为主，新贡献者上手成本高 |
+
+> **⛔ 前置约束（C-1 三条铁律——聚合写进入 Phase 2 前必须遵守）**：
+> 1. 汇聚视图与入口，**不汇聚事务**——登录准入/授权范围/资源准入各分区独立提交，不合并为一次跨表写；
+> 2. 字典只读范围：架构级字典（`sys_scope` 组定义）仅种子；配置级映射（`sys_scope_permission` / `iam_endpoint`）页面维护，**上线后库为真相、审计靠 A-P1-3**；
+> 3. **聚合写必须先落 A-P1-3（操作级敏感审计），顺序不可反** —— P0-2 引用完整性已 ✅，A-P1-3 未做 → **本约束当前生效**：任何「一处配齐」跨表写功能在 A-P1-3 落地前不得开工。
 
 ---
 
@@ -287,6 +293,8 @@ cd client/iam-client-h5-demo     && node server.js   # :8084
 | ✅6 | authorizedScopes 的 scope claim 装错内容 | 与 scope 同源修复一并解决 |
 | ✅7 | **A-P0-1 JWK 每次重启重新生成密钥** | 新增 `PersistentJwkStore`：首次启动生成 RSA/EC 密钥并写入密钥库文件（`iam.jwk.keystore-path`，默认 `~/.iam-platform/jwks.json`），后续启动复用同一份密钥。已验证 kid 跨实例稳定、私钥完整保留、文件权限收紧 600 |
 | ✅8 | **A-P0-2 issuer 硬编码 localhost:9000** | 新增配置项 `iam.issuer`（环境变量 `IAM_ISSUER`），`AuthorizationServerSettings`、`JwtDecoder` 校验器、内省 `iss` 属性三处同源引用。`application-prod.yml` 提供生产默认值 |
+| ✅9 | **A-P0-3 OIDC Client Registration 端点未受保护** | 两层收口：① permitAll 名单摘除该路径 ② 新增 `ClientRegistrationDenyFilter` 置于协议链最早（`SecurityContextHolderFilter` 之前），对配置路径 `/oauth2/connect/register` 任意方法一律 404（响应体模仿 Spring Boot 默认错误格式）。**只删 permitAll 不够**——SAS 端点过滤器经 `addFilterAfter(AuthorizationFilter)` 装配于授权层**之后**（javap 全量取证），删行只挡匿名请求，**已登录会话仍穿过授权层进入注册过滤器**；拒绝过滤器与装配状态/过滤器顺序/CSRF 豁免无关。框架默认路径 `/connect/register` 不在任何安全链 securityMatcher 内，其 404 来自「无链匹配 + 无 MVC 路由」，过滤器对该路径的兜底判断是未来 securityMatcher 扩展时的保险。实测：匿名与已登录同源 POST 均 404，discovery/jwks/introspect/登录链/管理 API 全正常 |
+| ✅10 | **A-P0-4 表外端点降级认证档 → 隐式权限提升** | `EndpointAdmissionManager` 的 null 分支（未配准入行）从"认证档放行"**翻转为一律拒绝 403**（fail-closed，方案 A）。**D1 裁定收敛**：仅保留启动维度（启动不阻塞、漂移告警提示补行），运行时子句改判 deny——两者本不冲突，D1 管"启动不拦"、deny 管"请求不放"。未配行 warn 按路径去重（首见 warn、后续 debug，防扫描刷日志）。零现实回归：56 接口 = 56 准入行全有行、null 分支从未执行；`/permitall/**` 链层短路不进管理器。落地后 README/概要设计/编码规范「三层任一缺口即拒绝」与代码一致 |
 
 ---
 
