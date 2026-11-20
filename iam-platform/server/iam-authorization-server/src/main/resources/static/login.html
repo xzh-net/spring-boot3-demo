@@ -78,6 +78,7 @@
         <h1>🚀 统一认证中心</h1>
 
         <div id="errorAlert" class="alert error">用户名或密码错误，请重试</div>
+        <div id="expiredAlert" class="alert error" style="display:none">会话已过期或已在其他设备登录，请重新登录</div>
         <div id="logoutAlert" class="alert logout">您已成功退出登录</div>
 
         <form action="/login" method="post">
@@ -113,6 +114,11 @@
         }
         if (params.get('logout') !== null) {
             document.getElementById('logoutAlert').style.display = 'block';
+        }
+        // 会话过期/被顶下线 (A-P1-4): expiredUrl 落点, 给出明确提示
+        if (params.get('expired') !== null) {
+            var expiredEl = document.getElementById('expiredAlert');
+            if (expiredEl) expiredEl.style.display = 'block';
         }
         // 设备验证链跳转过来时带 ?type=device, 将表单 action 改为 /device-login
         if (params.get('type') === 'device') {

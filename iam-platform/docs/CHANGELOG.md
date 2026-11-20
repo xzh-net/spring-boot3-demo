@@ -47,6 +47,15 @@
 - **验证（13/13）**：改前基线跳转逐字节一致（`/login.html?error`、`/login.html?type=device&error`）；失败 1-4 正常跳转、**第 5 次触发锁定**（`error=locked&retry=15`）；**第 6 次正确密码仍被拒**（核心用例）；Redis 锁 key TTL=900、计数清零；清 key（模拟 TTL 解锁）后正确密码恢复 302；20 次跨账号喷洒触发 IP 锁、锁定期内 admin 正确密码同样被拒；完整登录链（8001→8085→9000→回调）/设备码入口/管理 API 3×200/discovery 200 回归正常；全部 guard key 已清理。
 - **备注**：`boot9000.log` 中中文日志显示为替换符——实测改造前既有中文日志（EndpointPolicy 等）同样乱码，属 `schtasks+cmd 重定向+JVM 控制台编码` 的**环境既有问题**，非本改动引入（判定依据：新旧日志行均含 U+FFFD，表现一致）。
 
+### A-P1-4 拆弹：SSO 会话并发封顶 (maximumSessions 5 + 踢旧)
+
+- **改动**：两条链（主 SSO L428、设备验证 L471）`maximumSessions(-1)` → **`maximumSessions(5)`**。共享 `RedisSessionRegistry` 按 principal 计数不分链，两链必须同值对称（否则设备链 -1 不检查但照常计数）。默认语义 `maxSessionsPreventsLogin=false`：第 6 次登录总是成功、踢掉最旧会话——**永不锁死自己**（受害者重登即挤掉攻击者旧会话，正是被盗恢复动作）；`maxSessionsPreventsLogin=true` 反而是陷阱（攻击者占满后受害者登不进），刻意不用。
+- **【执行中修掉的隐藏缺陷 ①】封顶首轮实测不生效**（6 连登 → 活跃 6、踢 0）：字节码取证 `ConcurrentSessionControlAuthenticationStrategy.allowableSessionsExceeded` 踢出时只调 `SessionInformation.expireNow()`（内存布尔），而本项目注册表**每次从 Redis 重建临时对象**——标记不回写即丢，`SessionExpirationFilter` 永远检测不到 → 踢不出去。**修复**：自定义 `RedisSessionInformation` 覆写 `expireNow()` 同步写 Redis `expired=true`（与既有 `markSessionExpired` 同一存储位，幂等不改 TTL）。
+- **【执行中修掉的隐藏缺陷 ②】被踢落点不带 `?expired`**：DEBUG 启动日志过滤器链取证——`SessionExpirationFilter` 排在 `ConcurrentSessionFilter`（`expiredUrl` 唯一消费者，`SimpleRedirectSessionInformationExpiredStrategy`）**之前**，且先 `removeSessionInformation` + `invalidate` → CSF 查不到过期记录 → **`expiredUrl` 是死配置**，实测被踢落裸 `login.html`，用户无从得知被踢原因。**修复**：`SessionExpirationFilter` 改为显式 `saveRequest`（与 ETF 默认同 `SPRING_SECURITY_SAVED_REQUEST` 属性）+ 带 `?expired` 跳转——同时保住「可感知提示」与「重登回原流程」（原设计靠继续链由 ETF 保存请求，改为显式保存后两者兼得）。
+- **登录页**：`login.html` 补 `expired` 分支——「会话已过期或已在其他设备登录，请重新登录」。
+- **验证**（verify3 6/6 + final 4/4 + 全量回归）：6 连登 → **活跃=5、踢 1**（Redis `expired=true` 持久化）；被踢会话持有效授权请求（含 PKCE）→ **302 `login.html?expired`**（认证已清）；**同一浏览器重登 → 恢复原授权请求**（state=finalstate 一致，SavedRequest 生效）；活跃会话正常发 code；新登录不被拒；完整登录链（8001→8085→9000）/管理 API 3×200/设备码/登录防爆破（错误密码仍 `login.html?error`）全回归。
+- **脚本侧两坑记录**：① Spring Session cookie 值是 **base64 编码的 sid**，直接比对注册表 UUID 会误报不匹配（解码后一致）；② 首轮验证用无 PKCE 的授权请求，授权端点在校验阶段即报 `invalid_request`（早于会话检测），被踢/活跃两组结果无区分度——补全 PKCE 后用例才有效。
+
 ### README 待办补录（修复上轮重排丢失的 6 项）
 
 上轮「按代码审计重排待办」误删若干条目，按当前事实核实后补回（不照抄旧文，逐项复核状态）：

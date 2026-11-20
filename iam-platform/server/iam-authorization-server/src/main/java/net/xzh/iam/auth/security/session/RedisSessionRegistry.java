@@ -350,12 +350,36 @@ public class RedisSessionRegistry implements SessionRegistry, ApplicationListene
 				.authorities(authorities)
 				.build();
 
-		SessionInformation info = new SessionInformation(principal, sessionId, new Date(lastRequestMillis));
+		// A-P1-4: 必须用子类 —— 并发控制策略 (ConcurrentSessionControlAuthenticationStrategy)
+		// 踢出超额会话时只调 info.expireNow(), 若用原生类该标记仅存内存,
+		// 本注册表每次从 Redis 重建对象, 标记即丢 → SessionExpirationFilter 永远检测不到 → 踢不出去。
+		// 覆写 expireNow() 将过期标记持久化到 Redis, 与 markSessionExpired 同一存储位。
+		SessionInformation info = new RedisSessionInformation(principal, sessionId, new Date(lastRequestMillis));
 		// 如果 Redis 中标记了 expired=true，恢复过期状态
 		if ("true".equals(getStr(entries, "expired"))) {
 			info.expireNow();
 		}
 		return info;
+	}
+
+	/**
+	 * 过期标记可持久化的 SessionInformation —— {@link #expireNow()} 同步写 Redis.
+	 */
+	private class RedisSessionInformation extends SessionInformation {
+
+		private final String sessionKey;
+
+		RedisSessionInformation(UserDetails principal, String sessionId, Date lastRequest) {
+			super(principal, sessionId, lastRequest);
+			this.sessionKey = SESSION_KEY_PREFIX + sessionId;
+		}
+
+		@Override
+		public void expireNow() {
+			super.expireNow();
+			// 并发控制踢出 / 恢复重建均走此路径: 幂等写同一字段, 不改 TTL
+			redisTemplate.opsForHash().put(sessionKey, "expired", "true");
+		}
 	}
 
 	/**

@@ -425,7 +425,11 @@ public class AuthorizationServerConfig {
 						new AntPathRequestMatcher("/login", "POST")))
 				.sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
 						.sessionConcurrency(sc -> sc.sessionRegistry(sessionRegistry) // 配置会话注册表
-								.maximumSessions(-1) // 允许同一用户并发会话数（-1为不限制）
+								// 【A-P1-4】同一用户 SSO 会话封顶 5 个 (多设备: 桌面/手机/平板/换浏览器)。
+								// 默认语义 maxSessionsPreventsLogin=false: 第 6 次登录总是成功, 但踢掉最旧会话
+								// —— 永不锁死自己, 受害者重登即可挤掉攻击者的旧会话 (被盗恢复动作)。
+								// 两条链共享 RedisSessionRegistry (按 principal 计数不分链), 必须同值保持对称。
+								.maximumSessions(5)
 								.expiredUrl("/login.html?expired"))) // 会话过期后的跳转地址
 				.securityContext(sc -> sc.securityContextRepository(
 						// 【目的】使用复合的上下文仓库，以支持在同一应用中管理多种不同类型的登录会话
@@ -468,7 +472,8 @@ public class AuthorizationServerConfig {
 				.securityContext(sc -> sc.securityContextRepository(contextRepo(DEVICE_CONTEXT_KEY)))
 				// 【目的】配置会话并发控制，使用全局的 SessionRegistry 跟踪会话
 				.sessionManagement(sm -> sm.sessionConcurrency(sc -> sc.sessionRegistry(sessionRegistry)
-						.maximumSessions(-1).expiredUrl("/login.html?expired")))
+						// 【A-P1-4】与主 SSO 链同值 (5): 共享注册表按 principal 计数, 两链对称
+						.maximumSessions(5).expiredUrl("/login.html?expired")))
 				// 【注意】在用户名密码过滤器之前添加自定义的会话过期过滤器
 				.addFilterBefore(new SessionExpirationFilter(sessionRegistry),
 						UsernamePasswordAuthenticationFilter.class)
