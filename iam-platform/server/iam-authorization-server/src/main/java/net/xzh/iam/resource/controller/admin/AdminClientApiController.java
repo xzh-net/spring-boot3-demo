@@ -21,7 +21,9 @@ import net.xzh.iam.auth.vo.ClientVO;
  * 三域管理 API — 客户端域 (/api/admin/clients).
  * <p>
  * 认证中心「客户端管理」面向 oauth2_registered_client 的 REST 接口,
- * 经 Order(2) 安全链保护 (Bearer + ADMIN_SERVICE_TOKEN 管理服务凭证)。
+ * 经 Order(2) 安全链保护 (Bearer, 当前登录用户令牌)。
+ * 授权模式校验见 {@link net.xzh.iam.auth.service.ClientService#validate} —
+ * client_credentials (M2M) 已废弃并服务端拒绝 (A-P1-1)。
  * </p>
  */
 @RestController

@@ -27,6 +27,15 @@
   - **零回归**：表内端点 `GET /admin/users`、`/admin/endpoint-policies` 直连 200，8001 BFF 会话下 `/admin/users|roles|clients|endpoint-policies` 4×200；完整登录链（8001→8085 OAuth→9000 授权→回调）走通；`/permitall/time` 200（链层短路不受影响）；discovery/jwks 200；匿名态 9000 各路径 401（与改前一致）。
   - **行为差异（fail-closed 方向，记录备查）**：三前缀下**未在准入表注册的方法**（如 `HEAD/OPTIONS /admin/users`——表内只有 GET 行、扫描器按 `@XxxMapping` 注解方法生成行、HEAD 为 Spring 隐式支持不入表）改前走认证档落 MVC（HEAD=200/PUT=405），改后统一 **403**。平台内无 HEAD/OPTIONS 消费方（前端/BFF 脚本全量扫描 0 命中），9000 未配置 CORS（无跨域预检），无实际影响；语义上与"未配行即拒绝"自洽。
 
+### A-P1-1 拆弹：client_credentials (M2M) 接口层封死
+
+- **定性**：非现实漏洞（实测 DB 0 个 client_credentials 客户端、无 M2M 消费方），而是**半拆残留的引信**——M2M 方案已废弃（概要设计决策#1 单体无服务间调用 + 静态环境变量凭证不可轮换/审计，CHANGELOG 2026-10-27 已删凭证），但令牌端点转换器/provider、管理页选项、V6.9 迁移均未清理。原"三重保险"（无客户端/0 业务码/A-P0-4 deny）全是数据与实现巧合，非代码规则。
+- **四层封死（方案 A）**：① `accessTokenRequestConverters(converters -> removeIf CC)` 从默认列表摘除转换器；② `providers.removeIf(OAuth2ClientCredentialsAuthenticationProvider)` 双保险；③ `client.html` GRANT_TYPES 删选项；④ `ClientService.validate` 服务端拒绝（返回业务 400，防 API/直库绕过）。
+- **【关键坑】转换器摘除必须用复数 Consumer 方法**：单数 `accessTokenRequestConverter(...)` 字节码为 `List.add` **追加语义**，SAS `configure()` 中 `createDefaultAuthenticationConverters()`（含 CC）**永远先构建**、自建列表只是 `addAll(0, ...)` 插到前面——首轮按单数方法摘除属**无效操作**，实测表现为 `grant_type=client_credentials` → **302 login**（默认 CC 转换器认领请求 → provider 已摘 → 无 provider 异常冒泡 → ExceptionTranslationFilter → 登录页）而非 400；改用复数 Consumer（字节码证实其在默认列表构建**之后**执行）后 → 标准 **400 unsupported_grant_type**。
+- **顺手清理**：重复注册两次的 `OAuth2AuthorizationCodeAuthenticationConverter`（原 L364/365）；`AdminClientApiController` javadoc 中已废弃的 `ADMIN_SERVICE_TOKEN` 表述；V6.9 迁移头部加「已废弃·勿重跑」警告（重跑会插入换不到令牌的死客户端）。
+- **验证**：`grant_type=client_credentials` → 400 `unsupported_grant_type`（与无效 grant `foo` 同行为）；`authorization_code` 缺参 → 400 `invalid_request`（对照）；创建带该 grant 客户端 → 业务 400「不支持 client_credentials (M2M) 授权模式」；正常客户端创建/删除 → 200（DB 无残留）；设备码入口 200、授权码登录链（8001→8085→9000→回调）走通、管理 API 3×200。
+- **恢复路径**（将来真有 M2M 需求）：一次代码 PR（加回①②+UI 选项+放开校验）→ `m2m.*` scope 入 `sys_scope` + 交集逻辑对 client_credentials 改 scope 展开直作业务码（核心设计点）+ 端点准入行 + 服务身份审计 + 凭证轮换 → 概要设计/权限与安全设计决策先行改写。
+
 ### README 待办补录（修复上轮重排丢失的 6 项）
 
 上轮「按代码审计重排待办」误删若干条目，按当前事实核实后补回（不照抄旧文，逐项复核状态）：

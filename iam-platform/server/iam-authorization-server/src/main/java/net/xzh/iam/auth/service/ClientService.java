@@ -233,6 +233,13 @@ public class ClientService {
         if (grants.contains("authorization_code") && !vo.isRequireProofKey()) {
             throw new IllegalArgumentException("授权码模式必须开启 PKCE (requireProofKey=true)");
         }
+        // 【A-P1-1】M2M (client_credentials) 已废弃 —— 令牌端点已摘除对应转换器/提供者,
+        // 此处服务端拒绝创建/更新带该 grant 的客户端 (前端选项已同步移除, 此处防绕过)。
+        // 将来恢复 M2M 须先过文档决策关 + m2m.* scope 治理重建, 再一并放开。
+        if (grants.contains("client_credentials")) {
+            throw new IllegalArgumentException(
+                    "不支持 client_credentials (M2M) 授权模式: 该模式已废弃, 令牌端点不再签发服务令牌");
+        }
         Set<String> methods = vo.getClientAuthenticationMethods();
         if (methods != null && methods.contains("none") && StringUtils.hasText(vo.getClientSecret())) {
             throw new IllegalArgumentException("Public 客户端 (认证方式=none) 不能设置 client_secret");

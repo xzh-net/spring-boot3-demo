@@ -34,6 +34,7 @@ import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationConsentService;
+import org.springframework.security.oauth2.server.authorization.authentication.OAuth2ClientCredentialsAuthenticationProvider;
 import org.springframework.security.oauth2.server.authorization.authentication.OAuth2DeviceCodeAuthenticationProvider;
 import org.springframework.security.oauth2.server.authorization.authentication.OAuth2TokenIntrospectionAuthenticationProvider;
 import org.springframework.security.oauth2.server.authorization.client.RegisteredClientRepository;
@@ -49,11 +50,7 @@ import org.springframework.security.oauth2.server.authorization.token.OAuth2Acce
 import org.springframework.security.oauth2.server.authorization.token.OAuth2RefreshTokenGenerator;
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenCustomizer;
 import org.springframework.security.oauth2.server.authorization.token.OAuth2TokenGenerator;
-import org.springframework.security.oauth2.server.authorization.web.authentication.DelegatingAuthenticationConverter;
-import org.springframework.security.oauth2.server.authorization.web.authentication.OAuth2AuthorizationCodeAuthenticationConverter;
 import org.springframework.security.oauth2.server.authorization.web.authentication.OAuth2ClientCredentialsAuthenticationConverter;
-import org.springframework.security.oauth2.server.authorization.web.authentication.OAuth2DeviceCodeAuthenticationConverter;
-import org.springframework.security.oauth2.server.authorization.web.authentication.OAuth2RefreshTokenAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
@@ -351,6 +348,12 @@ public class AuthorizationServerConfig {
 											// 移除默认的设备码认证提供者
 											providers
 													.removeIf(p -> p instanceof OAuth2DeviceCodeAuthenticationProvider);
+											// 【A-P1-1】移除默认的 client_credentials 提供者: M2M 方案已废弃
+											// (概要设计决策#1 单体无服务间调用), 令牌端点不再签发服务令牌。
+											// 将来若恢复 M2M, 须先过文档决策关 + 按 m2m.* scope 重建治理, 再加回此两行
+											// (转换器见下方 accessTokenRequestConverter)。
+											providers.removeIf(
+													p -> p instanceof OAuth2ClientCredentialsAuthenticationProvider);
 											// 添加自定义的设备码认证提供者 (含登录准入闸)
 											providers.add(new DeviceCodeGrantAuthenticationProvider(
 													registeredClientRepository, authorizationService,
@@ -359,13 +362,13 @@ public class AuthorizationServerConfig {
 											// 授权码兑换/刷新令牌: 保留 SAS 默认提供者
 											// (自省层 scope∧RBAC 交集承担, 见 RbacAuthoritiesOpaqueTokenIntrospector)
 										})
-										// 【目的】组合多种认证转换器，确保能处理授权码、刷新令牌、设备码、客户端凭证等多种请求
-										.accessTokenRequestConverter(new DelegatingAuthenticationConverter(
-												List.of(new OAuth2AuthorizationCodeAuthenticationConverter(),
-														new OAuth2AuthorizationCodeAuthenticationConverter(),
-														new OAuth2RefreshTokenAuthenticationConverter(),
-														new OAuth2ClientCredentialsAuthenticationConverter(),
-														new OAuth2DeviceCodeAuthenticationConverter()))))
+										// 【A-P1-1】从默认转换器列表摘除 client_credentials (M2M 已废弃)。
+										// 必须用 accessTokenRequestConverters(Consumer) —— 它在 SAS
+										// createDefaultAuthenticationConverters() 之后执行, 才能摘到默认项;
+										// 单数 accessTokenRequestConverter(...) 是追加语义 (List.add), 摘不掉默认项。
+										// 授权码/刷新/设备码转换器均由 SAS 默认提供, 无需自建列表。
+										.accessTokenRequestConverters(converters -> converters.removeIf(
+												c -> c instanceof OAuth2ClientCredentialsAuthenticationConverter)))
 								.deviceAuthorizationEndpoint(da -> da.verificationUri("/activate")) // 设置设备验证的用户友好 URI
 								.deviceVerificationEndpoint(dv -> dv.consentPage("/consent")) // 设备验证也使用同一个同意页面
 								// 【增强】Token Introspection: 替换默认提供者,

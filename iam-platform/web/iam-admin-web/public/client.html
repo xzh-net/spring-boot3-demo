@@ -329,7 +329,7 @@
 <script>
 const GRANT_TYPES = [
     { v: "authorization_code", l: "授权码" },
-    { v: "client_credentials", l: "客户端" },
+    // client_credentials (M2M) 已废弃移除 — A-P1-1: 令牌端点不再签发服务令牌, 服务端亦拒绝该 grant
     { v: "refresh_token", l: "刷新令牌" },
     { v: "password", l: "密码" },
     { v: "urn:ietf:params:oauth:grant-type:device_code", l: "设备码" }

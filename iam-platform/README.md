@@ -236,7 +236,6 @@ cd client/iam-client-h5-demo     && node server.js   # :8084
 
 | # | 问题 | 现状 | 位置 | 影响 |
 |---|---|---|---|---|
-| A-P1-1 | **client_credentials 接口层未禁** | 虽然种子里没有 client_credentials 客户端，但 `OAuth2ClientCredentialsAuthenticationConverter` 仍在 config 中注册，SAS 默认 provider 未移除 | `AuthorizationServerConfig.java` | 如果有人通过管理端新增一个 client_credentials grant type 的客户端，整条 M2M 令牌链路就通了。当前自省层对 client_id 主体处理是偶然 fail-closed，不是显式接口层拦截 |
 | A-P1-2 | **登录防爆破完全未实现** | 登录端点无失败计数、无账号临时锁定机制 | 登录表单流程 | 账号暴力破解无防线 |
 | A-P1-3 | **敏感操作审计完全未实现** | 所有 Admin Controller 的写操作（用户/客户端/角色/权限/准入的增删改）裸写无审计记录 | 全栈 | 与 P0-4 "改权限码零窗口" 特性结合 = **无审计的即时生效变更** |
 | A-P1-4 | **maximumSessions(-1) 无限并发** | Spring Security 会话并发限制设为 -1（不限制），SSO 会话可无限创建 | `AuthorizationServerConfig.java` | 账号被盗用可无限会话 |
@@ -295,6 +294,7 @@ cd client/iam-client-h5-demo     && node server.js   # :8084
 | ✅8 | **A-P0-2 issuer 硬编码 localhost:9000** | 新增配置项 `iam.issuer`（环境变量 `IAM_ISSUER`），`AuthorizationServerSettings`、`JwtDecoder` 校验器、内省 `iss` 属性三处同源引用。`application-prod.yml` 提供生产默认值 |
 | ✅9 | **A-P0-3 OIDC Client Registration 端点未受保护** | 两层收口：① permitAll 名单摘除该路径 ② 新增 `ClientRegistrationDenyFilter` 置于协议链最早（`SecurityContextHolderFilter` 之前），对配置路径 `/oauth2/connect/register` 任意方法一律 404（响应体模仿 Spring Boot 默认错误格式）。**只删 permitAll 不够**——SAS 端点过滤器经 `addFilterAfter(AuthorizationFilter)` 装配于授权层**之后**（javap 全量取证），删行只挡匿名请求，**已登录会话仍穿过授权层进入注册过滤器**；拒绝过滤器与装配状态/过滤器顺序/CSRF 豁免无关。框架默认路径 `/connect/register` 不在任何安全链 securityMatcher 内，其 404 来自「无链匹配 + 无 MVC 路由」，过滤器对该路径的兜底判断是未来 securityMatcher 扩展时的保险。实测：匿名与已登录同源 POST 均 404，discovery/jwks/introspect/登录链/管理 API 全正常 |
 | ✅10 | **A-P0-4 表外端点降级认证档 → 隐式权限提升** | `EndpointAdmissionManager` 的 null 分支（未配准入行）从"认证档放行"**翻转为一律拒绝 403**（fail-closed，方案 A）。**D1 裁定收敛**：仅保留启动维度（启动不阻塞、漂移告警提示补行），运行时子句改判 deny——两者本不冲突，D1 管"启动不拦"、deny 管"请求不放"。未配行 warn 按路径去重（首见 warn、后续 debug，防扫描刷日志）。零现实回归：56 接口 = 56 准入行全有行、null 分支从未执行；`/permitall/**` 链层短路不进管理器。落地后 README/概要设计/编码规范「三层任一缺口即拒绝」与代码一致 |
+| ✅11 | **A-P1-1 client_credentials 接口层未禁** | M2M 门四层封死（方案 A）：① `accessTokenRequestConverters(Consumer)` 从**默认列表**摘除 CC 转换器——注意单数 `accessTokenRequestConverter(...)` 是 List.add **追加语义**、摘不掉 SAS 默认项（首轮误用即此坑，表现为 302 而非 400）；② providers `removeIf` 摘除 SAS 默认 CC 提供者（双保险）；③ 管理页 `GRANT_TYPES` 删该选项；④ `ClientService.validate` 服务端拒绝该 grant（防 API/直库绕过，前端已删选项仍返回业务 400）。附带：V6.9 迁移头部加「已废弃勿重跑」警告、删除重复注册的 `OAuth2AuthorizationCodeAuthenticationConverter`。恢复 M2M 路径已写明：一次代码 PR（加回①②）+ `m2m.*` scope 治理重建 + 概要设计决策关。实测：`grant_type=client_credentials` → **400 unsupported_grant_type**（与无效 grant 同行为）；创建带该 grant 的客户端 → 业务 400；授权码登录链/设备码/管理 API 全正常；DB 0 该类客户端 |
 
 ---
 
