@@ -80,6 +80,12 @@ iam:
   # OIDC 发行者标识 (discovery / id_token iss / 内省 iss 同源).
   # 对外部署时必须通过 IAM_ISSUER 覆盖为外部可访问地址, 否则客户端按 issuer 校验会失败.
   issuer: ${IAM_ISSUER:http://localhost:9000}
+  # 登录防爆破 (A-P1-2): Redis 失败计数 + 临时锁定, 双维度 (用户名/IP) 任一命中即拒
+  login-guard:
+    window-seconds: 600      # 失败计数窗口 (秒), 窗口内计数未达阈值自然过期归零
+    lock-seconds: 900        # 锁定时长 (秒), Redis TTL 自动解锁 (无需管理员干预)
+    user-threshold: 5        # 单用户名窗口内失败阈值 → 锁该账号
+    ip-threshold: 20         # 单 IP 窗口内失败阈值 → 锁该 IP (防喷洒, 高于账号阈值容忍共享出口)
   jwk:
     # JWT 签名密钥库文件: 首次启动自动生成并落盘, 后续启动复用同一份密钥.
     # 多实例部署需挂载共享卷指向同一文件; 该文件含私钥, 注意访问权限.

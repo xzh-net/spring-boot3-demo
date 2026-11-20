@@ -15,6 +15,7 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.core.annotation.Order;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.Customizer;
@@ -77,6 +78,9 @@ import net.xzh.iam.auth.security.repository.RedisOAuth2AuthorizationService;
 import net.xzh.iam.auth.security.authentication.client.DeviceClientAuthenticationProvider;
 import net.xzh.iam.auth.security.authentication.grant.DeviceCodeGrantAuthenticationProvider;
 import net.xzh.iam.auth.security.jwk.PersistentJwkStore;
+import net.xzh.iam.auth.security.lockout.LoginGuardService;
+import net.xzh.iam.auth.security.lockout.LockoutAwareFailureHandler;
+import net.xzh.iam.auth.security.lockout.LockoutAuthenticationProvider;
 import net.xzh.iam.auth.security.session.RedisSessionRegistry;
 import net.xzh.iam.auth.security.token.EnrichedOAuth2TokenIntrospectionAuthenticationProvider;
 import net.xzh.iam.auth.security.web.ActiveClientTrackingFilter;
@@ -201,15 +205,20 @@ public class AuthorizationServerConfig {
 	/**
 	 * 统一 IdP 的 DaoAuthenticationProvider (平台级, 服务全部客户端)，
 	 * 供 OAuth2 授权登录与设备验证两条链路共用。
+	 * <p>
+	 * 【A-P1-2 登录防爆破】外层包装 {@link LockoutAuthenticationProvider}:
+	 * 认证前 user/IP 双维度锁定检查 + 失败计数/成功清计数, 两条链单点覆盖。
+	 * </p>
 	 */
 	@Bean("platformDaoProvider")
-	public DaoAuthenticationProvider platformDaoProvider(
+	public AuthenticationProvider platformDaoProvider(
 			@Qualifier("platformUserDetailsService") UserDetailsService platformUserDetailsService,
-			PasswordEncoder passwordEncoder) {
+			PasswordEncoder passwordEncoder,
+			LoginGuardService loginGuardService) {
 		DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
 		provider.setUserDetailsService(platformUserDetailsService);
 		provider.setPasswordEncoder(passwordEncoder);
-		return provider;
+		return new LockoutAuthenticationProvider(provider, loginGuardService);
 	}
 
 	/**
@@ -296,9 +305,10 @@ public class AuthorizationServerConfig {
 			RegisteredClientRepository registeredClientRepository, RedisOAuth2AuthorizationService authorizationService,
 			OAuth2AuthorizationConsentService authorizationConsentService, OAuth2TokenGenerator<?> tokenGenerator,
 			@Qualifier("platformUserDetailsService") UserDetailsService platformUserDetailsService,
-			@Qualifier("platformDaoProvider") DaoAuthenticationProvider platformDaoProvider,
+			@Qualifier("platformDaoProvider") AuthenticationProvider platformDaoProvider,
 			SessionRegistry sessionRegistry,
 			LoginAdmissionService loginAdmissionService,
+			LoginGuardService loginGuardService,
 			@Value("${iam.issuer:http://localhost:9000}") String issuer) throws Exception {
 
 		// 1. 准备自定义的认证组件
@@ -403,6 +413,9 @@ public class AuthorizationServerConfig {
 						.anyRequest().authenticated())
 				.formLogin(form -> form.loginPage("/login.html") // 自定义登录页面
 						.loginProcessingUrl("/login") // 登录表单提交地址
+						// 【A-P1-2】失败跳转: 锁定给明确提示(带分钟数), 普通失败落点与文案同改造前基线
+						.failureHandler(new LockoutAwareFailureHandler(loginGuardService,
+								"/login.html?error", "/login.html?error=locked"))
 						.permitAll())
 				// 【目的】忽略设备验证端点和登录表单提交的 CSRF 校验
 				// /oauth2/device/verify: 跨安全链 CSRF Token 不一致
@@ -441,8 +454,9 @@ public class AuthorizationServerConfig {
 	@Bean
 	@Order(2)
 	public SecurityFilterChain deviceVerificationSecurityFilterChain(HttpSecurity http,
-			@Qualifier("platformDaoProvider") DaoAuthenticationProvider platformDaoProvider,
-			SessionRegistry sessionRegistry) throws Exception {
+			@Qualifier("platformDaoProvider") AuthenticationProvider platformDaoProvider,
+			SessionRegistry sessionRegistry,
+			LoginGuardService loginGuardService) throws Exception {
 
 		// 1. 配置请求匹配与认证提供者
 		// 【目的】明确指定这条安全链只处理 /activate 和 /device-login 两个端点
@@ -468,7 +482,11 @@ public class AuthorizationServerConfig {
 				// 【目的】指定设备验证流程的专属登录页面和处理 URL
 				// 登录成功后，会跳转到 /activate 页面，完成设备码与用户账户的绑定
 				.formLogin(form -> form.loginPage("/login.html?type=device").loginProcessingUrl("/device-login")
-						.defaultSuccessUrl("/activate", false).failureUrl("/login.html?type=device&error").permitAll())
+						.defaultSuccessUrl("/activate", false)
+						// 【A-P1-2】失败跳转: 锁定给明确提示(带分钟数), 普通失败落点同改造前基线
+						.failureHandler(new LockoutAwareFailureHandler(loginGuardService,
+								"/login.html?type=device&error", "/login.html?type=device&error=locked"))
+						.permitAll())
 
 				// 5. 配置 CSRF
 				// 【目的】使用基于 Cookie 的 CSRF 令牌策略，并将 HttpOnly 设置为 false，以便前端 JavaScript 可以读取令牌

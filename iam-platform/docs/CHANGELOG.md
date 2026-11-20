@@ -36,6 +36,17 @@
 - **验证**：`grant_type=client_credentials` → 400 `unsupported_grant_type`（与无效 grant `foo` 同行为）；`authorization_code` 缺参 → 400 `invalid_request`（对照）；创建带该 grant 客户端 → 业务 400「不支持 client_credentials (M2M) 授权模式」；正常客户端创建/删除 → 200（DB 无残留）；设备码入口 200、授权码登录链（8001→8085→9000→回调）走通、管理 API 3×200。
 - **恢复路径**（将来真有 M2M 需求）：一次代码 PR（加回①②+UI 选项+放开校验）→ `m2m.*` scope 入 `sys_scope` + 交集逻辑对 client_credentials 改 scope 展开直作业务码（核心设计点）+ 端点准入行 + 服务身份审计 + 凭证轮换 → 概要设计/权限与安全设计决策先行改写。
 
+### A-P1-2 拆弹：登录防爆破 (Redis 失败计数 + 临时锁定)
+
+- **现状事实**：登录端点零防线——无失败计数、无锁定触发方（`sys_user.account_non_locked` 字段存在且已接进 `UserDetails`，但全代码无任何处置 0 的地方）、无限流设施、**失败连一行日志都不打**（被爆破事后无从得知）；`/login` POST 在 CSRF 豁免清单（静态登录页无法渲染 token），攻击者裸 POST 即可。`client_login_policy` 登录准入只管"哪个客户端"，不管"猜了几次"，维度不同帮不上。
+- **方案 A 落地（三层）**：① `LockoutAuthenticationProvider`（`auth.security.lockout`）装饰 `platformDaoProvider`——认证前 user/IP 双维度锁定检查（**正确密码也拒绝**）+ 成功清计数与 info 日志；两条表单链单点覆盖。② `LockoutAwareFailureHandler`——失败计数 + 锁定/普通失败分流（normalUrl 与改前基线逐字节一致）。③ 登录页 `error=locked` 分支：「登录尝试过多，请 N 分钟后再试」（retry 分钟数由跳转 URL 携带，随配置走）。
+- **【关键坑】失败计数必须放 FailureHandler，不能放认证装饰器**：失败路径上本地与父级 ProviderManager 会**先后调用同一装饰器**（本地抛 BadCredentials 后父级回落复用 bean），INCR 翻倍——首轮实测每次失败 +2，**第 3 次请求即达阈值 5**（增量探针：failure#1→计数 2、#2→4、#3→5+锁定）。Spring 对每个失败请求**恰调用 FailureHandler 一次**，与 AuthenticationManager 拓扑无关。成功路径本地命中即返回不回落父级，故成功清计数留在装饰器是安全的（恰一次）。
+- **参数（`iam.login-guard.*`，application.yml 可调）**：计数窗口 600s（固定窗口，首见设 TTL）；账号阈值 5 → 锁 900s；IP 阈值 20（防喷洒、容忍共享出口/NAT）。**解锁 = Redis TTL 自然过期**——锁定机制不被反向利用为 DoS（攻击者零成本锁死真账号的场景被 TTL 上限压到 15 分钟）；管理员人工升级通道 = 已有的「禁用账号」（`enabled=0`），与自动锁正交，无需新做手动解锁。
+- **防抖与边界**：触发锁定即清零该维度计数（防"解锁瞬间旧计数二次触发"）；成功仅清用户名计数、IP 计数保留至窗口过期（否则攻击者持一个合法账号即可重置喷洒计数）；仅 `BadCredentialsException` 计数（Disabled/CredentialsExpired/内部错误不计，防 DB 故障误锁）；锁定期内尝试不再累计（锁不被延长）；用户名归一化小写（与 MySQL ci 排序规则一致，防大小写绕过）。
+- **审计第 1 层（log 级，本单交付）**：失败 `log.warn`（用户名 + IP + 双维度计数 x/阈值）、锁定触发 `log.warn`、成功 `log.info`。**登录历史落库 + 查询页归 A-P1-3**（与敏感操作审计统一设计，避免重复建表），已在 README A-P1-3 条目标注。
+- **验证（13/13）**：改前基线跳转逐字节一致（`/login.html?error`、`/login.html?type=device&error`）；失败 1-4 正常跳转、**第 5 次触发锁定**（`error=locked&retry=15`）；**第 6 次正确密码仍被拒**（核心用例）；Redis 锁 key TTL=900、计数清零；清 key（模拟 TTL 解锁）后正确密码恢复 302；20 次跨账号喷洒触发 IP 锁、锁定期内 admin 正确密码同样被拒；完整登录链（8001→8085→9000→回调）/设备码入口/管理 API 3×200/discovery 200 回归正常；全部 guard key 已清理。
+- **备注**：`boot9000.log` 中中文日志显示为替换符——实测改造前既有中文日志（EndpointPolicy 等）同样乱码，属 `schtasks+cmd 重定向+JVM 控制台编码` 的**环境既有问题**，非本改动引入（判定依据：新旧日志行均含 U+FFFD，表现一致）。
+
 ### README 待办补录（修复上轮重排丢失的 6 项）
 
 上轮「按代码审计重排待办」误删若干条目，按当前事实核实后补回（不照抄旧文，逐项复核状态）：

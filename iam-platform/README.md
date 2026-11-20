@@ -236,8 +236,7 @@ cd client/iam-client-h5-demo     && node server.js   # :8084
 
 | # | 问题 | 现状 | 位置 | 影响 |
 |---|---|---|---|---|
-| A-P1-2 | **登录防爆破完全未实现** | 登录端点无失败计数、无账号临时锁定机制 | 登录表单流程 | 账号暴力破解无防线 |
-| A-P1-3 | **敏感操作审计完全未实现** | 所有 Admin Controller 的写操作（用户/客户端/角色/权限/准入的增删改）裸写无审计记录 | 全栈 | 与 P0-4 "改权限码零窗口" 特性结合 = **无审计的即时生效变更** |
+| A-P1-3 | **敏感操作审计完全未实现** | 所有 Admin Controller 的写操作（用户/客户端/角色/权限/准入的增删改）裸写无审计记录 | 全栈 | 与 P0-4 "改权限码零窗口" 特性结合 = **无审计的即时生效变更**。**登录历史审计（登录成功/失败落库 + 查询页）一并归入本项设计**（A-P1-2 已交付 log 级第 1 层：失败 warn/成功 info，落库层随本项做，避免重复建表） |
 | A-P1-4 | **maximumSessions(-1) 无限并发** | Spring Security 会话并发限制设为 -1（不限制），SSO 会话可无限创建 | `AuthorizationServerConfig.java` | 账号被盗用可无限会话 |
 | A-P1-5 | **Redis / MySQL 密码硬编码无环境变量** | `application-local.yml` 中数据库地址 `192.168.31.161:3306`、密码 `123456` 硬编码，无 `${DB_HOST}` / `${DB_PASSWORD}` 占位符（原「YAML 配置分类」待办的实质继承——按 auth/resource 拆分配置文件的旧设想已随单服务合并过时） | `application-local.yml` | 生产部署必须手动改配置文件，易出错且不利于容器化 |
 | A-P1-6 | **ALLOWED_REDIRECT_HOSTS 白名单硬编码 localhost 端口** | 只覆盖 localhost/127.0.0.1 的固定端口列表 | `AuthorizationServerConfig.java` | 非 localhost 或端口不在列表的 redirect_uri 全部被拒。为演示方便写死、上线必炸 |
@@ -295,6 +294,7 @@ cd client/iam-client-h5-demo     && node server.js   # :8084
 | ✅9 | **A-P0-3 OIDC Client Registration 端点未受保护** | 两层收口：① permitAll 名单摘除该路径 ② 新增 `ClientRegistrationDenyFilter` 置于协议链最早（`SecurityContextHolderFilter` 之前），对配置路径 `/oauth2/connect/register` 任意方法一律 404（响应体模仿 Spring Boot 默认错误格式）。**只删 permitAll 不够**——SAS 端点过滤器经 `addFilterAfter(AuthorizationFilter)` 装配于授权层**之后**（javap 全量取证），删行只挡匿名请求，**已登录会话仍穿过授权层进入注册过滤器**；拒绝过滤器与装配状态/过滤器顺序/CSRF 豁免无关。框架默认路径 `/connect/register` 不在任何安全链 securityMatcher 内，其 404 来自「无链匹配 + 无 MVC 路由」，过滤器对该路径的兜底判断是未来 securityMatcher 扩展时的保险。实测：匿名与已登录同源 POST 均 404，discovery/jwks/introspect/登录链/管理 API 全正常 |
 | ✅10 | **A-P0-4 表外端点降级认证档 → 隐式权限提升** | `EndpointAdmissionManager` 的 null 分支（未配准入行）从"认证档放行"**翻转为一律拒绝 403**（fail-closed，方案 A）。**D1 裁定收敛**：仅保留启动维度（启动不阻塞、漂移告警提示补行），运行时子句改判 deny——两者本不冲突，D1 管"启动不拦"、deny 管"请求不放"。未配行 warn 按路径去重（首见 warn、后续 debug，防扫描刷日志）。零现实回归：56 接口 = 56 准入行全有行、null 分支从未执行；`/permitall/**` 链层短路不进管理器。落地后 README/概要设计/编码规范「三层任一缺口即拒绝」与代码一致 |
 | ✅11 | **A-P1-1 client_credentials 接口层未禁** | M2M 门四层封死（方案 A）：① `accessTokenRequestConverters(Consumer)` 从**默认列表**摘除 CC 转换器——注意单数 `accessTokenRequestConverter(...)` 是 List.add **追加语义**、摘不掉 SAS 默认项（首轮误用即此坑，表现为 302 而非 400）；② providers `removeIf` 摘除 SAS 默认 CC 提供者（双保险）；③ 管理页 `GRANT_TYPES` 删该选项；④ `ClientService.validate` 服务端拒绝该 grant（防 API/直库绕过，前端已删选项仍返回业务 400）。附带：V6.9 迁移头部加「已废弃勿重跑」警告、删除重复注册的 `OAuth2AuthorizationCodeAuthenticationConverter`。恢复 M2M 路径已写明：一次代码 PR（加回①②）+ `m2m.*` scope 治理重建 + 概要设计决策关。实测：`grant_type=client_credentials` → **400 unsupported_grant_type**（与无效 grant 同行为）；创建带该 grant 的客户端 → 业务 400；授权码登录链/设备码/管理 API 全正常；DB 0 该类客户端 |
+| ✅12 | **A-P1-2 登录防爆破完全未实现** | Redis 失败计数 + 临时锁定，**用户名/IP 双维度任一命中即拒**（账号阈值 5 次/10 分钟窗口 → 锁 15 分钟；IP 阈值 20 次防喷洒、容忍共享出口）。三层实现：① `LockoutAuthenticationProvider` 装饰 `platformDaoProvider`（认证前锁定检查——**正确密码也拒绝**；成功清计数 + info 日志），两条表单链（`/login`、`/device-login`）单点覆盖；② `LockoutAwareFailureHandler` 执行失败计数（**必须放这里**：失败路径本地与父级 ProviderManager 会先后调用装饰器，INCR 翻倍——首轮放装饰器实测第 3 次请求即达阈值 5；Spring 对每失败请求恰调用处理器一次）+ 锁定/普通失败分流跳转；③ 登录页 `error=locked&retry=N` 明确提示「登录尝试过多，请 N 分钟后再试」。**解锁 = Redis TTL 自然过期**（锁定不被反向利用为 DoS；管理员人工升级通道 = 已有的禁用账号功能，正交）；触发锁定即清零该维度计数（防解锁瞬间二次触发）；仅 `BadCredentialsException` 计数（DB 故障等不误锁）；锁定期内尝试不累计（锁不被延长）；用户名小写归一（与 MySQL ci 排序规则一致）。配置 `iam.login-guard.*` 可调。日志第 1 层：失败 warn（用户名/IP/双维度计数）+ 成功 info；**登录历史落库归 A-P1-3**。实测 13/13：基线跳转逐字节一致、第 5 次触发锁定、**第 6 次正确密码被拒**、TTL 解锁恢复、20 次喷洒触发 IP 锁、完整登录链/设备码/管理 API 回归正常 |
 
 ---
 
