@@ -56,6 +56,16 @@
 - **验证**（verify3 6/6 + final 4/4 + 全量回归）：6 连登 → **活跃=5、踢 1**（Redis `expired=true` 持久化）；被踢会话持有效授权请求（含 PKCE）→ **302 `login.html?expired`**（认证已清）；**同一浏览器重登 → 恢复原授权请求**（state=finalstate 一致，SavedRequest 生效）；活跃会话正常发 code；新登录不被拒；完整登录链（8001→8085→9000）/管理 API 3×200/设备码/登录防爆破（错误密码仍 `login.html?error`）全回归。
 - **脚本侧两坑记录**：① Spring Session cookie 值是 **base64 编码的 sid**，直接比对注册表 UUID 会误报不匹配（解码后一致）；② 首轮验证用无 PKCE 的授权请求，授权端点在校验阶段即报 `invalid_request`（早于会话检测），被踢/活跃两组结果无区分度——补全 PKCE 后用例才有效。
 
+### A-P1-5 拆弹：dev/local 配置占位符化（DB/Redis 凭据可覆盖）
+
+- **改动（3 文件，零行为变化）**：① `application-dev.yml` / `application-local.yml`（两文件内容原本完全相同）—— datasource 三项 `${DB_URL:现值}`、`${DB_USERNAME:root}`、`${DB_PASSWORD:123456}` + Redis 三项 `${REDIS_HOST:现值}`、`${REDIS_PORT:6379}`、`${REDIS_PASSWORD:}`；② `iam-admin-bff/application.yml` Redis 段同样处理（单文件无分层）。**默认值=现值 → 不设环境变量时行为逐字节不变**，schtasks 启动命令不改、clone 即跑；环境变量名与 prod profile 既有占位符**同名**（`DB_URL/DB_USERNAME/DB_PASSWORD/REDIS_HOST/REDIS_PORT/REDIS_PASSWORD`），跨 profile 覆盖方式一致。
+- **【事实修正】原影响描述有一半不成立**：README 称「生产部署必须手动改配置文件」——实测 `application-prod.yml` **本就是全占位符**（`${DB_URL:...}`、`${DB_PASSWORD:CHANGE_ME}`、`${REDIS_PASSWORD:CHANGE_ME}` 等 10 处），prod 不需要手改。真实剩余风险两条：① **仓库泄露 → 内网 root 凭据泄露**（MySQL root + `123456` + 内网 IP，网络可达即整库失守）；② dev/local 场景换环境手改文件 → **改过的文件可能被 git 回提交**（新环境密码反向写进仓库）。本项对症 ②（可覆盖、不改文件），① 靠「演示库不放真实数据 + 内网隔离」兜底——**密码仍可见于仓库是零摩擦开发的刻意取舍**。
+- **方案取舍记录**：方案 B（密码无默认值）——仓库彻底无密码但 schtasks 要塞环境变量（密码换地方存进计划任务 XML）、开发者 clone 跑不起来，对演示项目过重；方案 C（gitignored `application-secrets.yml` + `spring.config.import`）——密码真正出仓库但配置链多一层。**用户拍板 A**；将来若仓库要公开/接入 CI，升级路径 = A→C（占位符已就位，只需去掉默认值 + 加 import）。
+- **范围外澄清**：README/接口文档中的 `123456`（admin-app 密钥、演示用户密码）是**文档明示给使用者的演示凭据**，非配置泄露，不在本项；`iam-portal-bff` 无 Redis 配置（内存 session），不涉及。
+- **占位符生效实证**：临时实例 `-DDB_PASSWORD=WRONG_PLACEHOLDER_PROOF --server.port=9001` → 日志 `java.sql.SQLException: Access denied for user 'root'@'192.168.31.78'` —— 系统属性覆盖默认值、传到 JDBC 的链路确凿（启动不 fail-fast 是 Druid 建连重试语义，不影响证明；实例已清理，9001 无残留）。
+- **环境附带修复（中断恢复）**：本轮跨中断恢复时 8085 计划任务指向的 `start_bff8085.bat` 已被 Temp 清理、9000 也停了——重建 bat（java -jar 方式，与原 mvn spring-boot:run 等价、jar 已含占位符）并按「先 9000 后 8085」顺序拉起（8085 首启因 9000 未就绪、OIDC discovery Connection refused 失败，重试即成——**BFF 启动依赖 9000 的时序问题**，与本项无关但记档）。
+- **回归**：完整登录链（8001→8085→9000 授权码）走通、管理 API 3×200、discovery 200、设备码 200。
+
 ### README 待办补录（修复上轮重排丢失的 6 项）
 
 上轮「按代码审计重排待办」误删若干条目，按当前事实核实后补回（不照抄旧文，逐项复核状态）：

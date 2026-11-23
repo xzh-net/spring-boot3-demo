@@ -30,9 +30,9 @@ spring:
   #   namespace 作第二层防护: 9000 用 oauth2:session, 本服务用 admin-bff:session
   data:
     redis:
-      host: 192.168.31.161
-      port: 6379
-      password:
+      host: ${REDIS_HOST:192.168.31.161}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
       database: 3
 
   # ===== Spring Session (HttpSession + token 持久化到 Redis) =====
