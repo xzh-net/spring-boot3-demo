@@ -48,9 +48,8 @@ spring:
 # ===== 管理后台服务自定义配置 =====
 iam:
   admin-web-url: http://localhost:8001
-  # 单服务合并: 认证域与资源域同在 9000 (阶段 4 双 base 收口, resolveBase 分流无害)
+  # 单服务合并: 认证域与资源域同在 9000, 全路径统一此目标 (A-P2-2/2-3: 分流与双键已删)
   auth-center-base-url: http://localhost:9000
-  resource-service-base-url: http://localhost:9000
 
 logging:
   level:

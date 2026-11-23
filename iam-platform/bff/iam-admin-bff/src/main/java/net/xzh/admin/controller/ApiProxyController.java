@@ -20,9 +20,10 @@ import java.time.Duration;
  * 管理 API 透传代理.
  * <p>
  * 接收管理后台页面 (iam-admin-web 8001) 转发的 /admin/** 请求,
- * 附加当前登录用户 (admin-app) 的 Bearer Token 后转发到单服务合并实例 (9000);
- * resolveBase 按路径前缀分流在合并后指向同一目标 (保留分组语义, 无害冗余)。
- * 管理服务凭证 (ADMIN_SERVICE_TOKEN) 权限由对端内省校验。
+ * 附加当前登录用户 (admin-app) 的 Bearer Token 后转发到认证中心单服务实例 (9000)。
+ * A-P2-2/2-3: 单服务合并后无分流需求, 全路径统一 iam.auth-center-base-url
+ * (原 resolveBase 双目标 if/else 与 iam.resource-service-base-url 键已删除)。
+ * Bearer 权限由对端自省 + 端点准入校验。
  */
 @Slf4j
 @RestController
@@ -34,13 +35,9 @@ public class ApiProxyController {
             .build();
 
     private final String authCenterBaseUrl;
-    private final String resourceServiceBaseUrl;
 
-    public ApiProxyController(
-            @Value("${iam.auth-center-base-url}") String authCenterBaseUrl,
-            @Value("${iam.resource-service-base-url}") String resourceServiceBaseUrl) {
+    public ApiProxyController(@Value("${iam.auth-center-base-url}") String authCenterBaseUrl) {
         this.authCenterBaseUrl = authCenterBaseUrl;
-        this.resourceServiceBaseUrl = resourceServiceBaseUrl;
     }
 
     /**
@@ -53,8 +50,7 @@ public class ApiProxyController {
         String uri = request.getRequestURI();
         String query = request.getQueryString();
 
-        String base = resolveBase(uri);
-        String target = base + uri + (query != null ? "?" + query : "");
+        String target = authCenterBaseUrl + uri + (query != null ? "?" + query : "");
         log.debug("[proxy] {} {} -> {}", request.getMethod(), request.getRequestURI(), target);
 
         String method = request.getMethod();
@@ -88,18 +84,5 @@ public class ApiProxyController {
                         () -> response.setContentType("application/json; charset=utf-8"));
         response.getOutputStream().write(resp.body());
         response.getOutputStream().flush();
-    }
-
-    /**
-     * 按路径前缀决定转发目标.
-     */
-    private String resolveBase(String uri) {
-        if (uri.startsWith("/admin/roles")
-                || uri.startsWith("/admin/permissions")
-                || uri.startsWith("/admin/user-roles")
-                || uri.startsWith("/admin/applications")) {
-            return resourceServiceBaseUrl;
-        }
-        return authCenterBaseUrl;
     }
 }

@@ -96,6 +96,15 @@
 - **缓存代价评估（为何不做）**：授权路径上的陈旧 = 权限改动在 TTL 内旧数据仍生效——正是决策 #7 要消灭的毛病；失效需挂钩 **3+ 写入面**（EndpointPolicyService 策略 CRUD ×3 / PermissionService 改码 / RbacService.updateById），漏一处即静默旧授权决策；直改 SQL 与将来多实例部署留残留窗口（需 TTL 兜底 → "零窗口"承诺降级为"≤TTL 窗口"）。
 - **结论（用户确认方案 A）**：代码零改动；README A-P2-1 从"缺陷"改写为 ✅17「已评估关闭」并记录**触发条件**——准入行 >1000 条 或 findRule 实测 p95 >10ms 时再做，届时方案 B = 三层内存缓存 + 3 写入面失效 + TTL 60s 兜底（方案已入档，届时直接执行）。
 
+### A-P2-2 + A-P2-3 拆弹：ApiProxyController 死分流与键名残留（同批清理）
+
+- **A-P2-2**：删除 `resolveBase()`——单服务合并后 `auth-center-base-url` 与 `resource-service-base-url` **两值完全相同**（yml 均 `http://localhost:9000`），4 条路径（roles/permissions/user-roles/applications）与其余路径的 if/else 分流**零行为差异**，属拆分时代残留。全部路径统一 `iam.auth-center-base-url`；类 javadoc 同步（顺带清掉同段过时的 `ADMIN_SERVICE_TOKEN` 表述——该凭证已随 M2M 废弃删除，A-P1-1 时已清理过同类表述）。
+- **A-P2-3**：删除 `iam.resource-service-base-url` 键 + `@Value` 注入与字段——键名引用的 resource-service 服务已不存在；全库引用仅 ApiProxyController + yml 两处，portal-bff 无同类键（无扩散）。边界说明：若某部署曾分开配置两键，删键后该环境变量静默失效（当前无此部署）。
+- **改动**：`ApiProxyController.java`（javadoc/字段/构造器/分流调用/方法体）+ admin-bff `application.yml`（删键）。**零行为差异**（前后目标 URL 逐字相同）。
+- **验证 10/10**：admin-bff 打包重启 → 完整登录链（8001→8085→9000 授权码）走通 → **9 个管理 API 全 200 JSON**（含 4 条原分流路径 + 5 条常规路径）。
+- **【测试插曲】`/admin/user-roles`（无参数）403 的定性**：控制器仅注册 `GET/PUT /{userCode}`，集合路径**不存在** → 表外 → **A-P0-4 改判后 fail-closed 403**（改前为 404）——**正确行为，断言写错**；改用真实端点 `/admin/user-roles/{userCode}` 后 10/10。另记录脚本两坑：验证器误带 no-redirect 拦截器导致授权链未走完、API 循环未复用 cookie jar——均为测试脚手架问题，非功能问题。
+- **文档**：README A-P2-2/A-P2-3 移出 P2 表 → ✅18/✅19（P2 表剩 P2-4~P2-7）。
+
 ### README 待办补录（修复上轮重排丢失的 6 项）
 
 上轮「按代码审计重排待办」误删若干条目，按当前事实核实后补回（不照抄旧文，逐项复核状态）：
