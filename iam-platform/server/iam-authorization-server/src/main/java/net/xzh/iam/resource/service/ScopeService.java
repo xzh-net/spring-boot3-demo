@@ -32,7 +32,7 @@ import net.xzh.iam.resource.vo.ScopeVO;
  * <p>
  * 展开链: oauth2_registered_client.scopes (Spring 标准列, 客户端持有 scope 码)
  * → sys_scope (启用态) → sys_scope_permission → sys_permission (启用态)。
- * 展开结果与用户 RBAC 码取交集后注入令牌 authorities (见 RbacAuthoritiesOpaqueTokenIntrospector):
+ * 展开结果与用户 RBAC 码取交集后注入令牌 authorities (见 RedisOpaqueTokenIntrospector):
  * <ul>
  *   <li>用户有码、客户端 scope 未含 → 不注入 (403): 防三方借用户身份越权;</li>
  *   <li>客户端有 scope、用户无码 → 不注入 (403): 防低权用户借高权客户端越权;</li>

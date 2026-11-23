@@ -27,7 +27,7 @@ import net.xzh.iam.resource.service.LoginAdmissionService;
  * <p>
  * <b>【已启用】</b>准入判定按 client_login_policy 准入表实时裁决 (2026-11-04 启用):
  * 未命中即 302 拒发授权码, fail-closed。与授权维度解耦 — 登录资格只看准入表,
- * 令牌业务码仍由自省层 用户码 ∩ scope码 决定 (见 {@code RbacAuthoritiesOpaqueTokenIntrospector}),
+ * 令牌业务码仍由自省层 用户码 ∩ scope码 决定 (见 {@code RedisOpaqueTokenIntrospector}),
  * 改权限码不再影响登录边界。
  * </p>
  */

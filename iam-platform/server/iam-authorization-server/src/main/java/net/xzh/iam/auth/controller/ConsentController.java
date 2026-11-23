@@ -137,7 +137,7 @@ public class ConsentController {
 
     /**
      * C-2③⑤: 实际授予业务码 = expand(注册表 scopes) ∩ 用户 RBAC 码。
-     * 与 RbacAuthoritiesOpaqueTokenIntrospector 自省层同一公式 — 页面所见即令牌所得。
+     * 与 RedisOpaqueTokenIntrospector 自省层同一公式 — 页面所见即令牌所得。
      * 无用户认证 / 客户端缺失 / 计算异常 → 空表 (页面显示「无业务权限」)。
      */
     private Map<String, String> computeGrantedCodes(RegisteredClient client, Authentication auth) {

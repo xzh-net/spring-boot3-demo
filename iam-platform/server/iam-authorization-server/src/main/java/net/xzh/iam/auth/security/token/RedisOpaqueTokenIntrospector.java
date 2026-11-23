@@ -3,17 +3,14 @@ package net.xzh.iam.auth.security.token;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.oauth2.core.OAuth2AccessToken;
 import org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal;
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
@@ -28,7 +25,8 @@ import org.springframework.stereotype.Component;
 
 import lombok.extern.slf4j.Slf4j;
 import net.xzh.iam.auth.security.repository.RedisOAuth2AuthorizationService;
-import net.xzh.iam.auth.security.userdetails.PlatformUserDetailsService;
+import net.xzh.iam.resource.service.PermissionService;
+import net.xzh.iam.resource.service.ScopeService;
 
 /**
  * Opaque Token 自省器: 资源服务器收到 Bearer token 后调本类 introspect().
@@ -39,12 +37,17 @@ import net.xzh.iam.auth.security.userdetails.PlatformUserDetailsService;
  *   <li>找不到 → token 已被撤销或不存在 → 抛异常 → 401</li>
  *   <li>已过期 → 抛异常 → 401</li>
  *   <li>access_token 已 invalidated (revoke 端点标记) → 抛异常 → 401</li>
- *   <li>有效 → 构造 OAuth2AuthenticatedPrincipal 返回 (含 sub/scope/roles)</li>
+ *   <li>有效 → 构造 OAuth2AuthenticatedPrincipal 返回 (含 sub/scope/authorities)</li>
  * </ul>
  *
  * <p>撤销机制: /oauth2/revoke 调 save() 传入 invalidated=true,
  * RedisOAuth2AuthorizationService.save() 检测后直接 remove() 删 Redis key,
  * 下次 introspect 查不到即返回 401. 无需黑名单.</p>
+ *
+ * <p><b>A-P2-4 单层收敛</b>: 原两层结构 (本类 UserDetails 路径取角色 +
+ * {@code RbacAuthoritiesOpaqueTokenIntrospector} 追加角色与交集业务码) 已合并至本类 ——
+ * 角色码与业务码一次算完 (角色查询从 2 次降为 1 次), authorities 唯一注入点,
+ * 消费方: EndpointAdmissionManager (只认业务码, fail-closed) 与 /api 形式展示。</p>
  */
 @Slf4j
 @Component
@@ -55,23 +58,26 @@ public final class RedisOpaqueTokenIntrospector implements OpaqueTokenIntrospect
 
     /** Redis 持久化的 OAuth2Authorization 服务, 用于查找授权记录. */
     private final RedisOAuth2AuthorizationService authorizationService;
-    /** 用户详情服务, 用于加载用户权限信息 (非 client_credentials 模式). */
-    private final UserDetailsService platformUserDetailsService;
     /** 客户端仓库, 用于将授权记录的注册ID解析为对外 client_id. */
     private final RegisteredClientRepository clientRepository;
     /** OIDC 发行者标识, 与 AuthorizationServerSettings / id_token iss 同源. */
     private final String issuer;
+    /** 角色/权限查询 (原 RBAC 层逻辑并入, A-P2-4). */
+    private final PermissionService permissionService;
+    /** 客户端 scope 展开 (双维交集的客户端维度, A-P2-4). */
+    private final ScopeService scopeService;
 
     public RedisOpaqueTokenIntrospector(
             RedisOAuth2AuthorizationService authorizationService,
-            @Qualifier("platformUserDetailsService")
-            UserDetailsService platformUserDetailsService,
             RegisteredClientRepository clientRepository,
-            @Value("${iam.issuer:http://localhost:9000}") String issuer) {
+            @Value("${iam.issuer:http://localhost:9000}") String issuer,
+            PermissionService permissionService,
+            ScopeService scopeService) {
         this.authorizationService = authorizationService;
-        this.platformUserDetailsService = platformUserDetailsService;
         this.clientRepository = clientRepository;
         this.issuer = issuer;
+        this.permissionService = permissionService;
+        this.scopeService = scopeService;
     }
 
     @Override
@@ -135,8 +141,8 @@ public final class RedisOpaqueTokenIntrospector implements OpaqueTokenIntrospect
             attributes.put("exp", accessToken.getExpiresAt());
         }
 
-        // 解析 roles: 通过 UserDetailsService 查 (client_credentials 模式无用户, roles 为空)
-        Collection<GrantedAuthority> authorities = resolveAuthorities(principalName, scopes);
+        // 权限单点计算 (A-P2-4): 角色码 + 双维交集业务码一次算完
+        Collection<GrantedAuthority> authorities = resolveAuthorities(principalName, clientId);
 
         log.debug("Opaque token introspect success, sub={}, scope={}", principalName, scopes);
         return new OpaquePrincipal(principalName, attributes, authorities);
@@ -177,36 +183,35 @@ public final class RedisOpaqueTokenIntrospector implements OpaqueTokenIntrospect
     }
 
     /**
-     * 解析权限: 优先从 UserDetailsService 查 roles; client_credentials 模式无用户时,
-     * 把 scope 转成 ROLE_ 前缀的权限 (便于 @PreAuthorize 统一处理).
+     * 权限解析 (A-P2-4 单层收敛后的唯一注入点): 角色码 + 双维交集业务码.
      * <p>
-     * principal name 为业务用户编码 user_code, 需按 user_code 反查;
-     * 兼容历史遗留令牌 (principal name 为用户名), 两者都失败才退回 scope 映射。
+     * 原两层结构 (本类经 UserDetails 取角色 + RbacAuthoritiesOpaqueTokenIntrospector 追加
+     * 角色与交集码) 合并于此, 角色查询从 2 次降为 1 次, authorities 只在本方法产生:
+     * <ul>
+     *   <li><b>角色码</b>: sub (user_code) → sys_user_role → sys_role, 原样注入 (查不到为空);</li>
+     *   <li><b>业务码 (双维交集, fail-closed)</b> = 用户 RBAC 码 ∩ 客户端 scope 展开码:
+     *       用户有码、客户端 scope 未含 → 不注入, 反之亦然; 客户端无业务 scope → 一码不放;</li>
+     * </ul>
+     * 用户不存在 (已删除/历史用户名 token) → 角色与业务码皆空 → 端点准入拒绝 (fail-closed 语义与原两层一致).
+     * 权限查询异常向上抛出 → 自省失败 401 (与原外层行为一致, 不吞).
      */
-    private Collection<GrantedAuthority> resolveAuthorities(String principalName, Set<String> scopes) {
-        Collection<GrantedAuthority> authorities = new HashSet<>();
-        try {
-            UserDetails user = null;
-            if (platformUserDetailsService instanceof PlatformUserDetailsService pus) {
-                try {
-                    user = pus.loadUserByUserCode(principalName);
-                } catch (Exception ignored) {
-                    // 历史令牌 principal=用户名, 继续按用户名加载
-                }
-            }
-            if (user == null) {
-                user = platformUserDetailsService.loadUserByUsername(principalName);
-            }
-            if (user != null) {
-                user.getAuthorities().forEach(a -> authorities.add(new SimpleGrantedAuthority(a.getAuthority())));
-                return authorities;
-            }
-        } catch (Exception e) {
-            // client_credentials 模式 principalName=client_id, 查不到用户属正常
-            log.debug("loadUserBy* 失败 (可能是 client_credentials), principal={}", principalName);
+    private Collection<GrantedAuthority> resolveAuthorities(String principalName, String clientId) {
+        Set<GrantedAuthority> authorities = new LinkedHashSet<>();
+        List<String> roleCodes = permissionService.findRoleCodes(principalName);
+        for (String role : roleCodes) {
+            authorities.add(new SimpleGrantedAuthority(role));
         }
-        // 退而求其次: scope → ROLE_scope
-        scopes.forEach(s -> authorities.add(new SimpleGrantedAuthority("ROLE_" + s.toUpperCase())));
+        Set<String> clientCodes = scopeService.resolveClientBusinessCodes(clientId);
+        Set<String> userCodes = permissionService.findPermissions(principalName);
+        Set<String> grantedCodes = new LinkedHashSet<>();
+        for (String permission : userCodes) {
+            if (clientCodes.contains(permission)) {
+                grantedCodes.add(permission);
+                authorities.add(new SimpleGrantedAuthority(permission));
+            }
+        }
+        log.debug("[Introspect] 单层权限解析, sub={}, roles={}, client={}, userCodes={}, scopeCodes={}, 交集注入={}",
+                principalName, roleCodes, clientId, userCodes, clientCodes, grantedCodes);
         return authorities;
     }
 

@@ -37,7 +37,7 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class RbacService {
 
-    /** 内置角色编码: 认证中心/资源中心硬编码引用 (RbacAuthoritiesOpaqueTokenIntrospector 依据 ADMIN/USER 判定令牌类别),
+    /** 内置角色编码: 认证中心/资源中心硬编码引用 (RedisOpaqueTokenIntrospector 依据 ADMIN/USER 判定令牌类别),
      *  禁止编辑元数据与删除, 但允许维护权限绑定。 */
     private static final Set<String> BUILTIN_ROLE_CODES = Set.of("ADMIN", "PORTAL", "THIRD_PARTY");
 

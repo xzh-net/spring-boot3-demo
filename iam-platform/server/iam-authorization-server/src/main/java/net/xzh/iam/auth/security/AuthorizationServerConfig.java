@@ -369,7 +369,7 @@ public class AuthorizationServerConfig {
 													platformUserDetailsService, tokenGenerator,
 													loginAdmissionService));
 											// 授权码兑换/刷新令牌: 保留 SAS 默认提供者
-											// (自省层 scope∧RBAC 交集承担, 见 RbacAuthoritiesOpaqueTokenIntrospector)
+											// (自省层 scope∧RBAC 交集承担, 见 RedisOpaqueTokenIntrospector)
 										})
 										// 【A-P1-1】从默认转换器列表摘除 client_credentials (M2M 已废弃)。
 										// 必须用 accessTokenRequestConverters(Consumer) —— 它在 SAS

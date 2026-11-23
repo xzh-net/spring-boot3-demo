@@ -14,7 +14,7 @@ import java.util.List;
  * <p>
  * 每行 = 一个可授予的 API 权限码 (如 user:read); URL→码绑定见
  * iam_endpoint_permission (端点绑定) 与 sys_scope_permission (授权范围)。
- * 运行时经用户令牌注入 (RbacAuthoritiesOpaqueTokenIntrospector), 端点准入按码裁决。
+ * 运行时经用户令牌注入 (RedisOpaqueTokenIntrospector), 端点准入按码裁决。
  * </p>
  */
 @Data

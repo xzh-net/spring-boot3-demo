@@ -11,6 +11,8 @@ import org.springframework.security.web.SecurityFilterChain;
 
 import jakarta.servlet.http.HttpServletResponse;
 
+import net.xzh.iam.auth.security.token.RedisOpaqueTokenIntrospector;
+
 /**
  * 统一 API 资源服务器安全链 (Order(3)).
  * <p>
@@ -23,10 +25,11 @@ import jakarta.servlet.http.HttpServletResponse;
  *   <li>表内端点 (启动扫描播种) — 由
  *       {@link EndpointAdmissionManager} 按 policy_type + 权限码组合 (ALL/ANY) 裁决
  *       (客户端维度隔离由令牌双维交集承担);</li>
- *   <li>表外其余三前缀端点 — 走认证档, 持有效 Bearer Token 即放行。</li>
+ *   <li>表外其余三前缀端点 — 一律拒绝 403 (fail-closed, A-P0-4 改判; 启动漂移告警提示补行);</li>
  * </ul>
- * Bearer Token 由 {@link RbacAuthoritiesOpaqueTokenIntrospector} 同进程本地内省
- * (Redis 查授权记录, 无 HTTP 自回环), 并按业务 RBAC ∩ 客户端 scope 双维交集注入 authorities。
+ * Bearer Token 由 {@link RedisOpaqueTokenIntrospector} 同进程本地内省
+ * (Redis 查授权记录, 无 HTTP 自回环), 并按业务 RBAC ∩ 客户端 scope 双维交集注入 authorities
+ * (A-P2-4: 原双层 RbacAuthorities 包装已并入单层)。
  */
 @Configuration
 @EnableWebSecurity
@@ -35,12 +38,12 @@ import jakarta.servlet.http.HttpServletResponse;
 public class ResourceServerConfig {
 
     private final EndpointAdmissionManager endpointAdmissionManager;
-    private final RbacAuthoritiesOpaqueTokenIntrospector rbacAuthoritiesOpaqueTokenIntrospector;
+    private final RedisOpaqueTokenIntrospector opaqueTokenIntrospector;
 
     public ResourceServerConfig(EndpointAdmissionManager endpointAdmissionManager,
-                                RbacAuthoritiesOpaqueTokenIntrospector rbacAuthoritiesOpaqueTokenIntrospector) {
+                                RedisOpaqueTokenIntrospector opaqueTokenIntrospector) {
         this.endpointAdmissionManager = endpointAdmissionManager;
-        this.rbacAuthoritiesOpaqueTokenIntrospector = rbacAuthoritiesOpaqueTokenIntrospector;
+        this.opaqueTokenIntrospector = opaqueTokenIntrospector;
     }
 
     @Bean
@@ -53,7 +56,7 @@ public class ResourceServerConfig {
                         .requestMatchers("/permitall/**").permitAll()
                         .anyRequest().access(endpointAdmissionManager))
                 .oauth2ResourceServer(oauth2 -> oauth2.opaqueToken(
-                        token -> token.introspector(rbacAuthoritiesOpaqueTokenIntrospector)))
+                        token -> token.introspector(opaqueTokenIntrospector)))
                 // 认证/授权失败分别以 JSON 401 / 403 返回,
                 // 避免与协议链的登录页跳转冲突
                 .exceptionHandling(ex -> ex

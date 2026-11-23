@@ -105,6 +105,16 @@
 - **【测试插曲】`/admin/user-roles`（无参数）403 的定性**：控制器仅注册 `GET/PUT /{userCode}`，集合路径**不存在** → 表外 → **A-P0-4 改判后 fail-closed 403**（改前为 404）——**正确行为，断言写错**；改用真实端点 `/admin/user-roles/{userCode}` 后 10/10。另记录脚本两坑：验证器误带 no-redirect 拦截器导致授权链未走完、API 循环未复用 cookie jar——均为测试脚手架问题，非功能问题。
 - **文档**：README A-P2-2/A-P2-3 移出 P2 表 → ✅18/✅19（P2 表剩 P2-4~P2-7）。
 
+### A-P2-4 拆弹：introspector 双层收敛为单层（结构债清理，行为等价钉死）
+
+- **【定性修正——按代码实证而非 README 字面】** 原述「容易导致 authority 重复注入」有误导：两层注入的角色码本就相同、且均为 Set（HashSet/LinkedHashSet 按 authority 字符串去重）——**字面重复每次都在发生，但输出从无重复**，不存在"权限算错"的运行时 bug（多轮全绿是真实状态）。全库消费方实查：`EndpointAdmissionManager`（只认交集业务码）、展示类（且 `CurrentUserController` 在 **BFF**、由 id_token 角色驱动**不走本自省器**——此点修正了方案阶段的口误）；**无任何 `@PreAuthorize`**。
+- **真实问题（结构债三条）**：① 每次自省角色查 2 遍（内层经 UserDetails 绕路一遍、外层 `findRoleCodes` 再查一遍，同请求同数据）；② 两层都改 `authorities` 且无职责界定——下一个改动者必须读懂两个类才敢动手；③ 同一 token 资源链（两层）与 `/userinfo`（仅内层）产出的 authorities 组成不一致（后者不外露故无症状）。
+- **方案 A 落地**：外层 `RbacAuthoritiesOpaqueTokenIntrospector` 逻辑**并入** `RedisOpaqueTokenIntrospector`（选此方向：它持有校验核心、被 userinfo 复用、是被委托方，改动最小）——`resolveAuthorities` 重写为唯一注入点：角色码（`findRoleCodes` 1 次，原 2 次）+ 双维交集业务码（语义逐字保留）；删除 UserDetails 绕路与 `ROLE_scope` 兜底（M2M 已随 A-P1-1 废弃、全库无 @PreAuthorize 消费 ROLE_ 前缀）；异常向上抛 → 401（与原外层一致，不吞）。**删除 `RbacAuthoritiesOpaqueTokenIntrospector.java`**；`ResourceServerConfig` 接线改 1 行（字段更名 `opaqueTokenIntrospector`）；6 处 javadoc 改指向（类内 2 处历史说明刻意保留）。
+- **等价性验证（基线先行）**：改前从日志挖出旧层裁决行作为基线（中文乱码但 ASCII 值可读）：`sub=550e8400…, roles=[ADMIN], client=admin-app, 16 码交集注入`；改后**逐字段比对全部一致**；introspect claims 完好（active/sub/client_id/scope=`admin.full openid profile`/grant_type）；userinfo 200；管理 API 8/8 + 回归 3 个全绿；登录链（8001→8085→9000 授权码+PKCE 换票）/设备码/discovery 正常。共 **9/9 + 回归电池**。
+- **顺带修正**：`ResourceServerConfig` javadoc「表外走认证档放行」是 A-P0-4 改判前的陈旧描述，一并改为「一律拒绝 403 (fail-closed)」。
+- **测试插曲**：授权舞步首轮忘带 cookie（独立 opener 无 jar）→ authorize 落登录页；修正带 jar 后通过——脚手架问题记档。
+- **文档**：README A-P2-4 移出 → ✅20（**P2 表剩 P2-5/6/7**）。
+
 ### README 待办补录（修复上轮重排丢失的 6 项）
 
 上轮「按代码审计重排待办」误删若干条目，按当前事实核实后补回（不照抄旧文，逐项复核状态）：
