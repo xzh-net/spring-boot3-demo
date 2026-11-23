@@ -1,6 +1,5 @@
 package net.xzh.iam.auth.security;
 
-import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
@@ -513,35 +512,7 @@ public class AuthorizationServerConfig {
 		return repo;
 	}
 
-	/**
-	 * 允许的 post-logout 重定向目标, 防止 open-redirect 漏洞:
-	 * 本站同源路径 (以 / 开头, 不包含 // 协议跳) 或 OAuth2 回调客户端地址。
-	 */
-	private static final Set<String> ALLOWED_REDIRECT_HOSTS = Set.of(
-			"localhost:8000", "localhost:8080", "localhost:8081", "localhost:8082", "localhost:8083", "localhost:8084", "localhost:9000",
-			"127.0.0.1:8000", "127.0.0.1:8080", "127.0.0.1:8081", "127.0.0.1:8082", "127.0.0.1:8083", "127.0.0.1:8084", "127.0.0.1:9000"
-	);
-
-	/** 检查退出跳转 URL 是否在白名单内（同源路径自动通过） */
-	private static boolean isRedirectAllowed(String url) {
-		if (url == null || url.isEmpty())
-			return false;
-		try {
-			if (url.startsWith("/") && !url.startsWith("//"))
-				return true;
-			URI u = URI.create(url);
-			String host = u.getHost();
-			int port = u.getPort();
-			if (host == null)
-				return false;
-			String key = (port <= 0) ? host : host + ":" + port;
-			return ALLOWED_REDIRECT_HOSTS.contains(key);
-		} catch (Exception ignore) {
-			return false;
-		}
-	}
-
-	/**
+/**
 	 * 部分登出: 只移除指定的 SecurityContext 属性, 避免误删同一会话中其他链路的登录态.
 	 * <p>
 	 * OAuth2 授权登录 (OAUTH2)、设备验证 (DEVICE) 共用同一个 HttpSession (共享 JSESSIONID),

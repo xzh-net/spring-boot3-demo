@@ -66,6 +66,20 @@
 - **环境附带修复（中断恢复）**：本轮跨中断恢复时 8085 计划任务指向的 `start_bff8085.bat` 已被 Temp 清理、9000 也停了——重建 bat（java -jar 方式，与原 mvn spring-boot:run 等价、jar 已含占位符）并按「先 9000 后 8085」顺序拉起（8085 首启因 9000 未就绪、OIDC discovery Connection refused 失败，重试即成——**BFF 启动依赖 9000 的时序问题**，与本项无关但记档）。
 - **回归**：完整登录链（8001→8085→9000 授权码）走通、管理 API 3×200、discovery 200、设备码 200。
 
+### A-P1-6 拆弹：登出回跳目标校验（open redirect 堵死 + 数据源改客户端登记表）
+
+- **【事实修正】审计结论又是反的（与 A-P0-3 同款：只读常量、没追调用链、没实测）**：`ALLOWED_REDIRECT_HOSTS`（14 项 localhost 端口）+ `isRedirectAllowed()`（javadoc 明写"防止 open-redirect 漏洞"）**全库零调用——死代码**；README 所述"非 localhost 端口全被拒、上线必炸"**永不发生**。
+- **真实问题恰是反面——open redirect 活洞**：`LogoutController` 对 `post_logout_redirect_uri`/`redirect` 参数直接 `sendRedirect` 零校验。改前实测：`?redirect=https://evil.example.com/phish` → 302 直通；`?redirect=//evil.example.com` → 302 到 `http://evil.example.com`（协议相对绕过）；且 SAS 自带会校验 post_logout URI 的 `OidcLogoutEndpointFilter` 被自定义控制器刻意绕过（id_token_hint 解码 bug）——规范层兜底也没有。钓鱼场景：伪造"认证中心登出链接"→ 受害者被登出 + 跳钓鱼站，"刚登出"的跳转天然可信。
+- **A″ 方案（用户否决硬编码白名单接线，改为按客户端登记地址校验——OIDC RP-Initiated Logout 规范做法）**：跳转前三源判定，任一命中才放行，全不中 → 不跳转落「登出成功」页 + `log.warn`（记目标与来源 IP）：
+  - ① 同源相对路径（`/` 开头，排除 `//` 与 `/\` 协议相对变体）→ 放行（跳不出本站）；
+  - ② 绝对 URL（仅 http/https，拒 javascript:/data:/畸形）→ **逐字匹配**某注册客户端的 `post_logout_redirect_uris`——数据源 = `oauth2_registered_client` 表（「客户端管理」页维护），**零硬编码、零新配置，换环境改登记地址不改代码**；
+  - ③ 携带 `id_token_hint` → 解 JWT payload 的 `aud` **收窄到该客户端自己的登记地址**（跨客户端地址也拒）。**不验签**的安全性：伪造 aud 最多在各客户端已登记的合法地址间切换校验范围，永远跳不出登记表——主防线是②；解码失败退化 union，不影响主防线。
+  - 附带：`state` 追加前 URLEncode（防参数拼接注入）；删除死代码（常量+方法+`java.net.URI` import）。
+- **调用方全量核对**：portal-bff（带 hint，目标 8000/logged-out ✓ portal-app 已登记）、admin-bff（目标 8001/logged-out ✓ admin-app 已登记）、web-demo（`redirect=http://localhost:8081/`，**原登记不含此地址 → 配套数据修正**）、h5-demo/device-demo 本地登出不涉及。
+- **配套数据修正（V6.23）**：oa-web-app 补登记 `http://localhost:8081/`——base `iam.sql` + 新迁移 `V6.23__oa_web_app_logout_uri.sql`（幂等 `NOT LIKE '%,http://localhost:8081/'`，初版 `NOT LIKE '%http://localhost:8081/%'` 会误匹配已有 `/logout` 前缀导致永不执行，已修正）+ 现库已同步（rows updated=1）。
+- **验证 13/13 + 回归**：evil 绝对地址/`//evil`/`javascript:`/标准参数 evil → 全部 200 落成功页无 Location；跨客户端 hint（target=8000 但 aud=oa-web-app）→ 拒；同客户端 hint（target=8001，aud=admin-app）→ 302 ✓；坏 hint → 退化 union 放行已登记地址；portal/admin/web-demo 三真实登出流 302 正确；同源相对路径 → 302 补全为本站绝对地址（Servlet sendRedirect 规范行为）；state=`x&injected=1` → `state=x%26injected%3D1` 注入被编码；无参 → 成功页；完整登录链/管理 API 3×200/discovery/设备码回归全绿。
+- **文档**：README A-P1-6 移入 ✅15（P1 表**仅剩 A-P1-7**）、接口文档 §5.7 补回跳校验说明（新增客户端/换环境在管理页登记即可，无需改代码）。
+
 ### README 待办补录（修复上轮重排丢失的 6 项）
 
 上轮「按代码审计重排待办」误删若干条目，按当前事实核实后补回（不照抄旧文，逐项复核状态）：
