@@ -148,11 +148,6 @@ INSERT INTO `sys_user` VALUES (2, '550e8400-e29b-41d4-a716-446655440002', 'user'
 INSERT INTO `sys_user` VALUES (3, '550e8400-e29b-41d4-a716-446655440003', 'zhangsan', '$2a$10$ov3NUrdkAHujSRdGbDZF6O9h2cjZq4Zl17fL3TA5Nhs94mE/PmH8e', '张三', 'zhangsan@example.com', NULL, NULL, 1, 1, 1, 1, '2026-08-11 20:00:08', '2026-08-11 20:00:08');
 
 -- ----------------------------
--- 退役清理: iam_client_policy (登录边界策略) 已删除, 职责由 scope∧RBAC 双维交集覆盖
--- ----------------------------
-DROP TABLE IF EXISTS `iam_client_policy`;
-
--- ----------------------------
 -- Table structure for sys_scope (客户端授权范围字典: 双维控制的客户端维度粗分组, 只读)
 -- ----------------------------
 DROP TABLE IF EXISTS `sys_scope`;
@@ -526,7 +521,7 @@ CREATE TABLE `iam_endpoint_permission`  (
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '端点↔权限绑定 (PERMISSION 行使用, 一端点多权限 1:N, ALL/ANY 组合)' ROW_FORMAT = Dynamic;
 
 -- ----------------------------
--- Records of iam_endpoint (56 行: 51 条业务端点 + 3 条本表写接口 + 2 条范围映射写接口)
+-- Records of iam_endpoint (55 行: 50 条业务端点 + 3 条本表写接口 + 2 条范围映射写接口)
 -- 写入语义: 种子一次性初始化 + 管理页面维护, 上线后以库数据为准; 规则每请求直查 DB。
 -- 种子全为 PERMISSION 行 → 后置 UPDATE 定型 (若未来加入档位行种子, 此句需同步调整)。
 -- ----------------------------
@@ -540,7 +535,6 @@ INSERT INTO `iam_endpoint` (`method`, `path`, `status`) VALUES
 ('PUT', '/admin/users/{id}/enable', 1),
 ('POST', '/admin/users/{id}/reset-password', 1),
 ('DELETE', '/admin/users/{id}/sessions', 1),
-('DELETE', '/admin/users/{userCode}/data', 1),
 ('GET', '/admin/roles', 1),
 ('GET', '/admin/user-roles/{userCode}', 1),
 ('POST', '/admin/roles', 1),
@@ -606,7 +600,6 @@ SELECT `e`.`id`, `p`.`id`
     SELECT 'PUT' AS `m`, '/admin/users/{id}/enable' AS `pa`, 'user:write' AS `code` UNION ALL
     SELECT 'POST' AS `m`, '/admin/users/{id}/reset-password' AS `pa`, 'user:write' AS `code` UNION ALL
     SELECT 'DELETE' AS `m`, '/admin/users/{id}/sessions' AS `pa`, 'user:write' AS `code` UNION ALL
-    SELECT 'DELETE' AS `m`, '/admin/users/{userCode}/data' AS `pa`, 'user:write' AS `code` UNION ALL
     SELECT 'GET' AS `m`, '/admin/roles' AS `pa`, 'role:read' AS `code` UNION ALL
     SELECT 'GET' AS `m`, '/admin/user-roles/{userCode}' AS `pa`, 'role:read' AS `code` UNION ALL
     SELECT 'POST' AS `m`, '/admin/roles' AS `pa`, 'role:write' AS `code` UNION ALL
@@ -655,67 +648,5 @@ SELECT `e`.`id`, `p`.`id`
     SELECT 'GET' AS `m`, '/biz/clients/mine' AS `pa`, 'portal:client:read' AS `code`
   ) `t` ON `t`.`m` = `e`.`method` AND `t`.`pa` = `e`.`path`
   JOIN `sys_permission` `p` ON `p`.`code` = `t`.`code`;
--- ===================== 阶段清理: 开放能力体系退役 =====================
--- iam_api_capability / iam_capability_subscription 两表及种子已退役 (CAPABILITY 订阅机制清理,
--- 本期权限架构改造决定不保留 client×能力订阅粒度); 历史迁移 V6.5 保留为记录, 新库不再建这两表。
--- 原内容 (L409-465) 见 git 历史 / V6.5 迁移脚本。
--- ====================================================================
--- -- ----------------------------
--- -- Table structure for iam_api_capability (开放能力登记表)
--- -- ----------------------------
--- DROP TABLE IF EXISTS `iam_api_capability`;
--- CREATE TABLE `iam_api_capability`  (
---   `id` bigint(0) NOT NULL AUTO_INCREMENT COMMENT '能力ID',
---   `capability_code` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '能力编码 (业务唯一, 如 contact:query)',
---   `capability_name` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '能力名称',
---   `method` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT 'HTTP 方法',
---   `path_pattern` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '路径模式 (Ant 风格, 如 /api/capability/contacts/{id})',
---   `required_scopes` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '令牌所需 scope (逗号分隔, 空=不限制)',
---   `owner` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '归属 (产品线/部门)',
---   `qps_limit` int(0) NOT NULL DEFAULT 0 COMMENT '全局 QPS 上限 (0=不限制; 仅登记断言, 限流计数另表)',
---   `status` tinyint(1) NOT NULL DEFAULT 1 COMMENT '状态: 1=启用, 0=停用',
---   `remark` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '备注',
---   `create_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0) COMMENT '创建时间',
---   `update_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0) ON UPDATE CURRENT_TIMESTAMP(0) COMMENT '更新时间',
---   PRIMARY KEY (`id`) USING BTREE,
---   UNIQUE INDEX `uk_capability_code`(`capability_code`) USING BTREE,
---   UNIQUE INDEX `uk_capability_route`(`method`, `path_pattern`) USING BTREE
--- ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '开放能力登记表 (暴露给开发者的 API 能力)' ROW_FORMAT = Dynamic;
--- 
--- -- ----------------------------
--- -- Records of iam_api_capability (demo: 通讯录能力 2 条, 与 controller/capability 端点对应)
--- -- ----------------------------
--- INSERT INTO `iam_api_capability` VALUES
--- (1, 'contact:query', '通讯录列表', 'GET', '/api/capability/contacts', 'read', '研发部', 0, 1, '通讯录列表查询能力', '2026-08-16 10:00:00', '2026-08-16 10:00:00'),
--- (2, 'contact:detail', '通讯录详情', 'GET', '/api/capability/contacts/{id}', 'read', '研发部', 0, 1, '通讯录单条详情查询能力', '2026-08-16 10:00:00', '2026-08-16 10:00:00');
--- 
--- -- ----------------------------
--- -- Table structure for iam_capability_subscription (开放能力订阅表: 开发者客户端 × 能力)
--- -- ----------------------------
--- DROP TABLE IF EXISTS `iam_capability_subscription`;
--- CREATE TABLE `iam_capability_subscription`  (
---   `id` bigint(0) NOT NULL AUTO_INCREMENT COMMENT '订阅ID',
---   `client_id` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '订阅方客户端 (oauth2_registered_client.client_id, 逻辑引用, 非FK)',
---   `capability_code` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '能力编码 (逻辑引用 iam_api_capability.capability_code)',
---   `env` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL DEFAULT 'PROD' COMMENT '环境: PROD=生产/TEST=测试',
---   `qps_limit` int(0) NOT NULL DEFAULT 0 COMMENT '订阅 QPS 上限 (0=不限制)',
---   `quota_daily` int(0) NOT NULL DEFAULT 0 COMMENT '每日调用次数上限 (0=不限制)',
---   `quota_monthly` int(0) NOT NULL DEFAULT 0 COMMENT '每月调用次数上限 (0=不限制)',
---   `status` tinyint(1) NOT NULL DEFAULT 1 COMMENT '状态: 1=订阅中, 0=已取消',
---   `subscribe_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0) COMMENT '订阅时间',
---   `expire_time` datetime(0) NULL DEFAULT NULL COMMENT '到期时间 (NULL=长期有效)',
---   `revoke_time` datetime(0) NULL DEFAULT NULL COMMENT '取消时间',
---   `create_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0) COMMENT '创建时间',
---   `update_time` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0) ON UPDATE CURRENT_TIMESTAMP(0) COMMENT '更新时间',
---   PRIMARY KEY (`id`) USING BTREE,
---   UNIQUE INDEX `uk_subscription`(`client_id`, `capability_code`, `env`) USING BTREE
--- ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '开放能力订阅表 (开发者客户端 × 能力)' ROW_FORMAT = Dynamic;
--- 
--- -- ----------------------------
--- -- Records of iam_capability_subscription (demo: 移动端客户端订阅通讯录两项能力)
--- -- ----------------------------
--- INSERT INTO `iam_capability_subscription` VALUES
--- (1, 'mobile-app', 'contact:query', 'PROD', 100, 100000, 3000000, 1, '2026-08-16 10:00:00', NULL, NULL, '2026-08-16 10:00:00', '2026-08-16 10:00:00'),
--- (2, 'mobile-app', 'contact:detail', 'PROD', 100, 100000, 3000000, 1, '2026-08-16 10:00:00', NULL, NULL, '2026-08-16 10:00:00', '2026-08-16 10:00:00');
 
 SET FOREIGN_KEY_CHECKS = 1;

@@ -135,6 +135,14 @@
 - **验证 9/9**：列表/单查无 secret 键；带 secret 创建可用（WRITE_ONLY 只挡出站）；编辑留空哈希不毁（no-op round-trip）；reset 返回 16 位新明文；**round-trip 后登录链换票成功**（= 缓存重建含 secret，Redis 实证 `has clientSecret: True`）；管理 API 3×200。调试插曲：为定位 401 给 8085 临时加 TRACE（已还原）；两轮测试脚本问题（子串匹配误中 `clientSecretExpiresAt`、PUT 缺 `clientId` 触发校验 400）均已修正——均非功能问题。
 - **文档**：README A-P2-6 移出 → ✅22（**P2 表仅剩 P2-7 代码卫生**）、接口文档 L98 契约、本条。
 
+### A-P2-7 拆弹：代码卫生残留 — 死方法、死接口、死 SQL 三清（P2 系列收官，A 系列 P2 共 7 项清零）
+
+- **① `resolveDomain()` → `isManagedPackage()`**：全库唯一调用点（清单推导处）只做 `== null` 判空，返回值无语义 → 改布尔。**语义保持**：`.controller.` 叶段判定原样迁移（admin/biz/third 纳管，permitall 包与平铺控制器不纳入），行为字节级不变；随之孤立的 `DOMAIN_ADMIN/PORTAL/THIRD` 三个域常量一并删除（全库 grep 仅本文件声明+switch 引用，零外部使用方）。
+- **② 删 `AdminUserDataController`（`DELETE /admin/users/{userCode}/data`）**：**零调用方实证**——前端零引用、全平台 grep（java/html/js/yml/md）仅自身；其做的级联删除（角色绑定+应用授权）早已本地化在 `UserService.deleteUser`（控制器原设计供 ADMIN_SERVICE_TOKEN 跨服务调用，但无任何服务调它）。**联动五处**：(a) 删控制器文件；(b) iam.sql endpoint seed 行（L543）；(c) iam.sql endpoint_permission mapping 行（绑定按 (method,path) JOIN 推导，seed 没了绑定自然消失）；(d) iam.sql 计数注释 56→55（=50 业务+3 本表写+2 范围映射）与接口文档 L59 行；(e) **现库** `V6.24__remove_user_data_endpoint.sql` 入档并执行：endpoint id=10 + 绑定 (10,13) 删除。**边界钉死**：权限码 `record:read`（id=13）保留——仍绑 endpoint 47/48、role 1、scope 1；主删除端点 `DELETE /admin/users/{id}` 不受影响。
+- **③ iam.sql 死块**：孤儿 `DROP TABLE iam_client_policy` 段（5 行——表在 DB 不存在，注释头自称"已删除"）+ capability 注释建表块（62 行，`iam_api_capability`/`iam_capability_subscription`，头部自述"此处不再保留，见 git 历史/V6.5"）。文件 **721→652 行**。**保留不删**：L12/L17 历史说明注释（记录表为何不存在）、`sql/migration/` 全部档案（V6.5 记录的是当时执行的动作，历史档案不改写）。
+- **验证**：打包重启后启动漂移检查 **`无漂移 (接口清单 55, 准入行 55)`**（GBK 解码确认，0 WARN/ERROR——控制器与表行同批删，无幽灵行）；ap26_verify **9/9**（登录链换票+管理 API）；ap15_regression 全量绿（8001→8085→9000 登录链、管理 API、协议端点）；endpoint-policies 列表 **55 行、无 /data**；现库复核 endpoint 55、绑定 0、`record:read` 在。**插曲**：V6.24 执行脚本两轮小 bug（列表推导变量名笔误、SQL 注释里的 ASCII `;` 把语句切碎）均修正后一次成功，迁移本身是标准双 DELETE。
+- **文档**：README A-P2-7 移出 → **✅23**（P2 段改"已清零"，A 系列 P0/P1/P2 中 P0、P2 双清零，P1 仅剩用户明示跳过的 A-P1-3）、本条。
+
 ### README 待办补录（修复上轮重排丢失的 6 项）
 
 上轮「按代码审计重排待办」误删若干条目，按当前事实核实后补回（不照抄旧文，逐项复核状态）：

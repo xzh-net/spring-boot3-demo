@@ -45,11 +45,6 @@ import java.util.Set;
 @Service
 public class EndpointPolicyService {
 
-    /** 能力域: 仅作清单推导的 controller 分包判定 (admin=管理端 / biz=业务(门户+三方)) */
-    public static final String DOMAIN_ADMIN = "admin";
-    public static final String DOMAIN_PORTAL = "portal";
-    public static final String DOMAIN_THIRD = "third";
-
     /** 准入要求档位常量 (放行档, 不可作为权限码授予) */
     public static final String AUTH_PERMIT_ALL = "PERMIT_ALL";
     public static final String AUTH_AUTHENTICATED = "AUTHENTICATED";
@@ -362,7 +357,7 @@ public class EndpointPolicyService {
                     : handlerMapping.getHandlerMethods().entrySet()) {
                 RequestMappingInfo info = entry.getKey();
                 HandlerMethod handler = entry.getValue();
-                if (resolveDomain(handler.getBeanType().getPackageName()) == null) {
+                if (!isManagedPackage(handler.getBeanType().getPackageName())) {
                     continue;
                 }
                 for (String pattern : extractPatterns(info)) {
@@ -466,23 +461,22 @@ public class EndpointPolicyService {
     }
 
     /**
-     * 由 controller 分包推导能力域; 清单范围仅 admin / biz 两域 (permitall 链层放行不入表),
-     * 域外 (含 permitall 包、平铺控制器、任意杂包) 返回 null 不纳入。
+     * controller 分包叶段是否纳入接口清单 (admin / biz / third 三叶段纳管;
+     * permitall 包、平铺控制器、任意杂包不纳入 — 与原 resolveDomain 判定语义一致)。
+     * A-P2-7: 唯一调用方只判空, 故返回布尔; 域值无处使用, 常量已随之删除。
      */
-    private String resolveDomain(String packageName) {
+    private boolean isManagedPackage(String packageName) {
         String marker = ".controller.";
         int idx = packageName.indexOf(marker);
         if (idx < 0) {
-            return null;
+            return false;
         }
         String segment = packageName.substring(idx + marker.length());
         int dot = segment.indexOf('.');
         String leaf = dot < 0 ? segment : segment.substring(0, dot);
         return switch (leaf) {
-            case "admin" -> DOMAIN_ADMIN;
-            case "biz" -> DOMAIN_PORTAL;
-            case "third" -> DOMAIN_THIRD;
-            default -> null;
+            case "admin", "biz", "third" -> true;
+            default -> false;
         };
     }
 
