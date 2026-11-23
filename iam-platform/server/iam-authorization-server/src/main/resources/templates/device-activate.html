@@ -102,6 +102,8 @@
             <h1>📱 设备激活</h1>
             <p>输入设备上显示的用户码以完成授权</p>
         </div>
+        <!-- A-P1-7: 验证失败 (user_code 无效/过期) 回跳提示, 由 errorResponseHandler 302 携带 -->
+        <div id="errorAlert" style="display:none;margin:0 24px 16px;padding:10px 14px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#b91c1c;font-size:14px;"></div>
         <form th:action="@{/oauth2/device/verify}" method="post">
             <div class="body">
                 <div class="device-icon">🖥️</div>
@@ -126,5 +128,17 @@
             </div>
         </form>
     </div>
+    <script>
+        // A-P1-7: errorResponseHandler 回跳 ?error=invalid_user_code 时展示提示
+        (function () {
+            var err = new URLSearchParams(window.location.search).get('error');
+            if (!err) return;
+            var el = document.getElementById('errorAlert');
+            el.textContent = err === 'invalid_user_code'
+                ? '用户代码无效或已过期，请核对设备上显示的代码后重试'
+                : '验证未通过，请重试';
+            el.style.display = 'block';
+        })();
+    </script>
 </body>
 </html>

@@ -80,6 +80,15 @@
 - **验证 13/13 + 回归**：evil 绝对地址/`//evil`/`javascript:`/标准参数 evil → 全部 200 落成功页无 Location；跨客户端 hint（target=8000 但 aud=oa-web-app）→ 拒；同客户端 hint（target=8001，aud=admin-app）→ 302 ✓；坏 hint → 退化 union 放行已登记地址；portal/admin/web-demo 三真实登出流 302 正确；同源相对路径 → 302 补全为本站绝对地址（Servlet sendRedirect 规范行为）；state=`x&injected=1` → `state=x%26injected%3D1` 注入被编码；无参 → 成功页；完整登录链/管理 API 3×200/discovery/设备码回归全绿。
 - **文档**：README A-P1-6 移入 ✅15（P1 表**仅剩 A-P1-7**）、接口文档 §5.7 补回跳校验说明（新增客户端/换环境在管理页登记即可，无需改代码）。
 
+### A-P1-7 拆弹：device/verify 400（TC-12）—— 复现、根因、友好错误回落
+
+- **复现（README 要求"接手先复现"）**：矩阵探测确认**仍存在**——GET/POST 只要带 `user_code` 参数（格式对/错/空、真码/假码）→ **400 白标 JSON**；不带 → 正常 302 登录。日志**无任何异常堆栈**（白标 400 = `sendError`，非异常冒泡）。
+- **根因（字节码取证）**：SAS `OAuth2DeviceVerificationEndpointFilter` —— matcher = `(GET|POST) AND user_code != null`（解释"带参才 400"）；converter `validateUserCode` 格式校验 / 查 pending 记录；**任何** `OAuth2AuthenticationException`（格式错/码不存在/已过期）→ 默认 `authenticationFailureHandler` → `response.sendError(400)` → Spring Boot 白标错误页。
+- **影响面确认（比"已知 bug"字面窄）**：真实设备流程**完全正常**——真码未登录 → 302 登录（SavedRequest 保留）、已登录 → 302 同意页（流程推进）；**用户可达的坏路径** = `device-activate.html` 表单**直 POST** 到该端点，用户在 /activate 输错码 → 工程师风格白标 400（无任何"代码无效"提示）。**纯 UX 缺陷，无安全影响，设备功能未坏**。
+- **修复（方案 A，3 处）**：① `deviceVerificationEndpoint(dv -> ... .errorResponseHandler(...))`——SAS 公开的定制口（javap 确认）→ 验证失败 **302 回 `/activate?error=invalid_user_code`**，覆盖表单直 POST、GET 重定向（DeviceActivateController L80）、直访三种路径；② `device-activate.html` 补错误提示条 + JS 读 `error` 参数（该页原本**零错误显示能力**，只有表单）；③ 真码流程不受影响（失败处理器仅异常时触发）。
+- **验证 10/10 + 回归**：坏码矩阵（GET/POST × 格式错/假码/空码）全部 **302 带 error 回输码页**（改前全 400）；真实流程 3 步不变（device_authorization 200 → 未登录 302 登录 → 已登录 302 同意页）；输码页 200 且 alert div/JS/文案齐备——**首轮 2 项误报教训**：`/activate` 在设备链读 `DEVICE_SECURITY_CONTEXT`，主链 `/login` 的 cookie 不被接受，须走 `/device-login` 设备链登录后才能取到页面；登录链/管理 API 3×200/设备码/discovery 回归全绿。
+- **文档**：README A-P1-7 移入 ✅16——**P1 表仅剩 A-P1-3（用户明示跳过项，登录历史审计已归入其下）**。
+
 ### README 待办补录（修复上轮重排丢失的 6 项）
 
 上轮「按代码审计重排待办」误删若干条目，按当前事实核实后补回（不照抄旧文，逐项复核状态）：

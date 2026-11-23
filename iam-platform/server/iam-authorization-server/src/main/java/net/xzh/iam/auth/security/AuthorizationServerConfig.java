@@ -379,7 +379,16 @@ public class AuthorizationServerConfig {
 										.accessTokenRequestConverters(converters -> converters.removeIf(
 												c -> c instanceof OAuth2ClientCredentialsAuthenticationConverter)))
 								.deviceAuthorizationEndpoint(da -> da.verificationUri("/activate")) // 设置设备验证的用户友好 URI
-								.deviceVerificationEndpoint(dv -> dv.consentPage("/consent")) // 设备验证也使用同一个同意页面
+								.deviceVerificationEndpoint(dv -> dv.consentPage("/consent") // 设备验证也使用同一个同意页面
+										// 【A-P1-7/TC-12】验证失败 (user_code 格式错/不存在/过期) 原走 SAS 默认
+										// 失败处理器 sendError(404... 400 白标错误页) —— 用户在 /activate 输错码
+										// 直接怼工程师风格错误页。改为 302 回输码页带提示, 覆盖表单直 POST、
+										// GET 重定向、直访三种路径 (真码流程不受影响, 失败处理器只在异常时触发)。
+										.errorResponseHandler((req, res, ex) -> {
+											log.debug("[设备验证] 验证失败回输码页: {}",
+													ex.getMessage());
+											res.sendRedirect("/activate?error=invalid_user_code");
+										}))
 								// 【增强】Token Introspection: 替换默认提供者,
 								// 保证 Opaque access_token 在授权码等流程下也能内省出 sub/scope/client_id
 								// (默认提供者只读取 token 元数据 claims, Opaque 授权码 token 无 claims => sub 缺失)
