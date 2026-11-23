@@ -125,6 +125,16 @@
 - **【测试插曲】** 首轮 2 项失败均为脚手架问题：update 用 user_code 作路径 id（端点是 `Long` 类型转换异常被 catch-all 转 500）→ 改用数字 id 后过；日志中文锚点搜不到（乱码环境，A-P1-4 已记档）→ 给日志加 ASCII `[ResetPw]` tag（顺带符合编码规范）。
 - **文档**：README A-P2-5 移出 → ✅21（**P2 表仅剩 P2-6 密钥回显、P2-7 代码卫生**）。
 
+### A-P2-6 拆弹：客户端密钥回显 — 出站剥密钥 + 一轮缓存污染事故的完整记录
+
+- **【事实修正】** 原述「明文 + BCrypt 哈希回显给前端」一半不准：明文从不回显（`encodeSecretIfPlain` 保证入库即哈希），实测响应含的是 **BCrypt 哈希**（cost 10；demo 密钥 `123456` 在 README/接口文档明示 → 秒破 → 哈希暴露 ≈ 等效泄密）。明文仅 `reset-secret` 一次性返回——**合法通道**（前端 `prompt()` 展示，接口文档已写"只显示一次"），保留。
+- **消费方扫描（决定破坏面）**：前端 `client.html` 零引用（表格不渲染、编辑框打开即清空"留空不修改"）、`TokenValidationFilter` 用自己配置的值、update 留空 → `hasText=false` → 保留原值——**删除回显零破坏**。
+- **修复（出站三处）**：① `entityToVO` 删 `setClientSecret` 死行；② `ClientVO` 字段 `@JsonProperty(WRITE_ONLY)`（create/update 输入仍可用，响应不回传）；③ `list()`（返回裸实体的路径）返回前剥空——返回对象是本次 DB 新查，不碰缓存。接口文档 L98 契约同步：响应不回传，获取密钥唯一通道 = 重置。
+- **【首轮踩坑 → 缓存污染事故，本项最值钱的记录】** 给**实体** `OAuth2RegisteredClient.clientSecret` 加 WRITE_ONLY 后：首轮测试通过（旧缓存尚未重写）→ 随后一次 PUT 触发 `save()` → **Jackson 重序列化实体写 Redis 客户端缓存（`oauth2:client:*`，TTL 1h）时 secret 被注解抹掉** → 此后所有 admin-app 换票 `401 invalid_client`。**取证链**：DB 行字节级与 iam.sql 完全一致（排除数据损坏）→ 独立换票也 401（排除 BFF）→ 9000 日志 `ClientSecretAuthenticationProvider: client_secret does not match` → **Redis 缓存 JSON 无 `clientSecret` 键（实锤）**。**根因 = 验证盲区：只验了 MyBatis 字段映射不受注解影响，漏了同一实体还是 Jackson 缓存的序列化载荷**。**修正**：实体改 `@JsonInclude(NON_NULL)`（仅 null 省略——`list()` 剥空后响应无该键；缓存写入时 secret 非空照常序列化）+ 实体字段 javadoc 永久警告禁用出站抑制注解 + 清污染缓存强制回源。
+- **附带**：admin-bff/portal-bff `client-secret: 123456` 占位符化（`${ADMIN_APP_CLIENT_SECRET:123456}` / `${PORTAL_APP_CLIENT_SECRET:123456}`，与 A-P1-5 同款，默认值=现值零行为变化——README 处方"密钥改由环境变量注入"的落地；诚实说明：demo 密钥本就公开在文档，安全增益有限，价值在配置一致性）。
+- **验证 9/9**：列表/单查无 secret 键；带 secret 创建可用（WRITE_ONLY 只挡出站）；编辑留空哈希不毁（no-op round-trip）；reset 返回 16 位新明文；**round-trip 后登录链换票成功**（= 缓存重建含 secret，Redis 实证 `has clientSecret: True`）；管理 API 3×200。调试插曲：为定位 401 给 8085 临时加 TRACE（已还原）；两轮测试脚本问题（子串匹配误中 `clientSecretExpiresAt`、PUT 缺 `clientId` 触发校验 400）均已修正——均非功能问题。
+- **文档**：README A-P2-6 移出 → ✅22（**P2 表仅剩 P2-7 代码卫生**）、接口文档 L98 契约、本条。
+
 ### README 待办补录（修复上轮重排丢失的 6 项）
 
 上轮「按代码审计重排待办」误删若干条目，按当前事实核实后补回（不照抄旧文，逐项复核状态）：

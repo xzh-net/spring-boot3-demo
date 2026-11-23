@@ -1,5 +1,7 @@
 package net.xzh.iam.auth.vo;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import lombok.Data;
 
 import java.util.Set;
@@ -10,6 +12,8 @@ public class ClientVO {
     private String id;
     private String clientId;
     private String clientName;
+    /** A-P2-6: 只进不出 (WRITE_ONLY) —— create/update 仍接受输入, 响应不回传 (含哈希) */
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String clientSecret;
     private Set<String> clientAuthenticationMethods;
     private Set<String> authorizationGrantTypes;

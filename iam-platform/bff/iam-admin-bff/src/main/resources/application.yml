@@ -15,7 +15,8 @@ spring:
           admin-app:
             provider: iam
             client-id: admin-app
-            client-secret: 123456
+            # A-P2-6: 占位符化 (默认值=现值, 零行为变化), 换环境设 ADMIN_APP_CLIENT_SECRET 勿改文件
+            client-secret: ${ADMIN_APP_CLIENT_SECRET:123456}
             authorization-grant-type: authorization_code
             redirect-uri: http://localhost:8085/login/oauth2/code/admin-app
             scope: openid,profile

@@ -33,7 +33,8 @@ spring:
           portal-app-oidc:
             provider: spring-auth-server
             client-id: portal-app
-            client-secret: 123456
+            # A-P2-6: 占位符化 (默认值=现值, 零行为变化), 换环境设 PORTAL_APP_CLIENT_SECRET 勿改文件
+            client-secret: ${PORTAL_APP_CLIENT_SECRET:123456}
             authorization-grant-type: authorization_code
             redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
             # 前后端分离: 登出后直接回到 iam-portal-web 前端 (8000), 不经过 iam-portal-bff

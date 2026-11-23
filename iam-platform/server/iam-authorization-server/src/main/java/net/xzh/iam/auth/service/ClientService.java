@@ -40,7 +40,11 @@ public class ClientService {
 
     /** 列出全部客户端 (不走 AuthorizationServer 的 findAll — RegisteredClientRepository 没这个方法) */
     public List<OAuth2RegisteredClient> list() {
-        return mapper.selectList(null);
+        List<OAuth2RegisteredClient> list = mapper.selectList(null);
+        // A-P2-6: 出站剥密钥 — 实体是 Redis 缓存的 Jackson 载荷, 字段上不能加注解 (缓存会丢 secret),
+        // 故在 API 出口处置空; 返回的是本次 DB 查询的新对象, 修改不影响缓存
+        list.forEach(e -> e.setClientSecret(null));
+        return list;
     }
 
     public ClientVO get(String id) {
@@ -281,7 +285,7 @@ public class ClientService {
         vo.setId(entity.getId());
         vo.setClientId(entity.getClientId());
         vo.setClientName(entity.getClientName());
-        vo.setClientSecret(entity.getClientSecret());
+        // A-P2-6: 不再回传 clientSecret (字段 WRITE_ONLY, 此处亦不赋值 —— 不留死代码)
 
         if (StringUtils.hasText(entity.getClientAuthenticationMethods())) {
             vo.setClientAuthenticationMethods(Set.of(entity.getClientAuthenticationMethods().split(",")));
