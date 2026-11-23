@@ -52,6 +52,7 @@ public class UserService {
             throw new IllegalArgumentException("用户名已存在: " + user.getUsername());
         }
         if (!user.getPassword().startsWith("$")) {
+            validatePasswordStrength(user.getPassword()); // A-P2-5: 明文设密统一强度校验
             user.setPassword(passwordEncoder.encode(user.getPassword()));
         }
         if (user.getEnabled() == null) user.setEnabled(true);
@@ -101,6 +102,7 @@ public class UserService {
         if (user.getEnabled() != null) existing.setEnabled(user.getEnabled());
         // 处理密码: 编辑时若填了新密码则加密更新, 留空则不修改
         if (StringUtils.hasText(user.getPassword()) && !user.getPassword().startsWith("$")) {
+            validatePasswordStrength(user.getPassword()); // A-P2-5: 明文改密统一强度校验
             existing.setPassword(passwordEncoder.encode(user.getPassword()));
             passwordChanged = true;
         }
@@ -142,22 +144,46 @@ public class UserService {
     }
 
     @Transactional
-    public void resetPassword(Long id) {
+    public String resetPassword(Long id) {
         SysUser user = mapper.selectById(id);
         if (user == null) throw new IllegalArgumentException("用户不存在: " + id);
-        String newPassword = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        // A-P2-5: 16 位 hex (64bit 熵, 原 8 位 32bit 偏弱); 明文只经 API 返回给管理员页面
+        // 一次性展示, 不再写入日志 (原明文入日志 = 读日志即得用户密码的泄露面)
+        String newPassword = UUID.randomUUID().toString().replace("-", "").substring(0, 16);
         user.setPassword(passwordEncoder.encode(newPassword));
         user.setUpdateTime(LocalDateTime.now());
         mapper.updateById(user);
 
-        // TODO: 接入短信网关, 将新密码通过短信发送给用户手机 (user.getPhone())
-        //       短信发送失败不应影响密码重置流程, 建议异步发送 + 失败重试
-        // 临时: 通过 log 输出新密码, 仅供开发测试阶段使用, 上线前必须移除
-        log.info("重置密码 username={}, newPassword={}", user.getUsername(), newPassword);
+        // TODO: 接入短信网关后改为异步下发 (user.getPhone()), 不再经 API 返回
+        log.info("[ResetPw] 重置密码 (新密码经 API 返回, 不落日志): username={}", user.getUsername());
 
         // 重置密码后强制下线 (事务外执行, 避免 Redis 异常导致密码更新回滚)
         kickOfflineSafely(user.getUserCode(), user.getUsername());
+        return newPassword;
     }
+
+    /**
+     * 密码强度校验 (A-P2-5): 长度 ≥8 + 含字母和数字 + 拒绝常见弱密码。
+     * 挂 create/update 的明文设密路径 (预编码哈希传入不校验, 与既有 $ 前缀旁路语义一致)。
+     * 抛 IllegalArgumentException → GlobalExceptionHandler 转业务 400。
+     */
+    private void validatePasswordStrength(String raw) {
+        if (raw == null || raw.length() < 8) {
+            throw new IllegalArgumentException("密码强度不足: 长度至少 8 位");
+        }
+        if (!raw.matches(".*[A-Za-z].*") || !raw.matches(".*\\d.*")) {
+            throw new IllegalArgumentException("密码强度不足: 须同时包含字母和数字");
+        }
+        if (WEAK_PASSWORDS.contains(raw.toLowerCase())) {
+            throw new IllegalArgumentException("密码强度不足: 该密码过于常见");
+        }
+    }
+
+    /** 常见弱密码黑名单 (A-P2-5, 字典头部小表, 全小写比对) */
+    private static final java.util.Set<String> WEAK_PASSWORDS = java.util.Set.of(
+            "123456", "12345678", "123456789", "password", "password1", "admin",
+            "administrator", "qwerty", "qwerty123", "abc123", "111111", "000000",
+            "654321", "iloveyou", "letmein", "abcd1234");
 
     /**
      * 安全强制下线: 捕获 Redis 异常, 不影响数据库事务。

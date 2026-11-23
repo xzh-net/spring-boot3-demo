@@ -73,9 +73,9 @@ public class AdminUserApiController {
     }
 
     @PostMapping("/{id}/reset-password")
-    public Result<Void> resetPassword(@PathVariable Long id) {
-        userService.resetPassword(id);
-        return Result.ok();
+    public Result<String> resetPassword(@PathVariable Long id) {
+        // A-P2-5: 新密码经 API 返回给页面一次性展示, 不再写入日志 (原明文入日志为泄露面)
+        return Result.ok(userService.resetPassword(id));
     }
 
     @GetMapping("/{id}/sessions")

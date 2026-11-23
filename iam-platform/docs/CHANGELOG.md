@@ -115,6 +115,16 @@
 - **测试插曲**：授权舞步首轮忘带 cookie（独立 opener 无 jar）→ authorize 落登录页；修正带 jar 后通过——脚手架问题记档。
 - **文档**：README A-P2-4 移出 → ✅20（**P2 表剩 P2-5/6/7**）。
 
+### A-P2-5 拆弹：密码策略 — 三条设密路径统一强度校验 + 重置明文出日志
+
+- **现状事实**：三条设密路径全在 `UserService`（平台**无自助改密**，全走管理端）——`create` L54 / `update` L105 明文直进 bcrypt **零校验**（管理页可设 `1`/`123456`），`resetPassword` 服务端生成。前端 `user.html` 密码框无任何约束。密码历史/过期均无；`credentials_non_expired` **又一个闲置字段**（仅 null→true 默认、全库无人置 false、无时间机制——与 A-P1-2 的 `account_non_locked` 同款"字段在、机制不在"）。
+- **计划外发现（比原条目更实的问题）**：`resetPassword` 生成 8 位 hex（32bit 熵）后**把明文打进 `log.info`**，而 API 只返回 `Result.ok()` 不含新密码——**日志成了新密码唯一分发渠道**，读 `boot9000.log` 即得用户密码（原 TODO 自注"上线前必须移除"但从未移除）。
+- **方案 A 落地（3 文件）**：① `UserService.validatePasswordStrength()` 挂 create/update 明文路径：长度 ≥8 + 含字母和数字 + 常见弱密码黑名单（18 项字典头部，全小写比对），抛 IAE → `GlobalExceptionHandler` 业务 400；预编码哈希（`$` 前缀）旁路语义不变。② `resetPassword`：生成 8→**16 位 hex（64bit 熵）**、**明文从日志挪到 API 返回**（`Result<String>`），日志改留 `[ResetPw]` 标记（符合编码规范 `[模块]` tag 约定、且给 ASCII grep 锚点）；`AdminUserApiController` 同步返回类型。③ `user.html`：密码框 `minlength=8` + 提示文案；重置 JS 改为展示接口返回的新密码（alert 一次性，关闭后不可再查）。
+- **方案 B/C 挂触发条件**：密码历史（需 V6.24 历史列）与过期（需 `pwd_changed_at` 列 + 登录强制流程）**当前价值打折——平台无自助改密**，"禁止改回旧密码/强制换密"缺少用户侧入口；等自助改密功能立项时一并做（同 A-P1-3 登录历史挂法）。`credentials_non_expired` 闲置字段留给届时激活。
+- **验证 13/13 + 回归**：弱密码四类 create 全拒（过短/纯数字/纯字母/常见弱 `qwerty123` 各返回对应中文提示）；update 弱密码拒（业务 400）；合规密码 `Test9passOK` 创建成功→清理；reset 返回 16 位 hex（`fc9dbb327f06418f`）且日志 `[ResetPw]` 标记在、`newPassword=` 旧格式绝迹、**实际密码不在日志**；管理 API 4×200；既有 6 位旧密码（admin/123456）登录不受影响（校验只挂写路径，不动存量）。
+- **【测试插曲】** 首轮 2 项失败均为脚手架问题：update 用 user_code 作路径 id（端点是 `Long` 类型转换异常被 catch-all 转 500）→ 改用数字 id 后过；日志中文锚点搜不到（乱码环境，A-P1-4 已记档）→ 给日志加 ASCII `[ResetPw]` tag（顺带符合编码规范）。
+- **文档**：README A-P2-5 移出 → ✅21（**P2 表仅剩 P2-6 密钥回显、P2-7 代码卫生**）。
+
 ### README 待办补录（修复上轮重排丢失的 6 项）
 
 上轮「按代码审计重排待办」误删若干条目，按当前事实核实后补回（不照抄旧文，逐项复核状态）：
