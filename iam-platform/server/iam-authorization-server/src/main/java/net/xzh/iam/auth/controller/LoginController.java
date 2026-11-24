@@ -39,4 +39,16 @@ public class LoginController {
     public String root() {
         return "redirect:http://localhost:8080/oauth2/authorization/portal-app-oidc";
     }
+
+    /**
+     * 【B-9】登录页由静态文件改为服务端渲染: 模板 templates/login.html 内嵌 CSRF 隐藏域
+     * (静态文件拿不到每会话 token, 此前只能豁免 /login POST 的 CSRF 校验)。
+     * 与原静态版渲染差异仅多一个隐藏 input; ?error/?logout/?expired/?type=device 参数
+     * 行为不变 (页面 JS 读取)。设备链 /device-login 共用本页 (JS 按 type=device 切 action),
+     * 两条链 CSRF 已统一为 Cookie 仓库 (XSRF-TOKEN), 跨链 token 一致。
+     */
+    @GetMapping("/login.html")
+    public String loginPage() {
+        return "login";
+    }
 }

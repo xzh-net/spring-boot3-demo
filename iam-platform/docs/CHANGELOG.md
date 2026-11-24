@@ -143,6 +143,15 @@
 - **验证**：打包重启后启动漂移检查 **`无漂移 (接口清单 55, 准入行 55)`**（GBK 解码确认，0 WARN/ERROR——控制器与表行同批删，无幽灵行）；ap26_verify **9/9**（登录链换票+管理 API）；ap15_regression 全量绿（8001→8085→9000 登录链、管理 API、协议端点）；endpoint-policies 列表 **55 行、无 /data**；现库复核 endpoint 55、绑定 0、`record:read` 在。**插曲**：V6.24 执行脚本两轮小 bug（列表推导变量名笔误、SQL 注释里的 ASCII `;` 把语句切碎）均修正后一次成功，迁移本身是标准双 DELETE。
 - **文档**：README A-P2-7 移出 → **✅23**（P2 段改"已清零"，A 系列 P0/P1/P2 中 P0、P2 双清零，P1 仅剩用户明示跳过的 A-P1-3）、本条。
 
+### B-9 拆弹：CSRF 豁免 — 三处豁免的真相、统一 Cookie 仓库与登录页模板化
+
+- **【事实修正】豁免是三处不是两处**：`AuthorizationServerConfig` 主链豁免 `/oauth2/device/verify` + `/login` POST，设备链豁免 `/device-login` POST（原待办只写了前两处里的两处、漏了 `/device-login`——三者根因相同：`login.html` 是静态文件，无 token 可校验）。**`/oauth2/device/verify` 的豁免是死配置**：javap 字节码实证 SAS 1.4.1 `OAuth2AuthorizationServerConfigurer.init` 内部 `csrf.ignoringRequestMatchers(endpointsMatcher)`（`lambda$init$5`），`endpointsMatcher` = 全部 SAS 端点子配置器 matcher 的 OR + jwks GET —— `/oauth2/token`、`/oauth2/device_authorization`、`/oauth2/device/verify` 等协议端点**本就全部豁免**，这同时解释了取证期的头号疑点「协议 POST 无 CSRF token 却 200」。原注释「跨安全链 CSRF Token 不一致」的真实根因 = **表单根本没有 token + 主链 session 仓库 / 设备链 cookie 仓库分裂**。
+- **修复（方案 A，Cookie 仓库统一）**：① 两链统一 `CookieCsrfTokenRepository.withHttpOnlyFalse()`（XSRF-TOKEN 跨链同源 → token 一致，且不随 session 迁移失效）；三个 ignoring 全删（device/verify 走 SAS 内部豁免，行为不变）。② `static/login.html` → `templates/login.html` + `LoginController @GetMapping("/login.html")`，加隐藏 `_csrf`（`CsrfTokenRequestDataValueProcessor` 注入掩码值）——错误/锁定/过期参数提示、`type=device` JS 切 action 等行为逐字节原样；静态文件删除。③ `device-activate.html`、`consent.html` 补隐藏 `_csrf`（防御纵深 + 休眠 consent 路径保险：该页原本无 token，CSRF 强制后必 403——consent 在 demo 全客户端 consent=false 下休眠，属"修了才能用"）。④ 无用 `AntPathRequestMatcher` import 清理。
+- **测试基建同步（5 个在役脚本注入 token 解析）**：`ap26_verify.py`（双舞步）、`ap15_regression.ps1`（curl 改 `--data-urlencode` 防掩码值 `+`/`=` 破形）、`ap26_debug.py`、`ap26_direct.py`、`ap27_policies.py`。**坑：必须解析页面渲染值（96 位 Xor 掩码），裸 cookie 值（36 位原值）提交反被 403**——探针矩阵 A/B/C/D 定位（参数=渲染值 302、cookie 裸值 403、头=渲染值 302）。历史一次性取证脚本未改（点时快照，不再复跑）。
+- **【验证插曲——假绿与假阴性都要防】**首轮 b9_verify 7/8：带 token 正向 403，根因是 harness `post()` 的无重定向分支误用**全新空 cookie jar**（XSRF-TOKEN 没带上）——且同分支导致 2a/2b 负向"通过"也是假的（根本没测到 token 维度）。修正为复用原 jar 后，负向才是真证据。另两轮设备测试的 5 项失败同属脚本问题：对 `/activate?user_code` 保存请求的**自动验证链**（控制器 L80 → SAS verify GET → 成功页）认知错误 + 成功后重复 POST verify/乱试 consent 写坏授权记录（换票 `loadUserByUserCode` 反查失败报"用户不存在或已停用"）——**干净单趟旅程复测 = device_code 换票 200**，根因全程与 B-9 无关。
+- **验证（32 项断言 + 2 回归全绿）**：`b9_verify` 9/9（渲染含 token/XSRF-TOKEN cookie/内容保真；**负向**：带 cookie 无参数 403、无 cookie 无参数 403、设备链无参数 403；正向带 token 302；SAS 豁免事实：device/verify 无 token 非 403、device_authorization 200）；`b9_device` **11/11 两条旅程**（自动链 + 手工表单链，跨链统一 token 实证，双双 device_code 换票 200 access_token）；`b9_retry` 3/3（错密码带 token → 302 错误页非 403 → 错误页新 token → 重试 302 成功）；`ap26_verify` 9/9、`ap15_regression` 全量绿（8001→8085→9000 登录链 + 管理 API + 协议）、endpoint-policies 55 行、四服务健康。
+- **文档**：README B-9 移出 → **✅24**（B 系列剩 10 项）、本条。浏览器/操作说明手工步骤零影响（隐藏域随表单自动提交）。
+
 ### README 待办补录（修复上轮重排丢失的 6 项）
 
 上轮「按代码审计重排待办」误删若干条目，按当前事实核实后补回（不照抄旧文，逐项复核状态）：

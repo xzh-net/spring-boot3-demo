@@ -105,6 +105,7 @@
         <!-- A-P1-7: 验证失败 (user_code 无效/过期) 回跳提示, 由 errorResponseHandler 302 携带 -->
         <div id="errorAlert" style="display:none;margin:0 24px 16px;padding:10px 14px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#b91c1c;font-size:14px;"></div>
         <form th:action="@{/oauth2/device/verify}" method="post">
+        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
             <div class="body">
                 <div class="device-icon">🖥️</div>
                 <div class="input-group">

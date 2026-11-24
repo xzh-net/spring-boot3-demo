@@ -58,7 +58,6 @@ import org.springframework.security.web.context.HttpSessionSecurityContextReposi
 import org.springframework.security.web.context.SecurityContextHolderFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.session.HttpSessionEventPublisher;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.security.web.util.matcher.MediaTypeRequestMatcher;
 
 import com.nimbusds.jose.jwk.ECKey;
@@ -425,12 +424,11 @@ public class AuthorizationServerConfig {
 						.failureHandler(new LockoutAwareFailureHandler(loginGuardService,
 								"/login.html?error", "/login.html?error=locked"))
 						.permitAll())
-				// 【目的】忽略设备验证端点和登录表单提交的 CSRF 校验
-				// /oauth2/device/verify: 跨安全链 CSRF Token 不一致
-				// /login POST: login.html 为静态文件, 无服务端渲染的 CSRF token
-				.csrf(csrf -> csrf.ignoringRequestMatchers(
-						new AntPathRequestMatcher("/oauth2/device/verify"),
-						new AntPathRequestMatcher("/login", "POST")))
+				// 【B-9】不豁免任何用户态表单: 两链统一 Cookie 仓库 (XSRF-TOKEN, 非 HttpOnly), 跨链 token 一致。
+				// 原 /oauth2/device/verify 豁免 = 死配置 (SAS 内部 csrf.ignoringRequestMatchers(endpointsMatcher)
+				// 已豁免全部协议端点, 字节码实证); /login POST 随登录页模板化携带隐藏 token 后豁免移除,
+				// 跨站无 token 提交将被 CsrfFilter 拒绝 (B-9)。
+				.csrf(csrf -> csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse()))
 				.sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
 						.sessionConcurrency(sc -> sc.sessionRegistry(sessionRegistry) // 配置会话注册表
 								// 【A-P1-4】同一用户 SSO 会话封顶 5 个 (多设备: 桌面/手机/平板/换浏览器)。
@@ -503,9 +501,9 @@ public class AuthorizationServerConfig {
 
 				// 5. 配置 CSRF
 				// 【目的】使用基于 Cookie 的 CSRF 令牌策略，并将 HttpOnly 设置为 false，以便前端 JavaScript 可以读取令牌
-				// 【注意】特别忽略了对 /device-login 的 POST 请求的 CSRF 校验
-				.csrf(csrf -> csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
-						.ignoringRequestMatchers(new AntPathRequestMatcher("/device-login", "POST")));
+				// 【B-9】与主链统一 Cookie 仓库 (XSRF-TOKEN 跨链同源); /device-login 不再豁免 ——
+				// 登录页已模板化, 无论表单 action 指向 /login 还是 /device-login 都携带同一 token。
+				.csrf(csrf -> csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse()));
 
 		return http.build();
 	}

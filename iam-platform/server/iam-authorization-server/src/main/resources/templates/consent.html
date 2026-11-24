@@ -119,6 +119,7 @@
             <p th:unless="${grantedCodes.isEmpty()}">应用请求访问您的信息，授权后将获得以下权限</p>
         </div>
         <form th:action="${requestURI}" method="post">
+        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
             <input type="hidden" name="client_id" th:value="${clientId}"/>
             <input type="hidden" name="state" th:value="${state}"/>
             <input type="hidden" name="user_code" th:if="${userCode}" th:value="${userCode}"/>
